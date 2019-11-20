@@ -10,8 +10,10 @@ use crate::base;
 use crate::MemFlags;
 use crate::common::{self, IntPredicate};
 use crate::meth;
+use super::OperandValue;
 
 use crate::traits::*;
+use rustc_error_codes::*;
 
 use std::borrow::Cow;
 
@@ -881,6 +883,39 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             mir::TerminatorKind::Yield { .. } => bug!("generator ops in codegen"),
             mir::TerminatorKind::FalseEdges { .. } |
             mir::TerminatorKind::FalseUnwind { .. } => bug!("borrowck false edges in codegen"),
+            mir::TerminatorKind::InlineAsm { ref asm, target } => {
+                let outputs = asm.outputs.iter().map(|output| {
+                    self.codegen_place(&mut bx, &output.as_ref())
+                }).collect();
+
+                let input_vals = asm.inputs.iter()
+                    .fold(Vec::with_capacity(asm.inputs.len()), |mut acc, (span, input)| {
+                        let op = self.codegen_operand(&mut bx, input);
+                        if let OperandValue::Immediate(_) = op.val {
+                            acc.push(op.immediate());
+                        } else {
+                            span_err!(bx.sess(), span.to_owned(), E0669,
+                                     "invalid value for constraint in inline assembly");
+                        }
+                        acc
+                });
+
+                if input_vals.len() == asm.inputs.len() {
+                    let res = bx.codegen_inline_asm(
+                        &asm.asm,
+                        outputs,
+                        input_vals,
+                        terminator.source_info.span,
+                    );
+                    if !res {
+                        span_err!(bx.sess(), terminator.source_info.span, E0668,
+                                  "malformed inline assembly");
+                    }
+                }
+
+                helper.maybe_sideeffect(self.mir, &mut bx, &[target]);
+                helper.funclet_br(self, &mut bx, target);
+            }
         }
     }
 

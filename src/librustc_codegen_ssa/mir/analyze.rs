@@ -332,6 +332,7 @@ pub fn cleanup_kinds(mir: &mir::Body<'_>) -> IndexVec<mir::BasicBlock, CleanupKi
         for (bb, data) in mir.basic_blocks().iter_enumerated() {
             match data.terminator().kind {
                 TerminatorKind::Goto { .. } |
+                TerminatorKind::InlineAsm { .. } |
                 TerminatorKind::Resume |
                 TerminatorKind::Abort |
                 TerminatorKind::Return |

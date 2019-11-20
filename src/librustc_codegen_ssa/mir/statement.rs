@@ -3,10 +3,6 @@ use rustc::mir;
 use crate::traits::BuilderMethods;
 use super::FunctionCx;
 use super::LocalRef;
-use super::OperandValue;
-use crate::traits::*;
-
-use rustc_error_codes::*;
 
 impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
     pub fn codegen_statement(
@@ -68,37 +64,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     cg_place.storage_dead(&mut bx);
                 } else if let LocalRef::UnsizedPlace(cg_indirect_place) = self.locals[local] {
                     cg_indirect_place.storage_dead(&mut bx);
-                }
-                bx
-            }
-            mir::StatementKind::InlineAsm(ref asm) => {
-                let outputs = asm.outputs.iter().map(|output| {
-                    self.codegen_place(&mut bx, &output.as_ref())
-                }).collect();
-
-                let input_vals = asm.inputs.iter()
-                    .fold(Vec::with_capacity(asm.inputs.len()), |mut acc, (span, input)| {
-                        let op = self.codegen_operand(&mut bx, input);
-                        if let OperandValue::Immediate(_) = op.val {
-                            acc.push(op.immediate());
-                        } else {
-                            span_err!(bx.sess(), span.to_owned(), E0669,
-                                     "invalid value for constraint in inline assembly");
-                        }
-                        acc
-                });
-
-                if input_vals.len() == asm.inputs.len() {
-                    let res = bx.codegen_inline_asm(
-                        &asm.asm,
-                        outputs,
-                        input_vals,
-                        statement.source_info.span,
-                    );
-                    if !res {
-                        span_err!(bx.sess(), statement.source_info.span, E0668,
-                                  "malformed inline assembly");
-                    }
                 }
                 bx
             }
