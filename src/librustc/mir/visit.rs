@@ -359,19 +359,6 @@ macro_rules! make_mir_visitor {
                             location
                         );
                     }
-                    StatementKind::InlineAsm(asm) => {
-                        for output in & $($mutability)? asm.outputs[..] {
-                            self.visit_place(
-                                output,
-                                PlaceContext::MutatingUse(MutatingUseContext::AsmOutput),
-                                location
-                            );
-                        }
-                        for (span, input) in & $($mutability)? asm.inputs[..] {
-                            self.visit_span(span);
-                            self.visit_operand(input, location);
-                        }
-                    }
                     StatementKind::Retag(kind, place) => {
                         self.visit_retag(kind, place, location);
                     }
@@ -495,6 +482,19 @@ macro_rules! make_mir_visitor {
                         self.visit_operand(value, source_location);
                     }
 
+                    TerminatorKind::InlineAsm { asm, target: _ } => {
+                        for output in & $($mutability)? asm.outputs[..] {
+                            self.visit_place(
+                                output,
+                                PlaceContext::MutatingUse(MutatingUseContext::AsmOutput),
+                                source_location
+                            );
+                        }
+                        for (span, input) in & $($mutability)? asm.inputs[..] {
+                            self.visit_span(span);
+                            self.visit_operand(input, source_location);
+                        }
+                    }
                 }
             }
 

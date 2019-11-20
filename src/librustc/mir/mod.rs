@@ -1188,6 +1188,13 @@ pub enum TerminatorKind<'tcx> {
         /// of the `remove_noop_landing_pads` and `no_landing_pads` passes.
         unwind: Option<BasicBlock>,
     },
+
+    /// Executes a piece of inline Assembly. Stored in a Box to keep the size
+    /// of `StatementKind` low.
+    InlineAsm {
+        asm: Box<InlineAsm<'tcx>>,
+        target: BasicBlock,
+    },
 }
 
 pub type Successors<'a> =
@@ -1258,6 +1265,8 @@ impl<'tcx> TerminatorKind<'tcx> {
             FalseEdges { ref real_target, ref imaginary_target } => {
                 Some(real_target).into_iter().chain(slice::from_ref(imaginary_target))
             }
+
+            InlineAsm { ref target, .. } => Some(target).into_iter().chain(&[]),
         }
     }
 
@@ -1292,6 +1301,8 @@ impl<'tcx> TerminatorKind<'tcx> {
             FalseEdges { ref mut real_target, ref mut imaginary_target } => {
                 Some(real_target).into_iter().chain(slice::from_mut(imaginary_target))
             }
+
+            InlineAsm { ref mut target, .. } => Some(target).into_iter().chain(&mut []),
         }
     }
 
@@ -1305,6 +1316,7 @@ impl<'tcx> TerminatorKind<'tcx> {
             | TerminatorKind::GeneratorDrop
             | TerminatorKind::Yield { .. }
             | TerminatorKind::SwitchInt { .. }
+            | TerminatorKind::InlineAsm { .. }
             | TerminatorKind::FalseEdges { .. } => None,
             TerminatorKind::Call { cleanup: ref unwind, .. }
             | TerminatorKind::Assert { cleanup: ref unwind, .. }
@@ -1324,6 +1336,7 @@ impl<'tcx> TerminatorKind<'tcx> {
             | TerminatorKind::GeneratorDrop
             | TerminatorKind::Yield { .. }
             | TerminatorKind::SwitchInt { .. }
+            | TerminatorKind::InlineAsm { .. }
             | TerminatorKind::FalseEdges { .. } => None,
             TerminatorKind::Call { cleanup: ref mut unwind, .. }
             | TerminatorKind::Assert { cleanup: ref mut unwind, .. }
@@ -1490,6 +1503,9 @@ impl<'tcx> TerminatorKind<'tcx> {
             }
             FalseEdges { .. } => write!(fmt, "falseEdges"),
             FalseUnwind { .. } => write!(fmt, "falseUnwind"),
+            InlineAsm { ref asm, .. } => {
+                write!(fmt, "asm!({:?} : {:?} : {:?})", asm.asm, asm.outputs, asm.inputs)
+            }
         }
     }
 
@@ -1536,6 +1552,7 @@ impl<'tcx> TerminatorKind<'tcx> {
             FalseEdges { .. } => vec!["real".into(), "imaginary".into()],
             FalseUnwind { unwind: Some(_), .. } => vec!["real".into(), "cleanup".into()],
             FalseUnwind { unwind: None, .. } => vec!["real".into()],
+            InlineAsm { .. }  => vec!["next".into()],
         }
     }
 }
@@ -1591,10 +1608,6 @@ pub enum StatementKind<'tcx> {
 
     /// End the current live range for the storage of the local.
     StorageDead(Local),
-
-    /// Executes a piece of inline Assembly. Stored in a Box to keep the size
-    /// of `StatementKind` low.
-    InlineAsm(Box<InlineAsm<'tcx>>),
 
     /// Retag references in the given place, ensuring they got fresh tags. This is
     /// part of the Stacked Borrows model. These statements are currently only interpreted
@@ -1705,9 +1718,6 @@ impl Debug for Statement<'_> {
             StorageDead(ref place) => write!(fmt, "StorageDead({:?})", place),
             SetDiscriminant { ref place, variant_index } => {
                 write!(fmt, "discriminant({:?}) = {:?}", place, variant_index)
-            }
-            InlineAsm(ref asm) => {
-                write!(fmt, "asm!({:?} : {:?} : {:?})", asm.asm, asm.outputs, asm.inputs)
             }
             AscribeUserType(box(ref place, ref c_ty), ref variance) => {
                 write!(fmt, "AscribeUserType({:?}, {:?}, {:?})", place, variance, c_ty)
@@ -3001,6 +3011,7 @@ impl<'tcx> TypeFoldable<'tcx> for Terminator<'tcx> {
                 FalseEdges { real_target, imaginary_target }
             }
             FalseUnwind { real_target, unwind } => FalseUnwind { real_target, unwind },
+            InlineAsm { ref asm, target } => InlineAsm { asm: asm.fold_with(folder), target },
         };
         Terminator { source_info: self.source_info, kind }
     }
@@ -3040,6 +3051,7 @@ impl<'tcx> TypeFoldable<'tcx> for Terminator<'tcx> {
                     false
                 }
             }
+            InlineAsm { ref asm, .. } => asm.visit_with(visitor),
             Goto { .. }
             | Resume
             | Abort
