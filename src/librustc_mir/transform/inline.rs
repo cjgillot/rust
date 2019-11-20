@@ -738,6 +738,7 @@ impl<'a, 'tcx> MutVisitor<'tcx> for Integrator<'a, 'tcx> {
         match *kind {
             TerminatorKind::GeneratorDrop |
             TerminatorKind::Yield { .. } => bug!(),
+            TerminatorKind::InlineAsm { ref mut target, asm: _ } |
             TerminatorKind::Goto { ref mut target} => {
                 *target = self.update_target(*target);
             }

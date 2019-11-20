@@ -648,6 +648,7 @@ impl<'a, 'tcx> MirVisitor<'tcx> for MirNeighborCollector<'a, 'tcx> {
                 );
                 visit_drop_use(self.tcx, ty, true, self.output);
             }
+            mir::TerminatorKind::InlineAsm { .. } |
             mir::TerminatorKind::Goto { .. } |
             mir::TerminatorKind::SwitchInt { .. } |
             mir::TerminatorKind::Resume |

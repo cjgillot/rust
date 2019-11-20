@@ -97,6 +97,12 @@ impl<'a, 'tcx> Visitor<'tcx> for UnsafetyChecker<'a, 'tcx> {
                          undefined behavior", UnsafetyViolationKind::GeneralAndConstFn)
                 }
             }
+
+            TerminatorKind::InlineAsm { .. } => {
+                self.require_unsafe("use of inline assembly",
+                    "inline assembly is entirely unchecked and can cause undefined behavior",
+                    UnsafetyViolationKind::General)
+            },
         }
         self.super_terminator(terminator, location);
     }
@@ -117,12 +123,6 @@ impl<'a, 'tcx> Visitor<'tcx> for UnsafetyChecker<'a, 'tcx> {
             StatementKind::Nop => {
                 // safe (at least as emitted during MIR construction)
             }
-
-            StatementKind::InlineAsm { .. } => {
-                self.require_unsafe("use of inline assembly",
-                    "inline assembly is entirely unchecked and can cause undefined behavior",
-                    UnsafetyViolationKind::General)
-            },
         }
         self.super_statement(statement, location);
     }

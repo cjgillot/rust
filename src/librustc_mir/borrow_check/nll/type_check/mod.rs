@@ -1492,7 +1492,6 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
             StatementKind::FakeRead(..)
             | StatementKind::StorageLive(..)
             | StatementKind::StorageDead(..)
-            | StatementKind::InlineAsm { .. }
             | StatementKind::Retag { .. }
             | StatementKind::Nop => {}
         }
@@ -1513,6 +1512,7 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
             | TerminatorKind::Return
             | TerminatorKind::GeneratorDrop
             | TerminatorKind::Unreachable
+            | TerminatorKind::InlineAsm { .. }
             | TerminatorKind::Drop { .. }
             | TerminatorKind::FalseEdges { .. }
             | TerminatorKind::FalseUnwind { .. } => {
@@ -1769,6 +1769,7 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
         let is_cleanup = block_data.is_cleanup;
         self.last_span = block_data.terminator().source_info.span;
         match block_data.terminator().kind {
+            TerminatorKind::InlineAsm { target, asm: _ } |
             TerminatorKind::Goto { target } => {
                 self.assert_iscleanup(body, block_data, target, is_cleanup)
             }

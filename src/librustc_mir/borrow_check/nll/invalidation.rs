@@ -93,30 +93,6 @@ impl<'cx, 'tcx> Visitor<'tcx> for InvalidationGenerator<'cx, 'tcx> {
                     JustWrite,
                 );
             }
-            StatementKind::InlineAsm(ref asm) => {
-                for (o, output) in asm.asm.outputs.iter().zip(asm.outputs.iter()) {
-                    if o.is_indirect {
-                        // FIXME(eddyb) indirect inline asm outputs should
-                        // be encoded through MIR place derefs instead.
-                        self.access_place(
-                            location,
-                            output,
-                            (Deep, Read(ReadKind::Copy)),
-                            LocalMutationIsAllowed::No,
-                        );
-                    } else {
-                        self.mutate_place(
-                            location,
-                            output,
-                            if o.is_rw { Deep } else { Shallow(None) },
-                            if o.is_rw { WriteAndRead } else { JustWrite },
-                        );
-                    }
-                }
-                for (_, input) in asm.inputs.iter() {
-                    self.consume_operand(location, input);
-                }
-            }
             StatementKind::Nop |
             StatementKind::AscribeUserType(..) |
             StatementKind::Retag { .. } |
@@ -240,6 +216,30 @@ impl<'cx, 'tcx> Visitor<'tcx> for InvalidationGenerator<'cx, 'tcx> {
                     if borrow_of_local_data(&borrow_set.borrows[i].borrowed_place) {
                         self.all_facts.invalidates.push((start, i));
                     }
+                }
+            }
+            TerminatorKind::InlineAsm { ref asm, target: _ } => {
+                for (o, output) in asm.asm.outputs.iter().zip(asm.outputs.iter()) {
+                    if o.is_indirect {
+                        // FIXME(eddyb) indirect inline asm outputs should
+                        // be encoded through MIR place derefs instead.
+                        self.access_place(
+                            location,
+                            output,
+                            (Deep, Read(ReadKind::Copy)),
+                            LocalMutationIsAllowed::No,
+                        );
+                    } else {
+                        self.mutate_place(
+                            location,
+                            output,
+                            if o.is_rw { Deep } else { Shallow(None) },
+                            if o.is_rw { WriteAndRead } else { JustWrite },
+                        );
+                    }
+                }
+                for (_, input) in asm.inputs.iter() {
+                    self.consume_operand(location, input);
                 }
             }
             TerminatorKind::Goto { target: _ }

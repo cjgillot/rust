@@ -838,6 +838,7 @@ where
             mir::TerminatorKind::GeneratorDrop |
             mir::TerminatorKind::Unreachable => {}
             mir::TerminatorKind::Goto { target } |
+            mir::TerminatorKind::InlineAsm { target, asm: _ } |
             mir::TerminatorKind::Assert { target, cleanup: None, .. } |
             mir::TerminatorKind::Yield { resume: target, drop: None, .. } |
             mir::TerminatorKind::Drop { target, location: _, unwind: None } |

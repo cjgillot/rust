@@ -123,13 +123,6 @@ impl<'mir, 'tcx> BitDenotation<'tcx> for RequiresStorage<'mir, 'tcx> {
                     sets.gen(local);
                 }
             }
-            StatementKind::InlineAsm(box InlineAsm { ref outputs, .. }) => {
-                for p in &**outputs {
-                    if let PlaceBase::Local(local) = p.base {
-                        sets.gen(local);
-                    }
-                }
-            }
             _ => (),
         }
     }
@@ -143,11 +136,24 @@ impl<'mir, 'tcx> BitDenotation<'tcx> for RequiresStorage<'mir, 'tcx> {
     fn before_terminator_effect(&self, sets: &mut GenKillSet<Local>, loc: Location) {
         self.check_for_borrow(sets, loc);
 
-        if let TerminatorKind::Call {
-            destination: Some((Place { base: PlaceBase::Local(local), .. }, _)),
-            ..
-        } = self.body[loc.block].terminator().kind {
-            sets.gen(local);
+        match self.body[loc.block].terminator().kind {
+            TerminatorKind::Call {
+                destination: Some((Place { base: PlaceBase::Local(local), .. }, _)),
+                ..
+            } => {
+                sets.gen(local);
+            }
+            TerminatorKind::InlineAsm {
+                asm: box InlineAsm { ref outputs, .. },
+                ..
+            } => {
+                for p in &**outputs {
+                    if let PlaceBase::Local(local) = p.base {
+                        sets.gen(local);
+                    }
+                }
+            }
+            _ => {}
         }
     }
 

@@ -904,6 +904,7 @@ impl<'mir, 'tcx> MutVisitor<'tcx> for ConstPropagator<'mir, 'tcx> {
             TerminatorKind::DropAndReplace { .. } |
             TerminatorKind::Yield { .. } |
             TerminatorKind::GeneratorDrop |
+            TerminatorKind::InlineAsm { .. } |
             TerminatorKind::FalseEdges { .. } |
             TerminatorKind::FalseUnwind { .. } => { }
             //FIXME(wesleywiser) Call does have Operands that could be const-propagated

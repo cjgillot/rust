@@ -129,8 +129,6 @@ impl<'mir, 'tcx, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             // Defined to do nothing. These are added by optimization passes, to avoid changing the
             // size of MIR constantly.
             Nop => {}
-
-            InlineAsm { .. } => throw_unsup_format!("inline assembly is not supported"),
         }
 
         self.stack[frame_idx].stmt += 1;

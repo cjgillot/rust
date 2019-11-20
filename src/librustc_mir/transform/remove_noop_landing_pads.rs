@@ -52,7 +52,6 @@ impl RemoveNoopLandingPads {
 
                 StatementKind::Assign { .. } |
                 StatementKind::SetDiscriminant { .. } |
-                StatementKind::InlineAsm { .. } |
                 StatementKind::Retag { .. } => {
                     return false;
                 }
@@ -78,6 +77,7 @@ impl RemoveNoopLandingPads {
             TerminatorKind::Call { .. } |
             TerminatorKind::Assert { .. } |
             TerminatorKind::DropAndReplace { .. } |
+            TerminatorKind::InlineAsm { .. } |
             TerminatorKind::Drop { .. } => {
                 false
             }

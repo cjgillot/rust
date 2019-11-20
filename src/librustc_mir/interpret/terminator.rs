@@ -183,6 +183,7 @@ impl<'mir, 'tcx, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                                       `simplify_branches` mir pass"),
             FalseUnwind { .. } => bug!("should have been eliminated by\
                                        `simplify_branches` mir pass"),
+            InlineAsm { .. } => throw_unsup_format!("inline assembly is not supported"),
             Unreachable => throw_ub!(Unreachable),
         }
 

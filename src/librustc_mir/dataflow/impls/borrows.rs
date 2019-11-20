@@ -295,14 +295,6 @@ impl<'a, 'tcx> BitDenotation<'tcx> for Borrows<'a, 'tcx> {
                 self.kill_borrows_on_place(trans, &Place::from(local));
             }
 
-            mir::StatementKind::InlineAsm(ref asm) => {
-                for (output, kind) in asm.outputs.iter().zip(&asm.asm.outputs) {
-                    if !kind.is_indirect && !kind.is_rw {
-                        self.kill_borrows_on_place(trans, output);
-                    }
-                }
-            }
-
             mir::StatementKind::FakeRead(..) |
             mir::StatementKind::SetDiscriminant { .. } |
             mir::StatementKind::StorageLive(..) |
@@ -318,6 +310,20 @@ impl<'a, 'tcx> BitDenotation<'tcx> for Borrows<'a, 'tcx> {
                                 location: Location) {
         debug!("Borrows::before_terminator_effect: trans={:?} location={:?}",
                trans, location);
+
+        let block = &self.body.basic_blocks().get(location.block).unwrap_or_else(|| {
+            panic!("could not find block at location {:?}", location);
+        });
+        if let Some(terminator) = &block.terminator {
+            if let mir::TerminatorKind::InlineAsm { ref asm, .. } = terminator.kind {
+                for (output, kind) in asm.outputs.iter().zip(&asm.asm.outputs) {
+                    if !kind.is_indirect && !kind.is_rw {
+                        self.kill_borrows_on_place(trans, output);
+                    }
+                }
+            }
+        }
+
         self.kill_loans_out_of_scope_at_location(trans, location);
     }
 

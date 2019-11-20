@@ -548,7 +548,6 @@ impl Visitor<'tcx> for Validator<'_, 'mir, 'tcx> {
             StatementKind::SetDiscriminant { .. } |
             StatementKind::StorageLive(_) |
             StatementKind::StorageDead(_) |
-            StatementKind::InlineAsm {..} |
             StatementKind::Retag { .. } |
             StatementKind::AscribeUserType(..) |
             StatementKind::Nop => {}
@@ -642,6 +641,9 @@ impl Visitor<'tcx> for Validator<'_, 'mir, 'tcx> {
                     self.check_op_spanned(ops::LiveDrop, err_span);
                 }
             }
+
+            // FIXME(eddyb) should this really do nothing?
+            TerminatorKind::InlineAsm {..} => {}
 
             _ => {}
         }

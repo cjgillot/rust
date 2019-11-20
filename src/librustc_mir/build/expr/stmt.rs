@@ -112,7 +112,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 inputs,
             } => {
                 debug!("stmt_expr InlineAsm block_context.push(SubExpr) : {:?}", expr2);
-                this.block_context.push(BlockFrame::SubExpr);
                 let outputs = outputs
                     .into_iter()
                     .map(|output| unpack!(block = this.as_place(block, output)))
@@ -127,19 +126,20 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                         )
                     }).collect::<Vec<_>>()
                     .into_boxed_slice();
-                this.cfg.push(
+                let next_block = this.cfg.start_new_block();
+                this.cfg.terminate(
                     block,
-                    Statement {
-                        source_info,
-                        kind: StatementKind::InlineAsm(box InlineAsm {
+                    source_info,
+                    TerminatorKind::InlineAsm {
+                        asm: box InlineAsm {
                             asm: asm.clone(),
                             outputs,
                             inputs,
-                        }),
-                    },
+                        },
+                        target: next_block,
+                    }
                 );
-                this.block_context.pop();
-                block.unit()
+                next_block.unit()
             }
             _ => {
                 assert!(

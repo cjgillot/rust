@@ -541,38 +541,6 @@ impl<'cx, 'tcx> DataflowResultsConsumer<'cx, 'tcx> for MirBorrowckCtxt<'cx, 'tcx
                     flow_state,
                 );
             }
-            StatementKind::InlineAsm(ref asm) => {
-                for (o, output) in asm.asm.outputs.iter().zip(asm.outputs.iter()) {
-                    if o.is_indirect {
-                        // FIXME(eddyb) indirect inline asm outputs should
-                        // be encoded through MIR place derefs instead.
-                        self.access_place(
-                            location,
-                            (output, o.span),
-                            (Deep, Read(ReadKind::Copy)),
-                            LocalMutationIsAllowed::No,
-                            flow_state,
-                        );
-                        self.check_if_path_or_subpath_is_moved(
-                            location,
-                            InitializationRequiringAction::Use,
-                            (output.as_ref(), o.span),
-                            flow_state,
-                        );
-                    } else {
-                        self.mutate_place(
-                            location,
-                            (output, o.span),
-                            if o.is_rw { Deep } else { Shallow(None) },
-                            if o.is_rw { WriteAndRead } else { JustWrite },
-                            flow_state,
-                        );
-                    }
-                }
-                for (_, input) in asm.inputs.iter() {
-                    self.consume_operand(location, (input, span), flow_state);
-                }
-            }
             StatementKind::Nop
             | StatementKind::AscribeUserType(..)
             | StatementKind::Retag { .. }
@@ -736,6 +704,38 @@ impl<'cx, 'tcx> DataflowResultsConsumer<'cx, 'tcx> for MirBorrowckCtxt<'cx, 'tcx
                         self.check_for_invalidation_at_exit(loc, borrow, span);
                     }
                 });
+            }
+            TerminatorKind::InlineAsm { ref asm, target: _ } => {
+                for (o, output) in asm.asm.outputs.iter().zip(asm.outputs.iter()) {
+                    if o.is_indirect {
+                        // FIXME(eddyb) indirect inline asm outputs should
+                        // be encoded through MIR place derefs instead.
+                        self.access_place(
+                            location,
+                            (output, o.span),
+                            (Deep, Read(ReadKind::Copy)),
+                            LocalMutationIsAllowed::No,
+                            flow_state,
+                        );
+                        self.check_if_path_or_subpath_is_moved(
+                            location,
+                            InitializationRequiringAction::Use,
+                            (output.as_ref(), o.span),
+                            flow_state,
+                        );
+                    } else {
+                        self.mutate_place(
+                            location,
+                            (output, o.span),
+                            if o.is_rw { Deep } else { Shallow(None) },
+                            if o.is_rw { WriteAndRead } else { JustWrite },
+                            flow_state,
+                        );
+                    }
+                }
+                for (_, input) in asm.inputs.iter() {
+                    self.consume_operand(location, (input, span), flow_state);
+                }
             }
             TerminatorKind::Goto { target: _ }
             | TerminatorKind::Abort
