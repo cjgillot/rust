@@ -218,6 +218,10 @@ fn mir_const(tcx: TyCtxt<'_>, def_id: DefId) -> &Steal<BodyAndCache<'_>> {
 
     let mut body = tcx.mir_built(def_id).steal();
 
+    let ro_body = body.unwrap_read_only();
+    let liveness = util::liveness::liveness_of_locals(ro_body);
+    util::liveness::check_dead_def_use(tcx, ro_body, &liveness);
+
     util::dump_mir(tcx, None, "mir_map", &0, MirSource::item(def_id), &body, |_, _| Ok(()));
 
     run_passes(

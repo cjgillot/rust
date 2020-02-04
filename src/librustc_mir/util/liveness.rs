@@ -26,6 +26,7 @@
 
 use crate::transform::MirSource;
 use crate::util::pretty::{dump_enabled, write_basic_block, write_mir_intro};
+use rustc::lint;
 use rustc::mir::visit::{
     MutatingUseContext, NonMutatingUseContext, NonUseContext, PlaceContext, Visitor,
 };
@@ -35,6 +36,7 @@ use rustc::ty::{self, TyCtxt};
 use rustc_data_structures::work_queue::WorkQueue;
 use rustc_index::bit_set::BitSet;
 use rustc_index::vec::{Idx, IndexVec};
+use rustc_span::Symbol;
 use std::fs;
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -322,4 +324,153 @@ pub fn write_mir_fn<'tcx>(
 
     writeln!(w, "}}")?;
     Ok(())
+}
+
+struct DeadDefVisitor<'a, 'tcx> {
+    body: ReadOnlyBodyAndCache<'a, 'tcx>,
+    defs_uses: DefsUses,
+    last_def: IndexVec<Local, Option<(PlaceContext, Location)>>,
+    last_use: IndexVec<Local, Option<(PlaceContext, Location)>>,
+    tcx: TyCtxt<'tcx>,
+    local_names: IndexVec<Local, Option<Symbol>>,
+}
+
+impl DeadDefVisitor<'_, '_> {
+    fn reset(&mut self, liveness: &LiveVarSet) {
+        self.defs_uses.uses.overwrite(liveness);
+        self.defs_uses.defs.clear();
+        self.last_def.iter_mut().for_each(|a| *a = None);
+        self.last_use.iter_mut().for_each(|a| *a = None);
+    }
+
+    fn report_unused(&mut self, local: Local, context: PlaceContext, location: Location) {
+        let source_info = self.body.source_info(location);
+        let lint_root = match self.body.source_scopes[source_info.scope].local_data.as_ref() {
+            ClearCrossCrate::Set(data) => data.lint_root,
+            _ => return,
+        };
+        let name = match self.local_names[local] {
+            Some(name) => {
+                if name.as_str().starts_with("_") {
+                    return;
+                }
+                name
+            }
+            None => return,
+        };
+
+        debug!("Found dead def {:?} overwritten by ", (context, location));
+        match context {
+            PlaceContext::MutatingUse(MutatingUseContext::Call)
+            | PlaceContext::MutatingUse(MutatingUseContext::Store) => {
+                self.tcx.struct_span_lint_hir(
+                    lint::builtin::UNUSED_ASSIGNMENTS,
+                    lint_root,
+                    source_info.span,
+                    |lint| lint.build("variable is assigned to, but never used").emit(),
+                );
+            }
+
+            PlaceContext::NonUse(NonUseContext::StorageLive) => {
+                self.tcx.struct_span_lint_hir(
+                    lint::builtin::UNUSED_VARIABLES,
+                    lint_root,
+                    source_info.span,
+                    |lint| {
+                        lint.build("unused variable")
+                            .note(&format!("consider using `_{}` instead", name))
+                            .emit()
+                    },
+                );
+            }
+
+            _ => {}
+        }
+    }
+
+    fn report_redefined(&mut self, local: Local, context: PlaceContext, location: Location) {
+        let source_info = self.body.source_info(location);
+        let lint_root = match self.body.source_scopes[source_info.scope].local_data.as_ref() {
+            ClearCrossCrate::Set(data) => data.lint_root,
+            _ => return,
+        };
+        let _name = match self.local_names[local] {
+            Some(name) => {
+                if name.as_str().starts_with("_") {
+                    return;
+                }
+                name
+            }
+            None => return,
+        };
+
+        match context {
+            PlaceContext::MutatingUse(MutatingUseContext::Call)
+            | PlaceContext::MutatingUse(MutatingUseContext::Store) => {
+                self.tcx.struct_span_lint_hir(
+                    lint::builtin::UNUSED_ASSIGNMENTS,
+                    lint_root,
+                    source_info.span,
+                    |lint| lint.build("passed value is never read").emit(),
+                );
+            }
+
+            _ => {}
+        }
+    }
+}
+
+impl<'a, 'tcx> Visitor<'tcx> for DeadDefVisitor<'a, 'tcx> {
+    fn visit_local(&mut self, &local: &Local, context: PlaceContext, loc: Location) {
+        match categorize(context) {
+            Some(DefUse::Def) => {
+                if !self.defs_uses.uses.contains(local) {
+                    self.report_unused(local, context, loc);
+                };
+                if self.defs_uses.defs.contains(local) {
+                    self.report_redefined(local, context, loc);
+                };
+                self.last_use[local] = Some((context, loc));
+                self.defs_uses.add_def(local)
+            }
+            Some(DefUse::Use) | Some(DefUse::Drop) => {
+                self.last_use[local] = Some((context, loc));
+                self.defs_uses.add_use(local)
+            }
+            _ => (),
+        }
+    }
+}
+
+pub fn check_dead_def_use(
+    tcx: TyCtxt<'tcx>,
+    body: ReadOnlyBodyAndCache<'_, 'tcx>,
+    liveness: &LivenessResult,
+) {
+    let local_names = super::collect_local_names(&*body);
+
+    let num_live_vars = body.local_decls.len();
+    let mut visitor = DeadDefVisitor {
+        body,
+        defs_uses: DefsUses {
+            defs: LiveVarSet::new_empty(num_live_vars),
+            uses: LiveVarSet::new_empty(num_live_vars),
+        },
+        last_def: IndexVec::from_elem_n(None, num_live_vars),
+        last_use: IndexVec::from_elem_n(None, num_live_vars),
+        tcx,
+        local_names,
+    };
+
+    for (block, b) in body.basic_blocks().iter_enumerated() {
+        visitor.reset(&liveness.outs[block]);
+
+        // Visit the various parts of the basic block in reverse. If we go
+        // forward, the logic in `add_def` and `add_use` would be wrong.
+        visitor.visit_terminator(b.terminator(), body.terminator_loc(block));
+        for (statement_index, statement) in b.statements.iter().enumerate().rev() {
+            let location = Location { block, statement_index };
+            visitor.visit_statement(statement, location);
+        }
+    }
 }
