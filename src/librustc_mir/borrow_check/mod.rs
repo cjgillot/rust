@@ -116,23 +116,7 @@ fn do_mir_borrowck<'a, 'tcx>(
     let param_env = tcx.param_env(def_id);
     let id = tcx.hir().as_local_hir_id(def_id).expect("do_mir_borrowck: non-local DefId");
 
-    let mut local_names = IndexVec::from_elem(None, &input_body.local_decls);
-    for var_debug_info in &input_body.var_debug_info {
-        if let Some(local) = var_debug_info.place.as_local() {
-            if let Some(prev_name) = local_names[local] {
-                if var_debug_info.name != prev_name {
-                    span_bug!(
-                        var_debug_info.source_info.span,
-                        "local {:?} has many names (`{}` vs `{}`)",
-                        local,
-                        prev_name,
-                        var_debug_info.name
-                    );
-                }
-            }
-            local_names[local] = Some(var_debug_info.name);
-        }
-    }
+    let local_names = crate::util::collect_local_names(input_body);
 
     // Gather the upvars of a closure, if any.
     let tables = tcx.typeck_tables_of(def_id);
