@@ -2,7 +2,10 @@
 //! generate the actual methods on tcx which find and execute the provider,
 //! manage the caches, and so forth.
 
-use crate::dep_graph::DepGraph;
+use crate::dep_graph::{
+    DepContext, DepGraph, DepKind, DepNode, DepNodeIndex, SerializedDepNodeIndex,
+};
+use crate::ich::StableHashingContext;
 use crate::ty::query::Query;
 use crate::ty::tls;
 use crate::ty::TyCtxt;
@@ -10,12 +13,81 @@ use rustc_query_system::query::QueryContext;
 use rustc_query_system::query::{QueryJobId, QueryJobInfo};
 
 use rustc_data_structures::fx::FxHashMap;
+use rustc_data_structures::profiling::SelfProfilerRef;
 use rustc_data_structures::sync::Lock;
 use rustc_data_structures::thin_vec::ThinVec;
 use rustc_errors::Diagnostic;
 use rustc_span::def_id::DefId;
 
-impl QueryContext for TyCtxt<'tcx> {
+#[derive(Copy, Clone)]
+pub struct QueryCtxt<'tcx>(pub(crate) TyCtxt<'tcx>);
+
+impl<'tcx> std::ops::Deref for QueryCtxt<'tcx> {
+    type Target = TyCtxt<'tcx>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<'tcx> DepContext for QueryCtxt<'tcx> {
+    type DepKind = DepKind;
+    type StableHashingContext = StableHashingContext<'tcx>;
+
+    fn create_stable_hashing_context(&self) -> Self::StableHashingContext {
+        self.0.create_stable_hashing_context()
+    }
+
+    fn profiler(&self) -> &SelfProfilerRef {
+        self.0.profiler()
+    }
+
+    fn debug_dep_node(&self) -> bool {
+        self.0.debug_dep_node()
+    }
+
+    fn debug_dep_tasks(&self) -> bool {
+        self.0.debug_dep_tasks()
+    }
+
+    fn dep_graph(&self) -> &DepGraph {
+        &self.dep_graph
+    }
+
+    fn try_force_from_dep_node(&self, dep_node: &DepNode) -> bool {
+        self.0.try_force_from_dep_node(dep_node)
+    }
+
+    fn has_errors_or_delayed_span_bugs(&self) -> bool {
+        self.0.has_errors_or_delayed_span_bugs()
+    }
+
+    fn diagnostic(&self) -> &rustc_errors::Handler {
+        self.0.diagnostic()
+    }
+
+    fn try_load_from_on_disk_cache(&self, dep_node: &DepNode) {
+        self.0.try_load_from_on_disk_cache(dep_node)
+    }
+
+    fn load_diagnostics(&self, prev_dep_node_index: SerializedDepNodeIndex) -> Vec<Diagnostic> {
+        self.0.load_diagnostics(prev_dep_node_index)
+    }
+
+    fn store_diagnostics(&self, dep_node_index: DepNodeIndex, diagnostics: ThinVec<Diagnostic>) {
+        self.0.store_diagnostics(dep_node_index, diagnostics)
+    }
+
+    fn store_diagnostics_for_anon_node(
+        &self,
+        dep_node_index: DepNodeIndex,
+        diagnostics: ThinVec<Diagnostic>,
+    ) {
+        self.0.store_diagnostics_for_anon_node(dep_node_index, diagnostics)
+    }
+}
+
+impl QueryContext for QueryCtxt<'tcx> {
     type Query = Query<'tcx>;
 
     fn incremental_verify_ich(&self) -> bool {
@@ -26,15 +98,11 @@ impl QueryContext for TyCtxt<'tcx> {
     }
 
     fn def_path_str(&self, def_id: DefId) -> String {
-        TyCtxt::def_path_str(*self, def_id)
-    }
-
-    fn dep_graph(&self) -> &DepGraph {
-        &self.dep_graph
+        self.0.def_path_str(def_id)
     }
 
     fn current_query_job(&self) -> Option<QueryJobId<Self::DepKind>> {
-        tls::with_related_context(*self, |icx| icx.query)
+        tls::with_related_context(**self, |icx| icx.query)
     }
 
     fn try_collect_active_jobs(
@@ -53,22 +121,22 @@ impl QueryContext for TyCtxt<'tcx> {
         diagnostics: Option<&Lock<ThinVec<Diagnostic>>>,
         compute: impl FnOnce(Self) -> R,
     ) -> R {
-        TyCtxt::start_query(self, token, diagnostics, compute)
+        TyCtxt::start_query(**self, token, diagnostics, |tcx| compute(QueryCtxt(tcx)))
     }
 }
 
 macro_rules! handle_cycle_error {
     ([][$tcx: expr, $error:expr]) => {{
-        $tcx.report_cycle($error).emit();
+        $tcx.report_cycle($tcx, $error).emit();
         Value::from_cycle_error($tcx)
     }};
     ([fatal_cycle $($rest:tt)*][$tcx:expr, $error:expr]) => {{
-        $tcx.report_cycle($error).emit();
+        $tcx.report_cycle($tcx, $error).emit();
         $tcx.sess.abort_if_errors();
         unreachable!()
     }};
     ([cycle_delay_bug $($rest:tt)*][$tcx:expr, $error:expr]) => {{
-        $tcx.report_cycle($error).delay_as_bug();
+        $tcx.report_cycle($tcx, $error).delay_as_bug();
         Value::from_cycle_error($tcx)
     }};
     ([$other:ident $(($($other_args:tt)*))* $(, $($modifiers:tt)*)*][$($args:tt)*]) => {
@@ -151,7 +219,7 @@ macro_rules! define_query_enum {
                 }
             }
 
-            pub fn describe(&self, tcx: TyCtxt<$tcx>) -> Cow<'static, str> {
+            pub(crate) fn describe(&self, tcx: QueryCtxt<$tcx>) -> Cow<'static, str> {
                 let (r, name) = match *self {
                     $(Query::$name(key) => {
                         (queries::$name::describe(tcx, key), stringify!($name))
@@ -205,7 +273,7 @@ macro_rules! define_queries {
             })*
         }
 
-        $(impl<$tcx> QueryConfig<TyCtxt<$tcx>> for queries::$name<$tcx> {
+        $(impl<$tcx> QueryConfig<QueryCtxt<$tcx>> for queries::$name<$tcx> {
             type Key = $($K)*;
             type Value = $V;
             type Stored = <
@@ -215,7 +283,7 @@ macro_rules! define_queries {
             const NAME: &'static str = stringify!($name);
         }
 
-        impl<$tcx> QueryAccessors<TyCtxt<$tcx>> for queries::$name<$tcx> {
+        impl<$tcx> QueryAccessors<QueryCtxt<$tcx>> for queries::$name<$tcx> {
             const ANON: bool = is_anon!([$($modifiers)*]);
             const EVAL_ALWAYS: bool = is_eval_always!([$($modifiers)*]);
             const DEP_KIND: dep_graph::DepKind = dep_graph::DepKind::$node;
@@ -223,12 +291,12 @@ macro_rules! define_queries {
             type Cache = query_storage!([$($modifiers)*][$($K)*, $V]);
 
             #[inline(always)]
-            fn query_state<'a>(tcx: TyCtxt<$tcx>) -> &'a QueryState<TyCtxt<$tcx>, Self::Cache> {
+            fn query_state<'a>(tcx: QueryCtxt<$tcx>) -> &'a QueryState<QueryCtxt<$tcx>, Self::Cache> {
                 &tcx.queries.$name
             }
 
             #[inline]
-            fn compute(tcx: TyCtxt<'tcx>, key: Self::Key) -> Self::Value {
+            fn compute(tcx: QueryCtxt<'tcx>, key: Self::Key) -> Self::Value {
                 let provider = tcx.queries.providers.get(key.query_crate())
                     // HACK(eddyb) it's possible crates may be loaded after
                     // the query engine is created, and because crate loading
@@ -236,7 +304,7 @@ macro_rules! define_queries {
                     // would be missing appropriate entries in `providers`.
                     .unwrap_or(&tcx.queries.fallback_extern_providers)
                     .$name;
-                provider(tcx, key)
+                provider(*tcx, key)
             }
 
             fn hash_result(
@@ -247,7 +315,7 @@ macro_rules! define_queries {
             }
 
             fn handle_cycle_error(
-                tcx: TyCtxt<'tcx>,
+                tcx: QueryCtxt<'tcx>,
                 error: CycleError<Query<'tcx>>
             ) -> Self::Value {
                 handle_cycle_error!([$($modifiers)*][tcx, error])
@@ -257,7 +325,8 @@ macro_rules! define_queries {
         impl TyCtxtEnsure<$tcx> {
             $(#[inline(always)]
             pub fn $name(self, key: query_helper_param_ty!($($K)*)) {
-                ensure_query::<queries::$name<'_>, _>(self.tcx, key.into_query_param())
+                let qcx = QueryCtxt(self.tcx);
+                ensure_query::<queries::$name<'_>, _>(qcx, key.into_query_param())
             })*
         }
 
@@ -265,7 +334,7 @@ macro_rules! define_queries {
             $(#[inline(always)]
             #[must_use]
             pub fn $name(self, key: query_helper_param_ty!($($K)*))
-                -> <queries::$name<$tcx> as QueryConfig<TyCtxt<$tcx>>>::Stored
+                -> <queries::$name<$tcx> as QueryConfig<QueryCtxt<$tcx>>>::Stored
             {
                 self.at(DUMMY_SP).$name(key.into_query_param())
             })*
@@ -274,9 +343,10 @@ macro_rules! define_queries {
         impl TyCtxtAt<$tcx> {
             $(#[inline(always)]
             pub fn $name(self, key: query_helper_param_ty!($($K)*))
-                -> <queries::$name<$tcx> as QueryConfig<TyCtxt<$tcx>>>::Stored
+                -> <queries::$name<$tcx> as QueryConfig<QueryCtxt<$tcx>>>::Stored
             {
-                get_query::<queries::$name<'_>, _>(self.tcx, self.span, key.into_query_param())
+                let qcx = QueryCtxt(self.tcx);
+                get_query::<queries::$name<'_>, _>(qcx, self.span, key.into_query_param())
             })*
         }
     }
@@ -294,8 +364,8 @@ macro_rules! define_queries_struct {
             fallback_extern_providers: Box<Providers<$tcx>>,
 
             $($name: QueryState<
-                TyCtxt<$tcx>,
-                <queries::$name<$tcx> as QueryAccessors<TyCtxt<'tcx>>>::Cache,
+                QueryCtxt<$tcx>,
+                <queries::$name<$tcx> as QueryAccessors<QueryCtxt<'tcx>>>::Cache,
             >,)*
         }
 
@@ -315,12 +385,12 @@ macro_rules! define_queries_struct {
 
             fn try_collect_active_jobs(
                 &self
-            ) -> Option<FxHashMap<QueryJobId<crate::dep_graph::DepKind>, QueryJobInfo<TyCtxt<'tcx>>>> {
+            ) -> Option<FxHashMap<QueryJobId<crate::dep_graph::DepKind>, QueryJobInfo<QueryCtxt<'tcx>>>> {
                 let mut jobs = FxHashMap::default();
 
                 $(
                     self.$name.try_collect_active_jobs(
-                        <queries::$name<'tcx> as QueryAccessors<TyCtxt<'tcx>>>::DEP_KIND,
+                        <queries::$name<'tcx> as QueryAccessors<QueryCtxt<'tcx>>>::DEP_KIND,
                         Query::$name,
                         &mut jobs,
                     )?;

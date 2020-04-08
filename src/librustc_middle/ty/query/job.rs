@@ -1,3 +1,4 @@
+use crate::ty::query::QueryCtxt;
 use crate::ty::tls;
 
 use rustc_query_system::query::deadlock;
@@ -21,8 +22,9 @@ pub unsafe fn handle_deadlock() {
     thread::spawn(move || {
         tls::GCX_PTR.set(gcx_ptr, || {
             rustc_ast::attr::GLOBALS.set(syntax_globals, || {
-                rustc_span::GLOBALS
-                    .set(rustc_span_globals, || tls::with_global(|tcx| deadlock(tcx, &registry)))
+                rustc_span::GLOBALS.set(rustc_span_globals, || {
+                    tls::with_global(|tcx| deadlock(QueryCtxt(tcx), &registry))
+                })
             });
         })
     });

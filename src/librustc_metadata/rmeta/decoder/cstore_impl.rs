@@ -18,6 +18,7 @@ use rustc_middle::middle::exported_symbols::ExportedSymbol;
 use rustc_middle::middle::stability::DeprecationEntry;
 use rustc_middle::ty::query::Providers;
 use rustc_middle::ty::query::QueryConfig;
+use rustc_middle::ty::query::QueryCtxt;
 use rustc_middle::ty::{self, TyCtxt};
 use rustc_session::utils::NativeLibKind;
 use rustc_session::{CrateDisambiguator, Session};
@@ -37,7 +38,7 @@ macro_rules! provide {
             $(fn $name<$lt: $lt, T: IntoArgs>(
                 $tcx: TyCtxt<$lt>,
                 def_id_arg: T,
-            ) -> <ty::queries::$name<$lt> as QueryConfig<TyCtxt<$lt>>>::Value {
+            ) -> <ty::queries::$name<$lt> as QueryConfig<QueryCtxt<$lt>>>::Value {
                 let _prof_timer =
                     $tcx.prof.generic_activity("metadata_decode_entry");
 

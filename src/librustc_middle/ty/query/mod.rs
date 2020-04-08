@@ -63,6 +63,7 @@ use std::sync::Arc;
 
 #[macro_use]
 mod plumbing;
+pub use plumbing::QueryCtxt;
 pub(crate) use rustc_query_system::query::CycleError;
 use rustc_query_system::query::*;
 
@@ -132,7 +133,7 @@ impl<'tcx> TyCtxt<'tcx> {
     /// captured during execution and the actual result.
     #[inline(always)]
     fn start_query<R>(
-        &self,
+        self,
         token: QueryJobId<crate::dep_graph::DepKind>,
         diagnostics: Option<&Lock<ThinVec<Diagnostic>>>,
         compute: impl FnOnce(Self) -> R,
@@ -140,10 +141,10 @@ impl<'tcx> TyCtxt<'tcx> {
         // The `TyCtxt` stored in TLS has the same global interner lifetime
         // as `self`, so we use `with_related_context` to relate the 'tcx lifetimes
         // when accessing the `ImplicitCtxt`.
-        tls::with_related_context(*self, move |current_icx| {
+        tls::with_related_context(self, move |current_icx| {
             // Update the `ImplicitCtxt` to point to our new query job.
             let new_icx = ImplicitCtxt {
-                tcx: *self,
+                tcx: self,
                 query: Some(token),
                 diagnostics,
                 layout_depth: current_icx.layout_depth,
@@ -152,7 +153,7 @@ impl<'tcx> TyCtxt<'tcx> {
 
             // Use the `ImplicitCtxt` while we execute the query.
             tls::enter_context(&new_icx, |_| {
-                rustc_data_structures::stack::ensure_sufficient_stack(|| compute(*self))
+                rustc_data_structures::stack::ensure_sufficient_stack(|| compute(self))
             })
         })
     }
@@ -161,6 +162,7 @@ impl<'tcx> TyCtxt<'tcx> {
     #[cold]
     fn report_cycle(
         self,
+        qcx: QueryCtxt<'tcx>,
         CycleError { usage, cycle: stack }: CycleError<Query<'tcx>>,
     ) -> DiagnosticBuilder<'tcx> {
         assert!(!stack.is_empty());
@@ -180,24 +182,24 @@ impl<'tcx> TyCtxt<'tcx> {
                 span,
                 E0391,
                 "cycle detected when {}",
-                stack[0].query.describe(self)
+                stack[0].query.describe(qcx)
             );
 
             for i in 1..stack.len() {
                 let query = &stack[i].query;
                 let span = fix_span(stack[(i + 1) % stack.len()].span, query);
-                err.span_note(span, &format!("...which requires {}...", query.describe(self)));
+                err.span_note(span, &format!("...which requires {}...", query.describe(qcx)));
             }
 
             err.note(&format!(
                 "...which again requires {}, completing the cycle",
-                stack[0].query.describe(self)
+                stack[0].query.describe(qcx)
             ));
 
             if let Some((span, query)) = usage {
                 err.span_note(
                     fix_span(span, &query),
-                    &format!("cycle used when {}", query.describe(self)),
+                    &format!("cycle used when {}", query.describe(qcx)),
                 );
             }
 
@@ -231,7 +233,7 @@ impl<'tcx> TyCtxt<'tcx> {
                             "#{} [{}] {}",
                             i,
                             query_info.info.query.name(),
-                            query_info.info.query.describe(icx.tcx)
+                            query_info.info.query.describe(QueryCtxt(icx.tcx))
                         ),
                     );
                     diag.span =

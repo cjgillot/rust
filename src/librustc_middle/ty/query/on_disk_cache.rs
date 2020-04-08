@@ -3,6 +3,7 @@ use crate::mir::interpret;
 use crate::mir::interpret::{AllocDecodingSession, AllocDecodingState};
 use crate::ty::codec::{self as ty_codec, TyDecoder, TyEncoder};
 use crate::ty::context::TyCtxt;
+use crate::ty::query::QueryCtxt;
 use crate::ty::{self, Ty};
 use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::fx::FxHashMap;
@@ -203,7 +204,7 @@ impl<'sess> OnDiskCache<'sess> {
                     ($($query:ident,)*) => {
                         $(
                             encode_query_results::<ty::query::queries::$query<'_>, _>(
-                                tcx,
+                                QueryCtxt(tcx),
                                 enc,
                                 qri
                             )?;
@@ -962,12 +963,12 @@ impl<'a> SpecializedDecoder<IntEncodedWithFixedSize> for opaque::Decoder<'a> {
 }
 
 fn encode_query_results<'a, 'tcx, Q, E>(
-    tcx: TyCtxt<'tcx>,
+    tcx: QueryCtxt<'tcx>,
     encoder: &mut CacheEncoder<'a, 'tcx, E>,
     query_result_index: &mut EncodedQueryResultIndex,
 ) -> Result<(), E::Error>
 where
-    Q: super::QueryDescription<TyCtxt<'tcx>> + super::QueryAccessors<TyCtxt<'tcx>>,
+    Q: super::QueryDescription<QueryCtxt<'tcx>>,
     Q::Value: Encodable,
     E: 'a + TyEncoder,
 {

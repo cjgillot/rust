@@ -1,4 +1,5 @@
 use crate::ty::context::TyCtxt;
+use crate::ty::query::QueryCtxt;
 use measureme::{StringComponent, StringId};
 use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::profiling::SelfProfiler;
@@ -183,7 +184,7 @@ where
 pub(super) fn alloc_self_profile_query_strings_for_query_cache<'tcx, C>(
     tcx: TyCtxt<'tcx>,
     query_name: &'static str,
-    query_state: &QueryState<TyCtxt<'tcx>, C>,
+    query_state: &QueryState<QueryCtxt<'tcx>, C>,
     string_cache: &mut QueryKeyStringCache,
 ) where
     C: QueryCache,

@@ -1,4 +1,4 @@
-use crate::ty::query::queries;
+use crate::ty::query::{queries, QueryCtxt};
 use crate::ty::TyCtxt;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_query_system::query::QueryCache;
@@ -125,8 +125,8 @@ macro_rules! print_stats {
 
             $(
                 queries.push(stats::<
-                    TyCtxt<'_>,
-                    <queries::$name<'_> as QueryAccessors<TyCtxt<'_>>>::Cache,
+                    QueryCtxt<'_>,
+                    <queries::$name<'_> as QueryAccessors<QueryCtxt<'_>>>::Cache,
                 >(
                     stringify!($name),
                     &tcx.queries.$name,

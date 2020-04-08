@@ -328,9 +328,10 @@ fn add_query_description_impl(
             quote! {
                 #[inline]
                 fn try_load_from_disk(
-                    #tcx: TyCtxt<'tcx>,
-                    #id: SerializedDepNodeIndex
+                    tcx: QueryCtxt<'tcx>,
+                    id: SerializedDepNodeIndex
                 ) -> Option<Self::Value> {
+                    let (#tcx, #id) = (*tcx, id);
                     #block
                 }
             }
@@ -339,10 +340,10 @@ fn add_query_description_impl(
             quote! {
                 #[inline]
                 fn try_load_from_disk(
-                    tcx: TyCtxt<'tcx>,
+                    tcx: QueryCtxt<'tcx>,
                     id: SerializedDepNodeIndex
                 ) -> Option<Self::Value> {
-                    tcx.queries.on_disk_cache.try_load_query_result(tcx, id)
+                    tcx.queries.on_disk_cache.try_load_query_result(*tcx, id)
                 }
             }
         };
@@ -367,10 +368,11 @@ fn add_query_description_impl(
             #[inline]
             #[allow(unused_variables, unused_braces)]
             fn cache_on_disk(
-                #tcx: TyCtxt<'tcx>,
-                #key: &Self::Key,
-                #value: Option<&Self::Value>
+                tcx: QueryCtxt<'tcx>,
+                key: &Self::Key,
+                value: Option<&Self::Value>
             ) -> bool {
+                let (#tcx, #key, #value) = (*tcx, key, value);
                 #expr
             }
 
@@ -389,15 +391,16 @@ fn add_query_description_impl(
     let desc = quote! {
         #[allow(unused_variables)]
         fn describe(
-            #tcx: TyCtxt<'tcx>,
-            #key: #arg,
+            tcx: QueryCtxt<'tcx>,
+            key: #arg,
         ) -> Cow<'static, str> {
+            let (#tcx, #key) = (*tcx, key);
             format!(#desc).into()
         }
     };
 
     impls.extend(quote! {
-        impl<'tcx> QueryDescription<TyCtxt<'tcx>> for queries::#name<'tcx> {
+        impl<'tcx> QueryDescription<QueryCtxt<'tcx>> for queries::#name<'tcx> {
             #desc
             #cache
         }
@@ -440,7 +443,7 @@ pub fn rustc_queries(input: TokenStream) -> TokenStream {
                                             .unwrap_or(false));
 
                             let key = <#arg as DepNodeParams<TyCtxt<'_>>>::recover($tcx, $dep_node).unwrap();
-                            if queries::#name::cache_on_disk($tcx, &key, None) {
+                            if queries::#name::cache_on_disk(QueryCtxt($tcx), &key, None) {
                                 let _ = $tcx.#name(key);
                             }
                         }
@@ -493,7 +496,7 @@ pub fn rustc_queries(input: TokenStream) -> TokenStream {
                     if <#arg as DepNodeParams<TyCtxt<'_>>>::can_reconstruct_query_key() {
                         if let Some(key) = <#arg as DepNodeParams<TyCtxt<'_>>>::recover($tcx, $dep_node) {
                             force_query::<crate::ty::query::queries::#name<'_>, _>(
-                                $tcx,
+                                QueryCtxt($tcx),
                                 key,
                                 DUMMY_SP,
                                 *$dep_node
