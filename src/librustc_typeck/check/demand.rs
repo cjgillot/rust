@@ -135,7 +135,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         };
 
         let expr = expr.peel_drop_temps();
-        let cause = self.misc(expr.span);
+        let cause = self.misc(self.tcx.hir().span(expr.hir_id));
         let expr_ty = self.resolve_vars_with_obligations(checked_ty);
         let mut err = self.report_mismatched_types(&cause, expected, expr_ty, e);
 
@@ -206,11 +206,12 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 .peekable();
 
             if compatible_variants.peek().is_some() {
-                if let Ok(expr_text) = self.tcx.sess.source_map().span_to_snippet(expr.span) {
+                let expr_span = self.tcx.hir().span(expr.hir_id);
+                if let Ok(expr_text) = self.tcx.sess.source_map().span_to_snippet(expr_span) {
                     let suggestions = compatible_variants.map(|v| format!("{}({})", v, expr_text));
                     let msg = "try using a variant of the expected enum";
                     err.span_suggestions(
-                        expr.span,
+                        expr_span,
                         msg,
                         suggestions,
                         Applicability::MaybeIncorrect,
@@ -393,7 +394,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         expected: Ty<'tcx>,
     ) -> Option<(Span, &'static str, String, Applicability)> {
         let sm = self.sess().source_map();
-        let sp = expr.span;
+        let sp = self.tcx.hir().span(expr.hir_id);
         if sm.is_imported(sp) {
             // Ignore if span is from within a macro #41858, #58298. We previously used the macro
             // call span, but that breaks down when the type error comes from multiple calls down.
@@ -409,6 +410,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         // `ExprKind::DropTemps` is semantically irrelevant for these suggestions.
         let expr = expr.peel_drop_temps();
+        let expr_span = self.tcx.hir().span(expr.hir_id);
 
         match (&expr.kind, &expected.kind, &checked_ty.kind) {
             (_, &ty::Ref(_, exp, _), &ty::Ref(_, check, _)) => match (&exp.kind, &check.kind) {
@@ -473,7 +475,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         ) {
                             // If this expression had a clone call when suggesting borrowing
                             // we want to suggest removing it because it'd now be unnecessary.
-                            sugg_sp = arg.span;
+                            sugg_sp = self.tcx.hir().span(arg.hir_id);
                         }
                     }
                     if let Ok(src) = sm.span_to_snippet(sugg_sp) {
@@ -481,7 +483,14 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             // parenthesize if needed (Issue #46756)
                             hir::ExprKind::Cast(_, _) | hir::ExprKind::Binary(_, _, _) => true,
                             // parenthesize borrows of range literals (Issue #54505)
-                            _ if is_range_literal(self.tcx.sess.source_map(), expr) => true,
+                            _ if is_range_literal(
+                                |id| self.tcx.hir().span(id),
+                                self.tcx.sess.source_map(),
+                                expr,
+                            ) =>
+                            {
+                                true
+                            }
                             _ => false,
                         };
                         let sugg_expr = if needs_parens { format!("({})", src) } else { src };
@@ -511,9 +520,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                 //                                   |     |
                                 //    consider dereferencing here: `*opt`  |
                                 // expected mutable reference, found enum `Option`
-                                if let Ok(src) = sm.span_to_snippet(left_expr.span) {
+                                let left_expr_span = self.tcx.hir().span(left_expr.hir_id);
+                                if let Ok(src) = sm.span_to_snippet(left_expr_span) {
                                     return Some((
-                                        left_expr.span,
+                                        left_expr_span,
                                         "consider dereferencing here to assign to the mutable \
                                          borrowed piece of memory",
                                         format!("*{}", src),
@@ -550,7 +560,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             {
                 // We have `&T`, check if what was expected was `T`. If so,
                 // we may want to suggest removing a `&`.
-                if sm.is_imported(expr.span) {
+                let expr_span = self.tcx.hir().span(expr.hir_id);
+                if sm.is_imported(expr_span) {
                     if let Ok(src) = sm.span_to_snippet(sp) {
                         if let Some(src) = self.replace_prefix(src, "&", "") {
                             return Some((
@@ -563,7 +574,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     }
                     return None;
                 }
-                if let Ok(code) = sm.span_to_snippet(expr.span) {
+                if let Ok(code) = sm.span_to_snippet(expr_span) {
                     return Some((
                         sp,
                         "consider removing the borrow",
@@ -637,7 +648,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     }
                 }
             }
-            _ if sp == expr.span && !is_macro => {
+            _ if sp == expr_span && !is_macro => {
                 if let Some(steps) = self.deref_steps(checked_ty, expected) {
                     if steps == 1 {
                         // For a suggestion to make sense, the type would need to be `Copy`.
@@ -677,12 +688,13 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         expected_ty: Ty<'tcx>,
         expected_ty_expr: Option<&'tcx hir::Expr<'tcx>>,
     ) -> bool {
-        if self.tcx.sess.source_map().is_imported(expr.span) {
+        let expr_span = self.tcx.hir().span(expr.hir_id);
+        if self.tcx.sess.source_map().is_imported(expr_span) {
             // Ignore if span is from within a macro.
             return false;
         }
 
-        let src = if let Ok(src) = self.tcx.sess.source_map().span_to_snippet(expr.span) {
+        let src = if let Ok(src) = self.tcx.sess.source_map().span_to_snippet(expr_span) {
             src
         } else {
             return false;
@@ -798,7 +810,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 // can be given the suggestion "u32::from(x) > y" rather than
                 // "x > y.try_into().unwrap()".
                 let lhs_expr_and_src = expected_ty_expr.and_then(|expr| {
-                    match self.tcx.sess.source_map().span_to_snippet(expr.span).ok() {
+                    match self.tcx.sess.source_map().span_to_snippet(expr_span).ok() {
                         Some(src) => Some((expr, src)),
                         None => None,
                     }
@@ -811,12 +823,12 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         lhs_src, expected_ty, checked_ty, src
                     );
                     let suggestion = format!("{}::from({})", checked_ty, lhs_src);
-                    (lhs_expr.span, msg, suggestion)
+                    (self.tcx.hir().span(lhs_expr.hir_id), msg, suggestion)
                 } else {
                     let msg = format!("{} and panic if the converted value wouldn't fit", msg);
                     let suggestion =
                         format!("{}{}.try_into().unwrap()", prefix, with_opt_paren(&src));
-                    (expr.span, msg, suggestion)
+                    (expr_span, msg, suggestion)
                 };
                 err.span_suggestion(span, &msg, suggestion, Applicability::MachineApplicable);
             };
@@ -849,7 +861,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 } else {
                     into_suggestion.clone()
                 };
-                err.span_suggestion(expr.span, msg, suggestion, Applicability::MachineApplicable);
+                err.span_suggestion(expr_span, msg, suggestion, Applicability::MachineApplicable);
             };
 
         match (&expected_ty.kind, &checked_ty.kind) {
@@ -904,7 +916,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     suggest_to_change_suffix_or_into(err, false, true);
                 } else if literal_is_ty_suffixed(expr) {
                     err.span_suggestion(
-                        expr.span,
+                        expr_span,
                         &lit_msg,
                         suffix_suggestion,
                         Applicability::MachineApplicable,
@@ -912,7 +924,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 } else if can_cast {
                     // Missing try_into implementation for `f64` to `f32`
                     err.span_suggestion(
-                        expr.span,
+                        expr_span,
                         &format!("{}, producing the closest possible value", cast_msg),
                         cast_suggestion,
                         Applicability::MaybeIncorrect, // lossy conversion
@@ -923,7 +935,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             (&ty::Uint(_) | &ty::Int(_), &ty::Float(_)) => {
                 if literal_is_ty_suffixed(expr) {
                     err.span_suggestion(
-                        expr.span,
+                        expr_span,
                         &lit_msg,
                         suffix_suggestion,
                         Applicability::MachineApplicable,
@@ -931,7 +943,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 } else if can_cast {
                     // Missing try_into implementation for `{float}` to `{integer}`
                     err.span_suggestion(
-                        expr.span,
+                        expr_span,
                         &format!("{}, rounding the float towards zero", msg),
                         cast_suggestion,
                         Applicability::MaybeIncorrect, // lossy conversion
@@ -943,7 +955,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 // if `found` is `None` (meaning found is `usize`), don't suggest `.into()`
                 if exp.bit_width() > found.bit_width().unwrap_or(256) {
                     err.span_suggestion(
-                        expr.span,
+                        expr_span,
                         &format!(
                             "{}, producing the floating point representation of the integer",
                             msg,
@@ -953,7 +965,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     );
                 } else if literal_is_ty_suffixed(expr) {
                     err.span_suggestion(
-                        expr.span,
+                        expr_span,
                         &lit_msg,
                         suffix_suggestion,
                         Applicability::MachineApplicable,
@@ -961,7 +973,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 } else {
                     // Missing try_into implementation for `{integer}` to `{float}`
                     err.span_suggestion(
-                        expr.span,
+                        expr_span,
                         &format!(
                             "{}, producing the floating point representation of the integer,
                                  rounded if necessary",
@@ -977,7 +989,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 // if `found` is `None` (meaning found is `isize`), don't suggest `.into()`
                 if exp.bit_width() > found.bit_width().unwrap_or(256) {
                     err.span_suggestion(
-                        expr.span,
+                        expr_span,
                         &format!(
                             "{}, producing the floating point representation of the integer",
                             &msg,
@@ -987,7 +999,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     );
                 } else if literal_is_ty_suffixed(expr) {
                     err.span_suggestion(
-                        expr.span,
+                        expr_span,
                         &lit_msg,
                         suffix_suggestion,
                         Applicability::MachineApplicable,
@@ -995,7 +1007,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 } else {
                     // Missing try_into implementation for `{integer}` to `{float}`
                     err.span_suggestion(
-                        expr.span,
+                        expr_span,
                         &format!(
                             "{}, producing the floating point representation of the integer, \
                                 rounded if necessary",

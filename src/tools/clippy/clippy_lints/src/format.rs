@@ -42,7 +42,7 @@ declare_lint_pass!(UselessFormat => [USELESS_FORMAT]);
 
 impl<'a, 'tcx> LateLintPass<'a, 'tcx> for UselessFormat {
     fn check_expr(&mut self, cx: &LateContext<'a, 'tcx>, expr: &'tcx Expr<'_>) {
-        let span = match is_expn_of(expr.span, "format") {
+        let span = match is_expn_of(cx.tcx.hir().span(expr.hir_id), "format") {
             Some(s) if !s.from_expansion() => s,
             _ => return,
         };
@@ -103,7 +103,7 @@ fn on_argumentv1_new<'a, 'tcx>(
                     return Some(format!("{:?}.to_string()", s.as_str()));
                 }
             } else {
-                let snip = snippet(cx, format_args.span, "<arg>");
+                let snip = snippet(cx, cx.tcx.hir().span(format_args.hir_id), "<arg>");
                 if let ExprKind::MethodCall(ref path, _, _, _) = format_args.kind {
                     if path.ident.name == sym!(to_string) {
                         return Some(format!("{}", snip));

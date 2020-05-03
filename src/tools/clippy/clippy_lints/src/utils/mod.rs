@@ -370,6 +370,7 @@ pub fn has_drop<'a, 'tcx>(cx: &LateContext<'a, 'tcx>, ty: Ty<'tcx>) -> bool {
 /// Returns the method names and argument list of nested method call expressions that make up
 /// `expr`. method/span lists are sorted with the most recent call first.
 pub fn method_calls<'tcx>(
+    cx: &LateContext<'_, '_>,
     expr: &'tcx Expr<'tcx>,
     max_depth: usize,
 ) -> (Vec<Symbol>, Vec<&'tcx [Expr<'tcx>]>, Vec<Span>) {
@@ -380,7 +381,7 @@ pub fn method_calls<'tcx>(
     let mut current = expr;
     for _ in 0..max_depth {
         if let ExprKind::MethodCall(path, span, args, _) = &current.kind {
-            if args.iter().any(|e| e.span.from_expansion()) {
+            if args.iter().any(|e| cx.tcx.hir().span(e.hir_id).from_expansion()) {
                 break;
             }
             method_names.push(path.ident.name);
@@ -401,14 +402,14 @@ pub fn method_calls<'tcx>(
 /// `method_chain_args(expr, &["bar", "baz"])` will return a `Vec`
 /// containing the `Expr`s for
 /// `.bar()` and `.baz()`
-pub fn method_chain_args<'a>(expr: &'a Expr<'_>, methods: &[&str]) -> Option<Vec<&'a [Expr<'a>]>> {
+pub fn method_chain_args<'a>(cx: &LateContext<'_, '_>, expr: &'a Expr<'_>, methods: &[&str]) -> Option<Vec<&'a [Expr<'a>]>> {
     let mut current = expr;
     let mut matched = Vec::with_capacity(methods.len());
     for method_name in methods.iter().rev() {
         // method chains are stored last -> first
         if let ExprKind::MethodCall(ref path, _, ref args, _) = current.kind {
             if path.ident.name.as_str() == *method_name {
-                if args.iter().any(|e| e.span.from_expansion()) {
+                if args.iter().any(|e| cx.tcx.hir().span(e.hir_id).from_expansion()) {
                     return None;
                 }
                 matched.push(&**args); // build up `matched` backwards
@@ -652,17 +653,18 @@ fn line_span<T: LintContext>(cx: &T, span: Span) -> Span {
 
 /// Like `snippet_block`, but add braces if the expr is not an `ExprKind::Block`.
 /// Also takes an `Option<String>` which can be put inside the braces.
-pub fn expr_block<'a, T: LintContext>(
-    cx: &T,
+pub fn expr_block<'a>(
+    cx: &LateContext<'_, '_>,
     expr: &Expr<'_>,
     option: Option<String>,
     default: &'a str,
     indent_relative_to: Option<Span>,
 ) -> Cow<'a, str> {
-    let code = snippet_block(cx, expr.span, default, indent_relative_to);
+    let expr_span = cx.tcx.hir().span(expr.hir_id);
+    let code = snippet_block(cx, expr_span, default, indent_relative_to);
     let string = option.unwrap_or_default();
-    if expr.span.from_expansion() {
-        Cow::Owned(format!("{{ {} }}", snippet_with_macro_callsite(cx, expr.span, default)))
+    if expr_span.from_expansion() {
+        Cow::Owned(format!("{{ {} }}", snippet_with_macro_callsite(cx, expr_span, default)))
     } else if let ExprKind::Block(_, _) = expr.kind {
         Cow::Owned(format!("{}{}", code, string))
     } else if string.is_empty() {

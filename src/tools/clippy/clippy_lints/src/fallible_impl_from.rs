@@ -81,6 +81,8 @@ fn lint_impl_body<'a, 'tcx>(cx: &LateContext<'a, 'tcx>, impl_span: Span, impl_it
         type Map = Map<'tcx>;
 
         fn visit_expr(&mut self, expr: &'tcx Expr<'_>) {
+            let expr_span = self.lcx.tcx.hir().span(expr.hir_id);
+
             // check for `begin_panic`
             if_chain! {
                 if let ExprKind::Call(ref func_expr, _) = expr.kind;
@@ -88,19 +90,19 @@ fn lint_impl_body<'a, 'tcx>(cx: &LateContext<'a, 'tcx>, impl_span: Span, impl_it
                 if let Some(path_def_id) = path.res.opt_def_id();
                 if match_def_path(self.lcx, path_def_id, &BEGIN_PANIC) ||
                     match_def_path(self.lcx, path_def_id, &BEGIN_PANIC_FMT);
-                if is_expn_of(expr.span, "unreachable").is_none();
+                if is_expn_of(expr_span, "unreachable").is_none();
                 then {
-                    self.result.push(expr.span);
+                    self.result.push(expr_span);
                 }
             }
 
             // check for `unwrap`
-            if let Some(arglists) = method_chain_args(expr, &["unwrap"]) {
+            if let Some(arglists) = method_chain_args(self.lcx, expr, &["unwrap"]) {
                 let reciever_ty = walk_ptrs_ty(self.tables.expr_ty(&arglists[0][0]));
                 if is_type_diagnostic_item(self.lcx, reciever_ty, sym!(option_type))
                     || is_type_diagnostic_item(self.lcx, reciever_ty, sym!(result_type))
                 {
-                    self.result.push(expr.span);
+                    self.result.push(expr_span);
                 }
             }
 

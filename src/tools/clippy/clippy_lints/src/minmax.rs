@@ -43,7 +43,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for MinMaxPass {
                         span_lint(
                             cx,
                             MIN_MAX,
-                            expr.span,
+                            cx.tcx.hir().span(expr.hir_id),
                             "this `min`/`max` combination leads to constant result",
                         );
                     },

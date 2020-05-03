@@ -182,7 +182,7 @@ fn check_replace_with_default(cx: &LateContext<'_, '_>, src: &Expr<'_>, dest: &E
                     "replacing a value of type `T` with `T::default()` is better expressed using `std::mem::take`",
                     |diag| {
                         if !in_macro(expr_span) {
-                            let suggestion = format!("std::mem::take({})", snippet(cx, dest.span, ""));
+                            let suggestion = format!("std::mem::take({})", snippet(cx, cx.tcx.hir().span(dest.hir_id), ""));
 
                             diag.span_suggestion(
                                 expr_span,
@@ -208,9 +208,10 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for MemReplace {
             if match_def_path(cx, def_id, &paths::MEM_REPLACE);
             if let [dest, src] = &**func_args;
             then {
-                check_replace_option_with_none(cx, src, dest, expr.span);
-                check_replace_with_uninit(cx, src, expr.span);
-                check_replace_with_default(cx, src, dest, expr.span);
+                let expr_span = cx.tcx.hir().span(expr.hir_id);
+                check_replace_option_with_none(cx, src, dest, expr_span);
+                check_replace_with_uninit(cx, src, expr_span);
+                check_replace_with_default(cx, src, dest, expr_span);
             }
         }
     }

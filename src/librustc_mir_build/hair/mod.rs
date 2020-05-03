@@ -13,7 +13,7 @@ use rustc_middle::middle::region;
 use rustc_middle::mir::{BinOp, BorrowKind, Field, UnOp};
 use rustc_middle::ty::adjustment::PointerCast;
 use rustc_middle::ty::subst::SubstsRef;
-use rustc_middle::ty::{AdtDef, Const, Ty, UpvarSubsts, UserType};
+use rustc_middle::ty::{AdtDef, Const, Ty, TyCtxt, UpvarSubsts, UserType};
 use rustc_span::Span;
 use rustc_target::abi::VariantIdx;
 use rustc_target::asm::InlineAsmRegOrRegClass;
@@ -340,9 +340,9 @@ crate enum LogicalOp {
 }
 
 impl<'tcx> ExprRef<'tcx> {
-    crate fn span(&self) -> Span {
+    crate fn span(&self, tcx: TyCtxt<'tcx>) -> Span {
         match self {
-            ExprRef::Hair(expr) => expr.span,
+            ExprRef::Hair(expr) => tcx.hir().span(expr.hir_id),
             ExprRef::Mirror(expr) => expr.span,
         }
     }

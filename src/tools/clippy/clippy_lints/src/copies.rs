@@ -153,7 +153,7 @@ declare_lint_pass!(CopyAndPaste => [IFS_SAME_COND, SAME_FUNCTIONS_IN_IF_CONDITIO
 
 impl<'a, 'tcx> LateLintPass<'a, 'tcx> for CopyAndPaste {
     fn check_expr(&mut self, cx: &LateContext<'a, 'tcx>, expr: &'tcx Expr<'_>) {
-        if !expr.span.from_expansion() {
+        if !cx.tcx.hir().span(expr.hir_id).from_expansion() {
             // skip ifs directly in else, it will be checked in the parent if
             if let Some(expr) = get_parent_expr(cx, expr) {
                 if let Some((_, _, Some(ref else_expr))) = higher::if_block(&expr) {
@@ -204,9 +204,9 @@ fn lint_same_cond(cx: &LateContext<'_, '_>, conds: &[&Expr<'_>]) {
         span_lint_and_note(
             cx,
             IFS_SAME_COND,
-            j.span,
+            cx.tcx.hir().span(j.hir_id),
             "this `if` has the same condition as a previous `if`",
-            Some(i.span),
+            Some(cx.tcx.hir().span(i.hir_id)),
             "same as this",
         );
     }
@@ -232,9 +232,9 @@ fn lint_same_fns_in_if_cond(cx: &LateContext<'_, '_>, conds: &[&Expr<'_>]) {
         span_lint_and_note(
             cx,
             SAME_FUNCTIONS_IN_IF_CONDITION,
-            j.span,
+            cx.tcx.hir().span(j.hir_id),
             "this `if` has the same function call as a previous `if`",
-            Some(i.span),
+            Some(cx.tcx.hir().span(i.hir_id)),
             "same as this",
         );
     }
@@ -273,10 +273,10 @@ fn lint_match_arms<'tcx>(cx: &LateContext<'_, 'tcx>, expr: &Expr<'_>) {
             span_lint_and_then(
                 cx,
                 MATCH_SAME_ARMS,
-                j.body.span,
+                cx.tcx.hir().span(j.body.hir_id),
                 "this `match` has identical arm bodies",
                 |diag| {
-                    diag.span_note(i.body.span, "same as this");
+                    diag.span_note(cx.tcx.hir().span(i.body.hir_id), "same as this");
 
                     // Note: this does not use `span_suggestion` on purpose:
                     // there is no clean way
@@ -293,7 +293,7 @@ fn lint_match_arms<'tcx>(cx: &LateContext<'_, 'tcx>, expr: &Expr<'_>) {
                         // note that i.pat cannot be _, because that would mean that we're
                         // hiding all the subsequent arms, and rust won't compile
                         diag.span_note(
-                            i.body.span,
+                            cx.tcx.hir().span(i.body.hir_id),
                             &format!(
                                 "`{}` has the same arm body as the `_` wildcard, consider removing it",
                                 lhs

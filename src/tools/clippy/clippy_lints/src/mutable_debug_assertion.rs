@@ -38,7 +38,7 @@ const DEBUG_MACRO_NAMES: [&str; 3] = ["debug_assert", "debug_assert_eq", "debug_
 impl<'a, 'tcx> LateLintPass<'a, 'tcx> for DebugAssertWithMutCall {
     fn check_expr(&mut self, cx: &LateContext<'a, 'tcx>, e: &'tcx Expr<'_>) {
         for dmn in &DEBUG_MACRO_NAMES {
-            if is_direct_expn_of(e.span, dmn).is_some() {
+            if is_direct_expn_of(cx.tcx.hir().span(e.hir_id), dmn).is_some() {
                 if let Some(span) = extract_call(cx, e) {
                     span_lint(
                         cx,
@@ -147,7 +147,7 @@ impl<'a, 'tcx> Visitor<'tcx> for MutArgVisitor<'a, 'tcx> {
             },
             // Don't check await desugars
             ExprKind::Match(_, _, MatchSource::AwaitDesugar) => return,
-            _ if !self.found => self.expr_span = Some(expr.span),
+            _ if !self.found => self.expr_span = Some(self.cx.tcx.hir().span(expr.hir_id)),
             _ => return,
         }
         walk_expr(self, expr)

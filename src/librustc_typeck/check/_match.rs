@@ -43,8 +43,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         };
 
         // If there are no arms, that is a diverging match; a special case.
+        let expr_span = tcx.hir().span(expr.hir_id);
         if arms.is_empty() {
-            self.diverges.set(self.diverges.get() | Diverges::always(expr.span));
+            self.diverges.set(self.diverges.get() | Diverges::always(expr_span));
             return tcx.types.never;
         }
 
@@ -54,8 +55,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let scrut_diverges = self.diverges.replace(Diverges::Maybe);
 
         // #55810: Type check patterns first so we get types for all bindings.
+        let scrut_span = self.tcx.hir().span(scrut.hir_id);
         for arm in arms {
-            self.check_pat_top(&arm.pat, scrut_ty, Some(scrut.span), true);
+            self.check_pat_top(&arm.pat, scrut_ty, Some(scrut_span), true);
         }
 
         // Now typecheck the blocks.
@@ -81,7 +83,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 Expectation::ExpectHasType(ety) if ety != self.tcx.mk_unit() => ety,
                 _ => self.next_ty_var(TypeVariableOrigin {
                     kind: TypeVariableOriginKind::MiscVariable,
-                    span: expr.span,
+                    span: expr_span,
                 }),
             };
             CoerceMany::with_coercion_sites(coerce_first, arms)
@@ -103,7 +105,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             let arm_ty = if source_if
                 && if_no_else
                 && i != 0
-                && self.if_fallback_coercion(expr.span, &arms[0].body, &mut coercion)
+                && self.if_fallback_coercion(expr_span, &arms[0].body, &mut coercion)
             {
                 tcx.ty_error()
             } else {
@@ -115,27 +117,29 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             if source_if {
                 let then_expr = &arms[0].body;
                 match (i, if_no_else) {
-                    (0, _) => coercion.coerce(self, &self.misc(expr.span), &arm.body, arm_ty),
+                    (0, _) => coercion.coerce(self, &self.misc(expr_span), &arm.body, arm_ty),
                     (_, true) => {} // Handled above to avoid duplicated type errors (#60254).
                     (_, _) => {
                         let then_ty = prior_arm_ty.unwrap();
-                        let cause = self.if_cause(expr.span, then_expr, &arm.body, then_ty, arm_ty);
+                        let expr_span = self.tcx.hir().span(expr.hir_id);
+                        let cause = self.if_cause(expr_span, then_expr, &arm.body, then_ty, arm_ty);
                         coercion.coerce(self, &cause, &arm.body, arm_ty);
                     }
                 }
             } else {
-                let arm_span = if let hir::ExprKind::Block(blk, _) = &arm.body.kind {
-                    // Point at the block expr instead of the entire block
-                    blk.expr.as_ref().map(|e| e.span).unwrap_or(arm.body.span)
-                } else {
-                    arm.body.span
-                };
+                let arm_span =
+                    self.tcx.hir().span(if let hir::ExprKind::Block(blk, _) = &arm.body.kind {
+                        // Point at the block expr instead of the entire block
+                        blk.expr.as_ref().map(|e| e.hir_id).unwrap_or(arm.body.hir_id)
+                    } else {
+                        arm.body.hir_id
+                    });
                 let (span, code) = match i {
                     // The reason for the first arm to fail is not that the match arms diverge,
                     // but rather that there's a prior obligation that doesn't hold.
                     0 => (arm_span, ObligationCauseCode::BlockTailExpression(arm.body.hir_id)),
                     _ => (
-                        expr.span,
+                        self.tcx.hir().span(expr.hir_id),
                         ObligationCauseCode::MatchExpressionArm(box MatchExpressionArmCause {
                             arm_span,
                             source: match_src,
@@ -162,8 +166,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // at a diverging expression in an arbitrary arm,
         // we can point at the entire `match` expression
         if let (Diverges::Always { .. }, hir::MatchSource::Normal) = (all_arms_diverge, match_src) {
+            let span = self.tcx.hir().span(expr.hir_id);
             all_arms_diverge = Diverges::Always {
-                span: expr.span,
+                span,
                 custom_note: Some(
                     "any code following this `match` expression is unreachable, as all arms diverge",
                 ),
@@ -190,7 +195,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             _ => "arm",
         };
         for arm in arms {
-            self.warn_if_unreachable(arm.body.hir_id, arm.body.span, msg);
+            self.warn_if_unreachable(arm.body.hir_id, self.tcx.hir().span(arm.body.hir_id), msg);
         }
     }
 
@@ -216,7 +221,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     err.span_label(*span, msg.as_str());
                 } else if let ExprKind::Block(block, _) = &then_expr.kind {
                     if let Some(expr) = &block.expr {
-                        err.span_label(expr.span, "found here".to_string());
+                        let expr_span = self.tcx.hir().span(expr.hir_id);
+                        err.span_label(expr_span, "found here".to_string());
                     }
                 }
                 err.note("`if` expressions without `else` evaluate to `()`");
@@ -244,7 +250,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 (&block.expr, parent)
             {
                 // check that the `if` expr without `else` is the fn body's expr
-                if expr.span == span {
+                let expr_span = self.tcx.hir().span(expr.hir_id);
+                if expr_span == span {
                     return self.get_fn_decl(hir_id).and_then(|(fn_decl, _)| {
                         let span = fn_decl.output.span(|id| self.tcx.hir().span(id));
                         let snippet = self.tcx.sess.source_map().span_to_snippet(span).ok()?;
@@ -297,7 +304,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let mut remove_semicolon = None;
         let error_sp = if let ExprKind::Block(block, _) = &else_expr.kind {
             if let Some(expr) = &block.expr {
-                expr.span
+                self.tcx.hir().span(expr.hir_id)
             } else if let Some(stmt) = block.stmts.last() {
                 // possibly incorrect trailing `;` in the else arm
                 remove_semicolon = self.could_remove_semicolon(block, then_ty);
@@ -334,30 +341,30 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 if outer_sp.is_some() {
                     outer_sp = Some(self.tcx.sess.source_map().guess_head_span(span));
                 }
-                else_expr.span
+                self.tcx.hir().span(else_expr.hir_id)
             }
         } else {
             // shouldn't happen unless the parser has done something weird
-            else_expr.span
+            self.tcx.hir().span(else_expr.hir_id)
         };
 
         // Compute `Span` of `then` part of `if`-expression.
-        let then_sp = if let ExprKind::Block(block, _) = &then_expr.kind {
+        let then_sp = self.tcx.hir().span(if let ExprKind::Block(block, _) = &then_expr.kind {
             if let Some(expr) = &block.expr {
-                expr.span
+                expr.hir_id
             } else if let Some(stmt) = block.stmts.last() {
                 // possibly incorrect trailing `;` in the else arm
                 remove_semicolon = remove_semicolon.or(self.could_remove_semicolon(block, else_ty));
-                self.tcx.hir().span(stmt.hir_id)
+                stmt.hir_id
             } else {
                 // empty block; point at its entirety
                 outer_sp = None; // same as in `error_sp`; cleanup output
-                then_expr.span
+                then_expr.hir_id
             }
         } else {
             // shouldn't happen unless the parser has done something weird
-            then_expr.span
-        };
+            then_expr.hir_id
+        });
 
         // Finally construct the cause:
         self.cause(
@@ -445,7 +452,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             // `check_pat` for some details.
             let scrut_ty = self.next_ty_var(TypeVariableOrigin {
                 kind: TypeVariableOriginKind::TypeInference,
-                span: scrut.span,
+                span: self.tcx.hir().span(scrut.hir_id),
             });
             self.check_expr_has_type_or_error(scrut, scrut_ty, |_| {});
             scrut_ty

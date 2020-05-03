@@ -21,8 +21,9 @@ impl<'tcx> Mirror<'tcx> for &'tcx hir::Expr<'tcx> {
     fn make_mirror(self, cx: &mut Cx<'_, 'tcx>) -> Expr<'tcx> {
         let temp_lifetime = cx.region_scope_tree.temporary_scope(self.hir_id.local_id);
         let expr_scope = region::Scope { id: self.hir_id.local_id, data: region::ScopeData::Node };
+        let span = cx.tcx.hir().span(self.hir_id);
 
-        debug!("Expr::make_mirror(): id={}, span={:?}", self.hir_id, self.span);
+        debug!("Expr::make_mirror(): id={}, span={:?}", self.hir_id, span);
 
         let mut expr = make_mirror_unadjusted(cx, self);
 
@@ -36,7 +37,7 @@ impl<'tcx> Mirror<'tcx> for &'tcx hir::Expr<'tcx> {
         expr = Expr {
             temp_lifetime,
             ty: expr.ty,
-            span: self.span,
+            span,
             kind: ExprKind::Scope {
                 region_scope: expr_scope,
                 value: expr.to_ref(),
@@ -50,7 +51,7 @@ impl<'tcx> Mirror<'tcx> for &'tcx hir::Expr<'tcx> {
             expr = Expr {
                 temp_lifetime,
                 ty: expr.ty,
-                span: self.span,
+                span,
                 kind: ExprKind::Scope {
                     region_scope,
                     value: expr.to_ref(),
@@ -85,7 +86,7 @@ fn apply_adjustment<'a, 'tcx>(
     let mut adjust_span = |expr: &mut Expr<'tcx>| {
         if let ExprKind::Block { body } = expr.kind {
             if let Some(ref last_expr) = body.expr {
-                span = last_expr.span;
+                span = cx.tcx.hir().span(last_expr.hir_id);
                 expr.span = span;
             }
         }
@@ -155,13 +156,13 @@ fn make_mirror_unadjusted<'a, 'tcx>(
 
                 // rewrite f(u, v) into FnOnce::call_once(f, (u, v))
 
-                let method = method_callee(cx, expr, fun.span, None);
+                let method = method_callee(cx, expr, cx.tcx.hir().span(fun.hir_id), None);
 
                 let arg_tys = args.iter().map(|e| cx.tables().expr_ty_adjusted(e));
                 let tupled_args = Expr {
                     ty: cx.tcx.mk_tup(arg_tys),
                     temp_lifetime,
-                    span: expr.span,
+                    span: cx.tcx.hir().span(expr.hir_id),
                     kind: ExprKind::Tuple { fields: args.iter().map(ToRef::to_ref).collect() },
                 };
 
@@ -170,7 +171,7 @@ fn make_mirror_unadjusted<'a, 'tcx>(
                     fun: method.to_ref(),
                     args: vec![fun.to_ref(), tupled_args.to_ref()],
                     from_hir_call: true,
-                    fn_span: expr.span,
+                    fn_span: cx.tcx.hir().span(expr.hir_id),
                 }
             } else {
                 let adt_data =
@@ -216,7 +217,7 @@ fn make_mirror_unadjusted<'a, 'tcx>(
                         fun: fun.to_ref(),
                         args: args.to_ref(),
                         from_hir_call: true,
-                        fn_span: expr.span,
+                        fn_span: cx.tcx.hir().span(expr.hir_id),
                     }
                 }
             }
@@ -365,13 +366,17 @@ fn make_mirror_unadjusted<'a, 'tcx>(
                             }
                         }
                         _ => {
-                            span_bug!(expr.span, "unexpected res: {:?}", res);
+                            span_bug!(cx.tcx.hir().span(expr.hir_id), "unexpected res: {:?}", res);
                         }
                     }
                 }
             },
             _ => {
-                span_bug!(expr.span, "unexpected type for struct literal: {:?}", expr_ty);
+                span_bug!(
+                    cx.tcx.hir().span(expr.hir_id),
+                    "unexpected type for struct literal: {:?}",
+                    expr_ty
+                );
             }
         },
 
@@ -383,7 +388,11 @@ fn make_mirror_unadjusted<'a, 'tcx>(
                     (def_id, UpvarSubsts::Generator(substs), Some(movability))
                 }
                 _ => {
-                    span_bug!(expr.span, "closure expr w/o closure type: {:?}", closure_ty);
+                    span_bug!(
+                        cx.tcx.hir().span(expr.hir_id),
+                        "closure expr w/o closure type: {:?}",
+                        closure_ty
+                    );
                 }
             };
             let upvars = cx
@@ -440,7 +449,7 @@ fn make_mirror_unadjusted<'a, 'tcx>(
                             let qpath = match expr.kind {
                                 hir::ExprKind::Path(ref qpath) => qpath,
                                 _ => span_bug!(
-                                    expr.span,
+                                    cx.tcx.hir().span(expr.hir_id),
                                     "asm `sym` operand should be a path, found {:?}",
                                     expr.kind
                                 ),
@@ -457,7 +466,7 @@ fn make_mirror_unadjusted<'a, 'tcx>(
                                         expr: Expr {
                                             ty,
                                             temp_lifetime,
-                                            span: expr.span,
+                                            span: cx.tcx.hir().span(expr.hir_id),
                                             kind: ExprKind::Literal {
                                                 literal: ty::Const::zero_sized(cx.tcx, ty),
                                                 user_ty,
@@ -473,7 +482,7 @@ fn make_mirror_unadjusted<'a, 'tcx>(
 
                                 _ => {
                                     cx.tcx.sess.span_err(
-                                        expr.span,
+                                        cx.tcx.hir().span(expr.hir_id),
                                         "asm `sym` operand must point to a fn or static",
                                     );
 
@@ -483,7 +492,7 @@ fn make_mirror_unadjusted<'a, 'tcx>(
                                         expr: Expr {
                                             ty,
                                             temp_lifetime,
-                                            span: expr.span,
+                                            span: cx.tcx.hir().span(expr.hir_id),
                                             kind: ExprKind::Literal {
                                                 literal: ty::Const::zero_sized(cx.tcx, ty),
                                                 user_ty: None,
@@ -598,7 +607,7 @@ fn make_mirror_unadjusted<'a, 'tcx>(
                         Expr {
                             temp_lifetime,
                             ty: var_ty,
-                            span: expr.span,
+                            span: cx.tcx.hir().span(expr.hir_id),
                             kind: ExprKind::Literal { literal, user_ty: None },
                         }
                         .to_ref()
@@ -618,7 +627,13 @@ fn make_mirror_unadjusted<'a, 'tcx>(
                                 ty: var_ty,
                             }));
                             let bin = ExprKind::Binary { op: BinOp::Add, lhs, rhs: offset };
-                            Expr { temp_lifetime, ty: var_ty, span: expr.span, kind: bin }.to_ref()
+                            Expr {
+                                temp_lifetime,
+                                ty: var_ty,
+                                span: cx.tcx.hir().span(expr.hir_id),
+                                kind: bin,
+                            }
+                            .to_ref()
                         }
                         None => offset,
                     }
@@ -632,7 +647,12 @@ fn make_mirror_unadjusted<'a, 'tcx>(
             if let Some(user_ty) = user_ty {
                 // NOTE: Creating a new Expr and wrapping a Cast inside of it may be
                 //       inefficient, revisit this when performance becomes an issue.
-                let cast_expr = Expr { temp_lifetime, ty: expr_ty, span: expr.span, kind: cast };
+                let cast_expr = Expr {
+                    temp_lifetime,
+                    ty: expr_ty,
+                    span: cx.tcx.hir().span(expr.hir_id),
+                    kind: cast,
+                };
                 debug!("make_mirror_unadjusted: (cast) user_ty={:?}", user_ty);
 
                 ExprKind::ValueTypeAscription {
@@ -662,7 +682,7 @@ fn make_mirror_unadjusted<'a, 'tcx>(
         hir::ExprKind::Err => unreachable!(),
     };
 
-    Expr { temp_lifetime, ty: expr_ty, span: expr.span, kind }
+    Expr { temp_lifetime, ty: expr_ty, span: cx.tcx.hir().span(expr.hir_id), kind }
 }
 
 fn user_substs_applied_to_res<'tcx>(
@@ -710,10 +730,9 @@ fn method_callee<'a, 'tcx>(
     let (def_id, substs, user_ty) = match overloaded_callee {
         Some((def_id, substs)) => (def_id, substs, None),
         None => {
-            let (kind, def_id) = cx
-                .tables()
-                .type_dependent_def(expr.hir_id)
-                .unwrap_or_else(|| span_bug!(expr.span, "no type-dependent def for method callee"));
+            let (kind, def_id) = cx.tables().type_dependent_def(expr.hir_id).unwrap_or_else(|| {
+                span_bug!(cx.tcx.hir().span(expr.hir_id), "no type-dependent def for method callee")
+            });
             let user_ty = user_substs_applied_to_res(cx, expr.hir_id, Res::Def(kind, def_id));
             debug!("method_callee: user_ty={:?}", user_ty);
             (def_id, cx.tables().node_substs(expr.hir_id), user_ty)
@@ -851,12 +870,15 @@ fn convert_path_expr<'a, 'tcx>(
                     def_id: id,
                 }
             };
-            ExprKind::Deref { arg: Expr { ty, temp_lifetime, span: expr.span, kind }.to_ref() }
+            ExprKind::Deref {
+                arg: Expr { ty, temp_lifetime, span: cx.tcx.hir().span(expr.hir_id), kind }
+                    .to_ref(),
+            }
         }
 
         Res::Local(var_hir_id) => convert_var(cx, expr, var_hir_id),
 
-        _ => span_bug!(expr.span, "res `{:?}` not yet implemented", res),
+        _ => span_bug!(cx.tcx.hir().span(expr.hir_id), "res `{:?}` not yet implemented", res),
     }
 }
 
@@ -913,12 +935,12 @@ fn convert_var<'tcx>(
                         Expr {
                             ty: closure_ty,
                             temp_lifetime,
-                            span: expr.span,
+                            span: cx.tcx.hir().span(expr.hir_id),
                             kind: ExprKind::Deref {
                                 arg: Expr {
                                     ty: ref_closure_ty,
                                     temp_lifetime,
-                                    span: expr.span,
+                                    span: cx.tcx.hir().span(expr.hir_id),
                                     kind: ExprKind::SelfRef,
                                 }
                                 .to_ref(),
@@ -933,12 +955,12 @@ fn convert_var<'tcx>(
                         Expr {
                             ty: closure_ty,
                             temp_lifetime,
-                            span: expr.span,
+                            span: cx.tcx.hir().span(expr.hir_id),
                             kind: ExprKind::Deref {
                                 arg: Expr {
                                     ty: ref_closure_ty,
                                     temp_lifetime,
-                                    span: expr.span,
+                                    span: cx.tcx.hir().span(expr.hir_id),
                                     kind: ExprKind::SelfRef,
                                 }
                                 .to_ref(),
@@ -948,12 +970,17 @@ fn convert_var<'tcx>(
                     ty::ClosureKind::FnOnce => Expr {
                         ty: closure_ty,
                         temp_lifetime,
-                        span: expr.span,
+                        span: cx.tcx.hir().span(expr.hir_id),
                         kind: ExprKind::SelfRef,
                     },
                 }
             } else {
-                Expr { ty: closure_ty, temp_lifetime, span: expr.span, kind: ExprKind::SelfRef }
+                Expr {
+                    ty: closure_ty,
+                    temp_lifetime,
+                    span: cx.tcx.hir().span(expr.hir_id),
+                    kind: ExprKind::SelfRef,
+                }
             };
 
             // at this point we have `self.n`, which loads up the upvar
@@ -971,7 +998,7 @@ fn convert_var<'tcx>(
                             borrow.region,
                             ty::TypeAndMut { ty: var_ty, mutbl: borrow.kind.to_mutbl_lossy() },
                         ),
-                        span: expr.span,
+                        span: cx.tcx.hir().span(expr.hir_id),
                         kind: field_kind,
                     }
                     .to_ref(),
@@ -1008,8 +1035,9 @@ fn overloaded_operator<'a, 'tcx>(
     expr: &'tcx hir::Expr<'tcx>,
     args: Vec<ExprRef<'tcx>>,
 ) -> ExprKind<'tcx> {
-    let fun = method_callee(cx, expr, expr.span, None);
-    ExprKind::Call { ty: fun.ty, fun: fun.to_ref(), args, from_hir_call: false, fn_span: expr.span }
+    let expr_span = cx.tcx.hir().span(expr.hir_id);
+    let fun = method_callee(cx, expr, expr_span, None);
+    ExprKind::Call { ty: fun.ty, fun: fun.to_ref(), args, from_hir_call: false, fn_span: expr_span }
 }
 
 fn overloaded_place<'a, 'tcx>(
@@ -1033,24 +1061,28 @@ fn overloaded_place<'a, 'tcx>(
     // `Deref(Mut)::Deref(_mut)` and `Index(Mut)::index(_mut)`.
     let (region, mutbl) = match recv_ty.kind {
         ty::Ref(region, _, mutbl) => (region, mutbl),
-        _ => span_bug!(expr.span, "overloaded_place: receiver is not a reference"),
+        _ => span_bug!(
+            cx.tcx.hir().span(expr.hir_id),
+            "overloaded_place: receiver is not a reference"
+        ),
     };
     let ref_ty = cx.tcx.mk_ref(region, ty::TypeAndMut { ty: place_ty, mutbl });
 
     // construct the complete expression `foo()` for the overloaded call,
     // which will yield the &T type
     let temp_lifetime = cx.region_scope_tree.temporary_scope(expr.hir_id.local_id);
-    let fun = method_callee(cx, expr, expr.span, overloaded_callee);
+    let fun = method_callee(cx, expr, cx.tcx.hir().span(expr.hir_id), overloaded_callee);
+    let expr_span = cx.tcx.hir().span(expr.hir_id);
     let ref_expr = Expr {
         temp_lifetime,
         ty: ref_ty,
-        span: expr.span,
+        span: expr_span,
         kind: ExprKind::Call {
             ty: fun.ty,
             fun: fun.to_ref(),
             args,
             from_hir_call: false,
-            fn_span: expr.span,
+            fn_span: expr_span,
         },
     };
 
@@ -1071,10 +1103,11 @@ fn capture_upvar<'tcx>(
     let upvar_capture = cx.tables().upvar_capture(upvar_id);
     let temp_lifetime = cx.region_scope_tree.temporary_scope(closure_expr.hir_id.local_id);
     let var_ty = cx.tables().node_type(var_hir_id);
+    let closure_expr_span = cx.tcx.hir().span(closure_expr.hir_id);
     let captured_var = Expr {
         temp_lifetime,
         ty: var_ty,
-        span: closure_expr.span,
+        span: closure_expr_span,
         kind: convert_var(cx, closure_expr, var_hir_id),
     };
     match upvar_capture {
@@ -1088,7 +1121,7 @@ fn capture_upvar<'tcx>(
             Expr {
                 temp_lifetime,
                 ty: upvar_ty,
-                span: closure_expr.span,
+                span: closure_expr_span,
                 kind: ExprKind::Borrow { borrow_kind, arg: captured_var.to_ref() },
             }
             .to_ref()

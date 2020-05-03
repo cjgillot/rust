@@ -49,7 +49,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for NoNegCompOpForPartialOrd {
     fn check_expr(&mut self, cx: &LateContext<'a, 'tcx>, expr: &'tcx Expr<'_>) {
         if_chain! {
 
-            if !in_external_macro(cx.sess(), expr.span);
+            if !in_external_macro(cx.sess(), cx.tcx.hir().span(expr.hir_id));
             if let ExprKind::Unary(UnOp::UnNot, ref inner) = expr.kind;
             if let ExprKind::Binary(ref op, ref left, _) = inner.kind;
             if let BinOpKind::Le | BinOpKind::Ge | BinOpKind::Lt | BinOpKind::Gt = op.node;
@@ -78,7 +78,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for NoNegCompOpForPartialOrd {
                     span_lint(
                         cx,
                         NEG_CMP_OP_ON_PARTIAL_ORD,
-                        expr.span,
+                        cx.tcx.hir().span(expr.hir_id),
                         "The use of negated comparison operators on partially ordered \
                         types produces code that is hard to read and refactor. Please \
                         consider using the `partial_cmp` method instead, to make it \

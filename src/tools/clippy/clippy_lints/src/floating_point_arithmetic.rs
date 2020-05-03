@@ -168,7 +168,7 @@ fn check_log_base(cx: &LateContext<'_, '_>, expr: &Expr<'_>, args: &[Expr<'_>]) 
         span_lint_and_sugg(
             cx,
             SUBOPTIMAL_FLOPS,
-            expr.span,
+            cx.tcx.hir().span(expr.hir_id),
             "logarithm for bases 2, 10 and e can be computed more accurately",
             "consider using",
             format!("{}.{}()", Sugg::hir(cx, &args[0], ".."), method),
@@ -197,7 +197,7 @@ fn check_ln1p(cx: &LateContext<'_, '_>, expr: &Expr<'_>, args: &[Expr<'_>]) {
         span_lint_and_sugg(
             cx,
             IMPRECISE_FLOPS,
-            expr.span,
+            cx.tcx.hir().span(expr.hir_id),
             "ln(1 + x) can be computed more accurately",
             "consider using",
             format!("{}.ln_1p()", prepare_receiver_sugg(cx, recv)),
@@ -245,7 +245,7 @@ fn check_powf(cx: &LateContext<'_, '_>, expr: &Expr<'_>, args: &[Expr<'_>]) {
         span_lint_and_sugg(
             cx,
             SUBOPTIMAL_FLOPS,
-            expr.span,
+            cx.tcx.hir().span(expr.hir_id),
             "exponent for bases 2 and e can be computed more accurately",
             "consider using",
             format!("{}.{}()", prepare_receiver_sugg(cx, &args[1]), method),
@@ -284,7 +284,7 @@ fn check_powf(cx: &LateContext<'_, '_>, expr: &Expr<'_>, args: &[Expr<'_>]) {
         span_lint_and_sugg(
             cx,
             lint,
-            expr.span,
+            cx.tcx.hir().span(expr.hir_id),
             help,
             "consider using",
             suggestion,
@@ -308,7 +308,7 @@ fn check_expm1(cx: &LateContext<'_, '_>, expr: &Expr<'_>) {
             span_lint_and_sugg(
                 cx,
                 IMPRECISE_FLOPS,
-                expr.span,
+                cx.tcx.hir().span(expr.hir_id),
                 "(e.pow(x) - 1) can be computed more accurately",
                 "consider using",
                 format!(
@@ -355,7 +355,7 @@ fn check_mul_add(cx: &LateContext<'_, '_>, expr: &Expr<'_>) {
         span_lint_and_sugg(
             cx,
             SUBOPTIMAL_FLOPS,
-            expr.span,
+            cx.tcx.hir().span(expr.hir_id),
             "multiply and add expressions can be calculated more efficiently and accurately",
             "consider using",
             format!(
@@ -469,7 +469,7 @@ fn check_custom_abs(cx: &LateContext<'_, '_>, expr: &Expr<'_>) {
             span_lint_and_sugg(
                 cx,
                 SUBOPTIMAL_FLOPS,
-                expr.span,
+                cx.tcx.hir().span(expr.hir_id),
                 sugg.0,
                 "try",
                 sugg.1,

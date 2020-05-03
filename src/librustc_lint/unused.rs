@@ -105,7 +105,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for UnusedResults {
         };
 
         if let Some(must_use_op) = must_use_op {
-            cx.struct_span_lint(UNUSED_MUST_USE, expr.span, |lint| {
+            cx.struct_span_lint(UNUSED_MUST_USE, cx.tcx.hir().span(expr.hir_id), |lint| {
                 lint.build(&format!("unused {} that must be used", must_use_op)).emit()
             });
             op_warned = true;
@@ -181,7 +181,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for UnusedResults {
                     let mut has_emitted = false;
                     let spans = if let hir::ExprKind::Tup(comps) = &expr.kind {
                         debug_assert_eq!(comps.len(), tys.len());
-                        comps.iter().map(|e| e.span).collect()
+                        comps.iter().map(|e| cx.tcx.hir().span(e.hir_id)).collect()
                     } else {
                         vec![]
                     };
@@ -954,7 +954,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for UnusedAllocation {
 
         for adj in cx.tables.expr_adjustments(e) {
             if let adjustment::Adjust::Borrow(adjustment::AutoBorrow::Ref(_, m)) = adj.kind {
-                cx.struct_span_lint(UNUSED_ALLOCATION, e.span, |lint| {
+                cx.struct_span_lint(UNUSED_ALLOCATION, cx.tcx.hir().span(e.hir_id), |lint| {
                     let msg = match m {
                         adjustment::AutoBorrowMutability::Not => {
                             "unnecessary allocation, use `&` instead"

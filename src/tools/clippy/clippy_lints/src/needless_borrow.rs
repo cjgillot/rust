@@ -42,7 +42,8 @@ impl_lint_pass!(NeedlessBorrow => [NEEDLESS_BORROW]);
 
 impl<'a, 'tcx> LateLintPass<'a, 'tcx> for NeedlessBorrow {
     fn check_expr(&mut self, cx: &LateContext<'a, 'tcx>, e: &'tcx Expr<'_>) {
-        if e.span.from_expansion() || self.derived_item.is_some() {
+        let e_span = cx.tcx.hir().span(e.hir_id);
+        if e_span.from_expansion() || self.derived_item.is_some() {
             return;
         }
         if let ExprKind::AddrOf(BorrowKind::Ref, Mutability::Not, ref inner) = e.kind {
@@ -60,13 +61,13 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for NeedlessBorrow {
                         span_lint_and_then(
                             cx,
                             NEEDLESS_BORROW,
-                            e.span,
+                            e_span,
                             "this expression borrows a reference that is immediately dereferenced \
                              by the compiler",
                             |diag| {
-                                if let Some(snippet) = snippet_opt(cx, inner.span) {
+                                if let Some(snippet) = snippet_opt(cx, cx.tcx.hir().span(inner.hir_id)) {
                                     diag.span_suggestion(
-                                        e.span,
+                                        e_span,
                                         "change this to",
                                         snippet,
                                         Applicability::MachineApplicable,

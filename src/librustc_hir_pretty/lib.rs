@@ -359,7 +359,7 @@ impl<'a> State<'a> {
     }
 
     pub fn commasep_exprs(&mut self, b: Breaks, exprs: &[hir::Expr<'_>]) {
-        self.commasep_cmnt(b, exprs, |s, e| s.print_expr(&e), |_, e| e.span)
+        self.commasep_cmnt(b, exprs, |s, e| s.print_expr(&e), |s, e| s.span(e.hir_id))
     }
 
     pub fn print_mod(&mut self, _mod: &hir::Mod<'_>, attrs: &[ast::Attribute]) {
@@ -1107,7 +1107,7 @@ impl<'a> State<'a> {
         if let Some(ref expr) = blk.expr {
             self.space_if_not_bol();
             self.print_expr(&expr);
-            self.maybe_print_trailing_comment(expr.span, Some(span.hi()));
+            self.maybe_print_trailing_comment(self.span(expr.hir_id), Some(span.hi()));
         }
         self.bclose_maybe_open(span, close_box);
         self.ann.post(self, AnnNode::Block(blk))
@@ -1302,7 +1302,7 @@ impl<'a> State<'a> {
     }
 
     pub fn print_expr(&mut self, expr: &hir::Expr<'_>) {
-        self.maybe_print_comment(expr.span.lo());
+        self.maybe_print_comment(self.span(expr.hir_id).lo());
         self.print_outer_attributes(&expr.attrs);
         self.ibox(INDENT_UNIT);
         self.ann.pre(self, AnnNode::Expr(expr));
@@ -1370,7 +1370,7 @@ impl<'a> State<'a> {
                 self.print_ident(temp);
 
                 // Print `}`:
-                self.bclose_maybe_open(expr.span, true);
+                self.bclose_maybe_open(self.span(expr.hir_id), true);
             }
             hir::ExprKind::Loop(ref blk, opt_label, _) => {
                 if let Some(label) = opt_label {
@@ -1391,7 +1391,7 @@ impl<'a> State<'a> {
                 for arm in arms {
                     self.print_arm(arm);
                 }
-                self.bclose(expr.span);
+                self.bclose(self.span(expr.hir_id));
             }
             hir::ExprKind::Closure(capture_clause, ref decl, body, _fn_decl_span, _gen) => {
                 self.print_capture_clause(capture_clause);

@@ -618,7 +618,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for LetUnitValue {
                     "this let-binding has unit value",
                     |diag| {
                         if let Some(expr) = &local.init {
-                            let snip = snippet_with_macro_callsite(cx, expr.span, "()");
+                            let snip = snippet_with_macro_callsite(cx, cx.tcx.hir().span(expr.hir_id), "()");
                             diag.span_suggestion(
                                 stmt_span,
                                 "omit the `let` binding",
@@ -684,8 +684,9 @@ declare_lint_pass!(UnitCmp => [UNIT_CMP]);
 
 impl<'a, 'tcx> LateLintPass<'a, 'tcx> for UnitCmp {
     fn check_expr(&mut self, cx: &LateContext<'a, 'tcx>, expr: &'tcx Expr<'tcx>) {
-        if expr.span.from_expansion() {
-            if let Some(callee) = expr.span.source_callee() {
+        let expr_span = cx.tcx.hir().span(expr.hir_id);
+        if expr_span.from_expansion() {
+            if let Some(callee) = expr_span.source_callee() {
                 if let ExpnKind::Macro(MacroKind::Bang, symbol) = callee.kind {
                     if let ExprKind::Binary(ref cmp, ref left, _) = expr.kind {
                         let op = cmp.node;
@@ -698,7 +699,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for UnitCmp {
                             span_lint(
                                 cx,
                                 UNIT_CMP,
-                                expr.span,
+                                expr_span,
                                 &format!(
                                     "`{}` of unit values detected. This will always {}",
                                     symbol.as_str(),
@@ -721,7 +722,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for UnitCmp {
                 span_lint(
                     cx,
                     UNIT_CMP,
-                    expr.span,
+                    expr_span,
                     &format!(
                         "{}-comparison of unit values detected. This will always be {}",
                         op.as_str(),
@@ -757,7 +758,7 @@ declare_lint_pass!(UnitArg => [UNIT_ARG]);
 
 impl<'a, 'tcx> LateLintPass<'a, 'tcx> for UnitArg {
     fn check_expr(&mut self, cx: &LateContext<'a, 'tcx>, expr: &'tcx Expr<'_>) {
-        if expr.span.from_expansion() {
+        if cx.tcx.hir().span(expr.hir_id).from_expansion() {
             return;
         }
 
@@ -765,14 +766,14 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for UnitArg {
         // so check for that here
         // only the calls to `Try::from_error` is marked as desugared,
         // so we need to check both the current Expr and its parent.
-        if is_questionmark_desugar_marked_call(expr) {
+        if is_questionmark_desugar_marked_call(cx, expr) {
             return;
         }
         if_chain! {
             let map = &cx.tcx.hir();
             let opt_parent_node = map.find(map.get_parent_node(expr.hir_id));
             if let Some(hir::Node::Expr(parent_expr)) = opt_parent_node;
-            if is_questionmark_desugar_marked_call(parent_expr);
+            if is_questionmark_desugar_marked_call(cx, parent_expr);
             then {
                 return;
             }
@@ -810,10 +811,11 @@ fn lint_unit_args(cx: &LateContext<'_, '_>, expr: &Expr<'_>, args_to_recover: &[
     } else {
         ("a ", "")
     };
+    let expr_span = cx.tcx.hir().span(expr.hir_id);
     span_lint_and_then(
         cx,
         UNIT_ARG,
-        expr.span,
+        expr_span,
         &format!("passing {}unit value{} to a function", singular, plural),
         |db| {
             let mut or = "";
@@ -825,7 +827,7 @@ fn lint_unit_args(cx: &LateContext<'_, '_>, expr: &Expr<'_>, args_to_recover: &[
                         if block.expr.is_none();
                         if let Some(last_stmt) = block.stmts.iter().last();
                         if let StmtKind::Semi(last_expr) = last_stmt.kind;
-                        if let Some(snip) = snippet_opt(cx, last_expr.span);
+                        if let Some(snip) = snippet_opt(cx, cx.tcx.hir().span(last_expr.hir_id));
                         then {
                             Some((
                                 cx.tcx.hir().span(last_stmt.hir_id),
@@ -854,12 +856,12 @@ fn lint_unit_args(cx: &LateContext<'_, '_>, expr: &Expr<'_>, args_to_recover: &[
                     let indent = if i == 0 {
                         0
                     } else {
-                        indent_of(cx, expr.span).unwrap_or(0)
+                        indent_of(cx, expr_span).unwrap_or(0)
                     };
                     format!(
                         "{}{};",
                         " ".repeat(indent),
-                        snippet_block_with_applicability(cx, arg.span, "..", Some(expr.span), &mut applicability)
+                        snippet_block_with_applicability(cx, cx.tcx.hir().span(arg.hir_id), "..", Some(expr_span), &mut applicability)
                     )
                 })
                 .collect::<Vec<String>>();
@@ -867,7 +869,7 @@ fn lint_unit_args(cx: &LateContext<'_, '_>, expr: &Expr<'_>, args_to_recover: &[
             if !sugg.is_empty() {
                 let plural = if sugg.len() > 1 { "s" } else { "" };
                 db.span_suggestion(
-                    expr.span.with_hi(expr.span.lo()),
+                    expr_span.with_hi(expr_span.lo()),
                     &format!("{}move the expression{} in front of the call...", or, plural),
                     format!("{}\n", sugg.join("\n")),
                     applicability,
@@ -878,7 +880,7 @@ fn lint_unit_args(cx: &LateContext<'_, '_>, expr: &Expr<'_>, args_to_recover: &[
                 &format!("{}use {}unit literal{} instead", and, singular, plural),
                 args_to_recover
                     .iter()
-                    .map(|arg| (arg.span, "()".to_string()))
+                    .map(|arg| (cx.tcx.hir().span(arg.hir_id), "()".to_string()))
                     .collect::<Vec<_>>(),
                 applicability,
             );
@@ -898,10 +900,10 @@ fn is_empty_block(expr: &Expr<'_>) -> bool {
     )
 }
 
-fn is_questionmark_desugar_marked_call(expr: &Expr<'_>) -> bool {
+fn is_questionmark_desugar_marked_call(cx: &LateContext<'_, '_>, expr: &Expr<'_>) -> bool {
     use rustc_span::hygiene::DesugaringKind;
     if let ExprKind::Call(ref callee, _) = expr.kind {
-        callee.span.is_desugaring(DesugaringKind::QuestionMark)
+        cx.tcx.hir().span(callee.hir_id).is_desugaring(DesugaringKind::QuestionMark)
     } else {
         false
     }
@@ -1183,7 +1185,7 @@ fn span_precision_loss_lint(cx: &LateContext<'_, '_>, expr: &Expr<'_>, cast_from
     span_lint(
         cx,
         CAST_PRECISION_LOSS,
-        expr.span,
+        cx.tcx.hir().span(expr.hir_id),
         &format!(
             "casting `{0}` to `{1}` causes a loss of precision {2}(`{0}` is {3} bits wide, \
              but `{1}`'s mantissa is only {4} bits wide)",
@@ -1213,7 +1215,7 @@ fn span_lossless_lint(cx: &LateContext<'_, '_>, expr: &Expr<'_>, op: &Expr<'_>, 
     // The suggestion is to use a function call, so if the original expression
     // has parens on the outside, they are no longer needed.
     let mut applicability = Applicability::MachineApplicable;
-    let opt = snippet_opt(cx, op.span);
+    let opt = snippet_opt(cx, cx.tcx.hir().span(op.hir_id));
     let sugg = if let Some(ref snip) = opt {
         if should_strip_parens(op, snip) {
             &snip[1..snip.len() - 1]
@@ -1228,7 +1230,7 @@ fn span_lossless_lint(cx: &LateContext<'_, '_>, expr: &Expr<'_>, op: &Expr<'_>, 
     span_lint_and_sugg(
         cx,
         CAST_LOSSLESS,
-        expr.span,
+        cx.tcx.hir().span(expr.hir_id),
         &format!(
             "casting `{}` to `{}` may become silently lossy if you later change the type",
             cast_from, cast_to
@@ -1269,7 +1271,7 @@ fn check_loss_of_sign(cx: &LateContext<'_, '_>, expr: &Expr<'_>, op: &Expr<'_>, 
 
         if_chain! {
             if method_name == "unwrap";
-            if let Some(arglist) = method_chain_args(op, &["unwrap"]);
+            if let Some(arglist) = method_chain_args(cx, op, &["unwrap"]);
             if let ExprKind::MethodCall(ref inner_path, _, _, _) = &arglist[0][0].kind;
             then {
                 method_name = inner_path.ident.name.as_str();
@@ -1284,7 +1286,7 @@ fn check_loss_of_sign(cx: &LateContext<'_, '_>, expr: &Expr<'_>, op: &Expr<'_>, 
     span_lint(
         cx,
         CAST_SIGN_LOSS,
-        expr.span,
+        cx.tcx.hir().span(expr.hir_id),
         &format!(
             "casting `{}` to `{}` may lose the sign of the value",
             cast_from, cast_to
@@ -1331,7 +1333,7 @@ fn check_truncation_and_wrapping(cx: &LateContext<'_, '_>, expr: &Expr<'_>, cast
         span_lint(
             cx,
             CAST_POSSIBLE_TRUNCATION,
-            expr.span,
+            cx.tcx.hir().span(expr.hir_id),
             &format!(
                 "casting `{}` to `{}` may truncate the value{}",
                 cast_from,
@@ -1348,7 +1350,7 @@ fn check_truncation_and_wrapping(cx: &LateContext<'_, '_>, expr: &Expr<'_>, cast
         span_lint(
             cx,
             CAST_POSSIBLE_WRAP,
-            expr.span,
+            cx.tcx.hir().span(expr.hir_id),
             &format!(
                 "casting `{}` to `{}` may wrap around the value{}",
                 cast_from,
@@ -1413,7 +1415,7 @@ fn fp_ty_mantissa_nbits(typ: Ty<'_>) -> u32 {
 
 impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Casts {
     fn check_expr(&mut self, cx: &LateContext<'a, 'tcx>, expr: &'tcx Expr<'_>) {
-        if expr.span.from_expansion() {
+        if cx.tcx.hir().span(expr.hir_id).from_expansion() {
             return;
         }
         if let ExprKind::Cast(ref ex, _) = expr.kind {
@@ -1432,7 +1434,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Casts {
                         span_lint_and_sugg(
                             cx,
                             UNNECESSARY_CAST,
-                            expr.span,
+                            cx.tcx.hir().span(expr.hir_id),
                             &format!("casting integer literal to `{}` is unnecessary", cast_to),
                             "try",
                             format!("{}_{}", n, cast_to),
@@ -1444,11 +1446,11 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Casts {
                 match lit.node {
                     LitKind::Int(_, LitIntType::Unsuffixed) | LitKind::Float(_, LitFloatType::Unsuffixed) => {},
                     _ => {
-                        if cast_from.kind == cast_to.kind && !in_external_macro(cx.sess(), expr.span) {
+                        if cast_from.kind == cast_to.kind && !in_external_macro(cx.sess(), cx.tcx.hir().span(expr.hir_id)) {
                             span_lint(
                                 cx,
                                 UNNECESSARY_CAST,
-                                expr.span,
+                                cx.tcx.hir().span(expr.hir_id),
                                 &format!(
                                     "casting to the same type is unnecessary (`{}` -> `{}`)",
                                     cast_from, cast_to
@@ -1458,7 +1460,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Casts {
                     },
                 }
             }
-            if cast_from.is_numeric() && cast_to.is_numeric() && !in_external_macro(cx.sess(), expr.span) {
+            if cast_from.is_numeric() && cast_to.is_numeric() && !in_external_macro(cx.sess(), cx.tcx.hir().span(expr.hir_id)) {
                 lint_numeric_casts(cx, expr, ex, cast_from, cast_to);
             }
 
@@ -1493,14 +1495,14 @@ fn lint_numeric_casts<'tcx>(
             span_lint(
                 cx,
                 CAST_POSSIBLE_TRUNCATION,
-                expr.span,
+                cx.tcx.hir().span(expr.hir_id),
                 &format!("casting `{}` to `{}` may truncate the value", cast_from, cast_to),
             );
             if !cast_to.is_signed() {
                 span_lint(
                     cx,
                     CAST_SIGN_LOSS,
-                    expr.span,
+                    cx.tcx.hir().span(expr.hir_id),
                     &format!(
                         "casting `{}` to `{}` may lose the sign of the value",
                         cast_from, cast_to
@@ -1518,7 +1520,7 @@ fn lint_numeric_casts<'tcx>(
                 span_lint(
                     cx,
                     CAST_POSSIBLE_TRUNCATION,
-                    expr.span,
+                    cx.tcx.hir().span(expr.hir_id),
                     "casting `f64` to `f32` may truncate the value",
                 );
             }
@@ -1544,7 +1546,7 @@ fn lint_cast_ptr_alignment<'tcx>(cx: &LateContext<'_, 'tcx>, expr: &Expr<'_>, ca
             span_lint(
                 cx,
                 CAST_PTR_ALIGNMENT,
-                expr.span,
+                cx.tcx.hir().span(expr.hir_id),
                 &format!(
                     "casting from `{}` to a more-strictly-aligned pointer (`{}`) ({} < {} bytes)",
                     cast_from,
@@ -1572,14 +1574,14 @@ fn lint_fn_to_numeric_cast(
     match cast_from.kind {
         ty::FnDef(..) | ty::FnPtr(_) => {
             let mut applicability = Applicability::MaybeIncorrect;
-            let from_snippet = snippet_with_applicability(cx, cast_expr.span, "x", &mut applicability);
+            let from_snippet = snippet_with_applicability(cx, cx.tcx.hir().span(cast_expr.hir_id), "x", &mut applicability);
 
             let to_nbits = int_ty_to_nbits(cast_to, cx.tcx);
             if to_nbits < cx.tcx.data_layout.pointer_size.bits() {
                 span_lint_and_sugg(
                     cx,
                     FN_TO_NUMERIC_CAST_WITH_TRUNCATION,
-                    expr.span,
+                    cx.tcx.hir().span(expr.hir_id),
                     &format!(
                         "casting function pointer `{}` to `{}`, which truncates the value",
                         from_snippet, cast_to
@@ -1592,7 +1594,7 @@ fn lint_fn_to_numeric_cast(
                 span_lint_and_sugg(
                     cx,
                     FN_TO_NUMERIC_CAST,
-                    expr.span,
+                    cx.tcx.hir().span(expr.hir_id),
                     &format!("casting function pointer `{}` to `{}`", from_snippet, cast_to),
                     "try",
                     format!("{} as usize", from_snippet),
@@ -1799,27 +1801,28 @@ declare_lint_pass!(CharLitAsU8 => [CHAR_LIT_AS_U8]);
 
 impl<'a, 'tcx> LateLintPass<'a, 'tcx> for CharLitAsU8 {
     fn check_expr(&mut self, cx: &LateContext<'a, 'tcx>, expr: &'tcx Expr<'_>) {
+        let expr_span = cx.tcx.hir().span(expr.hir_id);
         if_chain! {
-            if !expr.span.from_expansion();
+            if !expr_span.from_expansion();
             if let ExprKind::Cast(e, _) = &expr.kind;
             if let ExprKind::Lit(l) = &e.kind;
             if let LitKind::Char(c) = l.node;
             if ty::Uint(UintTy::U8) == cx.tables.expr_ty(expr).kind;
             then {
                 let mut applicability = Applicability::MachineApplicable;
-                let snippet = snippet_with_applicability(cx, e.span, "'x'", &mut applicability);
+                let snippet = snippet_with_applicability(cx, cx.tcx.hir().span(e.hir_id), "'x'", &mut applicability);
 
                 span_lint_and_then(
                     cx,
                     CHAR_LIT_AS_U8,
-                    expr.span,
+                    expr_span,
                     "casting a character literal to `u8` truncates",
                     |diag| {
                         diag.note("`char` is four bytes wide, but `u8` is a single byte");
 
                         if c.is_ascii() {
                             diag.span_suggestion(
-                                expr.span,
+                                expr_span,
                                 "use a byte literal instead",
                                 format!("b{}", snippet),
                                 applicability,
@@ -1971,7 +1974,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for AbsurdExtremeComparisons {
 
         if let ExprKind::Binary(ref cmp, ref lhs, ref rhs) = expr.kind {
             if let Some((culprit, result)) = detect_absurd_comparison(cx, cmp.node, lhs, rhs) {
-                if !expr.span.from_expansion() {
+                if !cx.tcx.hir().span(expr.hir_id).from_expansion() {
                     let msg = "this comparison involving the minimum or maximum element for this \
                                type contains a case that is always true or always false";
 
@@ -1981,14 +1984,14 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for AbsurdExtremeComparisons {
                         InequalityImpossible => format!(
                             "the case where the two sides are not equal never occurs, consider using `{} == {}` \
                              instead",
-                            snippet(cx, lhs.span, "lhs"),
-                            snippet(cx, rhs.span, "rhs")
+                            snippet(cx, cx.tcx.hir().span(lhs.hir_id), "lhs"),
+                            snippet(cx, cx.tcx.hir().span(rhs.hir_id), "rhs")
                         ),
                     };
 
                     let help = format!(
                         "because `{}` is the {} value for this type, {}",
-                        snippet(cx, culprit.expr.span, "x"),
+                        snippet(cx, cx.tcx.hir().span(culprit.expr.hir_id), "x"),
                         match culprit.which {
                             Minimum => "minimum",
                             Maximum => "maximum",
@@ -1996,7 +1999,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for AbsurdExtremeComparisons {
                         conclusion
                     );
 
-                    span_lint_and_help(cx, ABSURD_EXTREME_COMPARISONS, expr.span, msg, None, &help);
+                    span_lint_and_help(cx, ABSURD_EXTREME_COMPARISONS, cx.tcx.hir().span(expr.hir_id), msg, None, &help);
                 }
             }
         }
@@ -2156,7 +2159,7 @@ fn err_upcast_comparison(cx: &LateContext<'_, '_>, span: Span, expr: &Expr<'_>, 
             span,
             &format!(
                 "because of the numeric bounds on `{}` prior to casting, this expression is always {}",
-                snippet(cx, cast_val.span, "the expression"),
+                snippet(cx, cx.tcx.hir().span(cast_val.hir_id), "the expression"),
                 if always { "true" } else { "false" },
             ),
         );
@@ -2234,8 +2237,9 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for InvalidUpcastComparisons {
             let lhs_bounds = numeric_cast_precast_bounds(cx, normalized_lhs);
             let rhs_bounds = numeric_cast_precast_bounds(cx, normalized_rhs);
 
-            upcast_comparison_bounds_err(cx, expr.span, rel, lhs_bounds, normalized_lhs, normalized_rhs, false);
-            upcast_comparison_bounds_err(cx, expr.span, rel, rhs_bounds, normalized_rhs, normalized_lhs, true);
+            let expr_span = cx.tcx.hir().span(expr.hir_id);
+            upcast_comparison_bounds_err(cx, expr_span, rel, lhs_bounds, normalized_lhs, normalized_rhs, false);
+            upcast_comparison_bounds_err(cx, expr_span, rel, rhs_bounds, normalized_rhs, normalized_lhs, true);
         }
     }
 }
@@ -2562,29 +2566,30 @@ impl<'a, 'b, 'tcx> Visitor<'tcx> for ImplicitHasherConstructorVisitor<'a, 'b, 't
                     return;
                 }
 
+                let e_span = self.cx.tcx.hir().span(e.hir_id);
                 if match_path(ty_path, &paths::HASHMAP) {
                     if method.ident.name == sym!(new) {
                         self.suggestions
-                            .insert(e.span, "HashMap::default()".to_string());
+                            .insert(e_span, "HashMap::default()".to_string());
                     } else if method.ident.name == sym!(with_capacity) {
                         self.suggestions.insert(
-                            e.span,
+                            e_span,
                             format!(
                                 "HashMap::with_capacity_and_hasher({}, Default::default())",
-                                snippet(self.cx, args[0].span, "capacity"),
+                                snippet(self.cx, self.cx.tcx.hir().span(args[0].hir_id), "capacity"),
                             ),
                         );
                     }
                 } else if match_path(ty_path, &paths::HASHSET) {
                     if method.ident.name == sym!(new) {
                         self.suggestions
-                            .insert(e.span, "HashSet::default()".to_string());
+                            .insert(e_span, "HashSet::default()".to_string());
                     } else if method.ident.name == sym!(with_capacity) {
                         self.suggestions.insert(
-                            e.span,
+                            e_span,
                             format!(
                                 "HashSet::with_capacity_and_hasher({}, Default::default())",
-                                snippet(self.cx, args[0].span, "capacity"),
+                                snippet(self.cx, self.cx.tcx.hir().span(args[0].hir_id), "capacity"),
                             ),
                         );
                     }
@@ -2649,7 +2654,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for RefToMut {
                 span_lint(
                     cx,
                     CAST_REF_TO_MUT,
-                    expr.span,
+                    cx.tcx.hir().span(expr.hir_id),
                     "casting `&T` to `&mut T` may cause undefined behavior, consider instead using an `UnsafeCell`",
                 );
             }

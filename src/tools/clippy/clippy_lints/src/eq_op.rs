@@ -56,12 +56,12 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for EqOp {
     #[allow(clippy::similar_names, clippy::too_many_lines)]
     fn check_expr(&mut self, cx: &LateContext<'a, 'tcx>, e: &'tcx Expr<'_>) {
         if let ExprKind::Binary(op, ref left, ref right) = e.kind {
-            if e.span.from_expansion() {
+            if cx.tcx.hir().span(e.hir_id).from_expansion() {
                 return;
             }
             let macro_with_not_op = |expr_kind: &ExprKind<'_>| {
                 if let ExprKind::Unary(_, ref expr) = *expr_kind {
-                    in_macro(expr.span)
+                    in_macro(cx.tcx.hir().span(expr.hir_id))
                 } else {
                     false
                 }
@@ -73,7 +73,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for EqOp {
                 span_lint(
                     cx,
                     EQ_OP,
-                    e.span,
+                    cx.tcx.hir().span(e.hir_id),
                     &format!("equal expressions as operands to `{}`", op.node.as_str()),
                 );
                 return;
@@ -112,15 +112,15 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for EqOp {
                             span_lint_and_then(
                                 cx,
                                 OP_REF,
-                                e.span,
+                                cx.tcx.hir().span(e.hir_id),
                                 "needlessly taken reference of both operands",
                                 |diag| {
-                                    let lsnip = snippet(cx, l.span, "...").to_string();
-                                    let rsnip = snippet(cx, r.span, "...").to_string();
+                                    let lsnip = snippet(cx, cx.tcx.hir().span(l.hir_id), "...").to_string();
+                                    let rsnip = snippet(cx, cx.tcx.hir().span(r.hir_id), "...").to_string();
                                     multispan_sugg(
                                         diag,
                                         "use the values directly",
-                                        vec![(left.span, lsnip), (right.span, rsnip)],
+                                        vec![(cx.tcx.hir().span(left.hir_id), lsnip), (cx.tcx.hir().span(right.hir_id), rsnip)],
                                     );
                                 },
                             )
@@ -131,12 +131,12 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for EqOp {
                             span_lint_and_then(
                                 cx,
                                 OP_REF,
-                                e.span,
+                                cx.tcx.hir().span(e.hir_id),
                                 "needlessly taken reference of left operand",
                                 |diag| {
-                                    let lsnip = snippet(cx, l.span, "...").to_string();
+                                    let lsnip = snippet(cx, cx.tcx.hir().span(l.hir_id), "...").to_string();
                                     diag.span_suggestion(
-                                        left.span,
+                                        cx.tcx.hir().span(left.hir_id),
                                         "use the left value directly",
                                         lsnip,
                                         Applicability::MaybeIncorrect, // FIXME #2597
@@ -150,12 +150,12 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for EqOp {
                             span_lint_and_then(
                                 cx,
                                 OP_REF,
-                                e.span,
+                                cx.tcx.hir().span(e.hir_id),
                                 "needlessly taken reference of right operand",
                                 |diag| {
-                                    let rsnip = snippet(cx, r.span, "...").to_string();
+                                    let rsnip = snippet(cx, cx.tcx.hir().span(r.hir_id), "...").to_string();
                                     diag.span_suggestion(
-                                        right.span,
+                                        cx.tcx.hir().span(right.hir_id),
                                         "use the right value directly",
                                         rsnip,
                                         Applicability::MaybeIncorrect, // FIXME #2597
@@ -174,12 +174,12 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for EqOp {
                             span_lint_and_then(
                                 cx,
                                 OP_REF,
-                                e.span,
+                                cx.tcx.hir().span(e.hir_id),
                                 "needlessly taken reference of left operand",
                                 |diag| {
-                                    let lsnip = snippet(cx, l.span, "...").to_string();
+                                    let lsnip = snippet(cx, cx.tcx.hir().span(l.hir_id), "...").to_string();
                                     diag.span_suggestion(
-                                        left.span,
+                                        cx.tcx.hir().span(left.hir_id),
                                         "use the left value directly",
                                         lsnip,
                                         Applicability::MaybeIncorrect, // FIXME #2597
@@ -195,10 +195,10 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for EqOp {
                         if (requires_ref || rcpy)
                             && implements_trait(cx, cx.tables.expr_ty(left), trait_id, &[rty.into()])
                         {
-                            span_lint_and_then(cx, OP_REF, e.span, "taken reference of right operand", |diag| {
-                                let rsnip = snippet(cx, r.span, "...").to_string();
+                            span_lint_and_then(cx, OP_REF, cx.tcx.hir().span(e.hir_id), "taken reference of right operand", |diag| {
+                                let rsnip = snippet(cx, cx.tcx.hir().span(r.hir_id), "...").to_string();
                                 diag.span_suggestion(
-                                    right.span,
+                                    cx.tcx.hir().span(right.hir_id),
                                     "use the right value directly",
                                     rsnip,
                                     Applicability::MaybeIncorrect, // FIXME #2597

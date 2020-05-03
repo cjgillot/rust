@@ -28,7 +28,13 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         let ty =
             if !lhs_ty.is_ty_var() && !rhs_ty.is_ty_var() && is_builtin_binop(lhs_ty, rhs_ty, op) {
-                self.enforce_builtin_binop_types(&lhs.span, lhs_ty, &rhs.span, rhs_ty, op);
+                self.enforce_builtin_binop_types(
+                    &self.tcx.hir().span(lhs.hir_id),
+                    lhs_ty,
+                    &self.tcx.hir().span(rhs.hir_id),
+                    rhs_ty,
+                    op,
+                );
                 self.tcx.mk_unit()
             } else {
                 return_ty
@@ -90,13 +96,17 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     && is_builtin_binop(lhs_ty, rhs_ty, op)
                 {
                     let builtin_return_ty = self.enforce_builtin_binop_types(
-                        &lhs_expr.span,
+                        &self.tcx.hir().span(lhs_expr.hir_id),
                         lhs_ty,
-                        &rhs_expr.span,
+                        &self.tcx.hir().span(rhs_expr.hir_id),
                         rhs_ty,
                         op,
                     );
-                    self.demand_suptype(expr.span, builtin_return_ty, return_ty);
+                    self.demand_suptype(
+                        self.tcx.hir().span(expr.hir_id),
+                        builtin_return_ty,
+                        return_ty,
+                    );
                 }
 
                 return_ty
@@ -168,7 +178,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 let lhs_ty = self.check_expr(lhs_expr);
                 let fresh_var = self.next_ty_var(TypeVariableOrigin {
                     kind: TypeVariableOriginKind::MiscVariable,
-                    span: lhs_expr.span,
+                    span: self.tcx.hir().span(lhs_expr.hir_id),
                 });
                 self.demand_coerce(lhs_expr, lhs_ty, fresh_var, Some(rhs_expr), AllowTwoPhase::No)
             }
@@ -190,7 +200,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // particularly for things like `String + &String`.
         let rhs_ty_var = self.next_ty_var(TypeVariableOrigin {
             kind: TypeVariableOriginKind::MiscVariable,
-            span: rhs_expr.span,
+            span: self.tcx.hir().span(rhs_expr.hir_id),
         });
 
         let result = self.lookup_op_method(lhs_ty, &[rhs_ty_var], Op::Binary(op, is_assign));
@@ -258,14 +268,15 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         IsAssign::Yes => {
                             let mut err = struct_span_err!(
                                 self.tcx.sess,
-                                expr.span,
+                                self.tcx.hir().span(expr.hir_id),
                                 E0368,
                                 "binary assignment operation `{}=` cannot be applied to type `{}`",
                                 op.node.as_str(),
                                 lhs_ty,
                             );
+                            let lhs_expr_span = self.tcx.hir().span(lhs_expr.hir_id);
                             err.span_label(
-                                lhs_expr.span,
+                                lhs_expr_span,
                                 format!("cannot use `{}=` on type `{}`", op.node.as_str(), lhs_ty),
                             );
                             let mut suggested_deref = false;
@@ -274,12 +285,12 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                     self.infcx.type_is_copy_modulo_regions(
                                         self.param_env,
                                         rty,
-                                        lhs_expr.span,
+                                        lhs_expr_span,
                                     ) && self
                                         .lookup_op_method(rty, &[rhs_ty], Op::Binary(op, is_assign))
                                         .is_ok()
                                 } {
-                                    if let Ok(lstring) = source_map.span_to_snippet(lhs_expr.span) {
+                                    if let Ok(lstring) = source_map.span_to_snippet(lhs_expr_span) {
                                         let msg = &format!(
                                             "`{}=` can be used on '{}', you can dereference `{}`",
                                             op.node.as_str(),
@@ -287,7 +298,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                             lstring,
                                         );
                                         err.span_suggestion(
-                                            lhs_expr.span,
+                                            lhs_expr_span,
                                             msg,
                                             format!("*{}", lstring),
                                             rustc_errors::Applicability::MachineApplicable,
@@ -427,10 +438,12 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             );
 
                             let mut involves_fn = false;
-                            if !lhs_expr.span.eq(&rhs_expr.span) {
+                            let lhs_expr_span = self.tcx.hir().span(lhs_expr.hir_id);
+                            let rhs_expr_span = self.tcx.hir().span(rhs_expr.hir_id);
+                            if !lhs_expr_span.eq(&rhs_expr_span) {
                                 involves_fn |= self.add_type_neq_err_label(
                                     &mut err,
-                                    lhs_expr.span,
+                                    lhs_expr_span,
                                     lhs_ty,
                                     rhs_ty,
                                     op,
@@ -438,7 +451,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                 );
                                 involves_fn |= self.add_type_neq_err_label(
                                     &mut err,
-                                    rhs_expr.span,
+                                    rhs_expr_span,
                                     rhs_ty,
                                     lhs_ty,
                                     op,
@@ -452,12 +465,12 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                     self.infcx.type_is_copy_modulo_regions(
                                         self.param_env,
                                         rty,
-                                        lhs_expr.span,
+                                        lhs_expr_span,
                                     ) && self
                                         .lookup_op_method(rty, &[rhs_ty], Op::Binary(op, is_assign))
                                         .is_ok()
                                 } {
-                                    if let Ok(lstring) = source_map.span_to_snippet(lhs_expr.span) {
+                                    if let Ok(lstring) = source_map.span_to_snippet(lhs_expr_span) {
                                         err.help(&format!(
                                             "`{}` can be used on '{}', you can \
                                             dereference `{2}`: `*{2}`",
@@ -598,10 +611,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         op.span,
                         "`+` cannot be used to concatenate two `&str` strings",
                     );
-                    match source_map.span_to_snippet(lhs_expr.span) {
+                    let lhs_expr_span = self.tcx.hir().span(lhs_expr.hir_id);
+                    match source_map.span_to_snippet(lhs_expr_span) {
                         Ok(lstring) => {
                             err.span_suggestion(
-                                lhs_expr.span,
+                                lhs_expr_span,
                                 if lstring.starts_with('&') {
                                     remove_borrow_msg
                                 } else {
@@ -625,13 +639,15 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             (&Ref(_, l_ty, _), &Adt(..)) // Handle `&str` & `&String` + `String`
                 if (l_ty.kind == Str || is_std_string(l_ty)) && is_std_string(rhs_ty) =>
             {
+                let lhs_expr_span = self.tcx.hir().span(lhs_expr.hir_id);
+                let rhs_expr_span = self.tcx.hir().span(rhs_expr.hir_id);
                 err.span_label(
                     op.span,
                     "`+` cannot be used to concatenate a `&str` with a `String`",
                 );
                 match (
-                    source_map.span_to_snippet(lhs_expr.span),
-                    source_map.span_to_snippet(rhs_expr.span),
+                    source_map.span_to_snippet(lhs_expr_span),
+                    source_map.span_to_snippet(rhs_expr_span),
                     is_assign,
                 ) {
                     (Ok(l), Ok(r), false) => {
@@ -645,8 +661,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         err.multipart_suggestion(
                             msg,
                             vec![
-                                (lhs_expr.span, to_string),
-                                (rhs_expr.span, format!("&{}", r)),
+                                (lhs_expr_span, to_string),
+                                (rhs_expr_span, format!("&{}", r)),
                             ],
                             Applicability::MachineApplicable,
                         );
@@ -668,7 +684,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         op: hir::UnOp,
     ) -> Ty<'tcx> {
         assert!(op.is_by_value());
-        match self.lookup_op_method(operand_ty, &[], Op::Unary(op, ex.span)) {
+        let ex_span = self.tcx.hir().span(ex.hir_id);
+        match self.lookup_op_method(operand_ty, &[], Op::Unary(op, ex_span)) {
             Ok(method) => {
                 self.write_method_call(ex.hir_id, method);
                 method.sig.output()
@@ -678,14 +695,14 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 if !actual.references_error() {
                     let mut err = struct_span_err!(
                         self.tcx.sess,
-                        ex.span,
+                        ex_span,
                         E0600,
                         "cannot apply unary operator `{}` to type `{}`",
                         op.as_str(),
                         actual
                     );
                     err.span_label(
-                        ex.span,
+                        ex_span,
                         format!(
                             "cannot apply unary \
                                                     operator `{}`",

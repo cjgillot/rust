@@ -113,7 +113,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
                     // Evaluate the initializer, if present.
                     if let Some(init) = initializer {
-                        let initializer_span = init.span();
+                        let initializer_span = init.span(this.hir.tcx());
 
                         unpack!(
                             block = this.in_opt_scope(
@@ -176,7 +176,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             let tail_result_is_ignored =
                 destination_ty.is_unit() || this.block_context.currently_ignores_tail_results();
             let span = match expr {
-                ExprRef::Hair(expr) => expr.span,
+                ExprRef::Hair(expr) => tcx.hir().span(expr.hir_id),
                 ExprRef::Mirror(ref expr) => expr.span,
             };
             this.block_context.push(BlockFrame::TailExpr { tail_result_is_ignored, span });

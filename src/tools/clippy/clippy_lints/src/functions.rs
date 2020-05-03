@@ -333,7 +333,7 @@ impl<'a, 'tcx> Functions {
             return;
         }
 
-        let code_snippet = snippet(cx, body.value.span, "..");
+        let code_snippet = snippet(cx, cx.tcx.hir().span(body.value.hir_id), "..");
         let mut line_count: u64 = 0;
         let mut in_comment = false;
         let mut code_in_line;
@@ -591,7 +591,7 @@ impl<'a, 'tcx> DerefVisitor<'a, 'tcx> {
                     span_lint(
                         self.cx,
                         NOT_UNSAFE_PTR_ARG_DEREF,
-                        ptr.span,
+                        self.cx.tcx.hir().span(ptr.hir_id),
                         "this public function dereferences a raw pointer but is not marked `unsafe`",
                     );
                 }
@@ -623,7 +623,7 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for StaticMutVisitor<'a, 'tcx> {
                         && is_mutable_ty(
                             self.cx,
                             self.cx.tcx.typeck_tables_of(def_id.expect_local()).expr_ty(arg),
-                            arg.span,
+                            self.cx.tcx.hir().span(arg.hir_id),
                             &mut tys,
                         )
                         && is_mutated_static(self.cx, arg)

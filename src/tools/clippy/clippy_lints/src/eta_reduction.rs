@@ -66,7 +66,7 @@ declare_lint_pass!(EtaReduction => [REDUNDANT_CLOSURE, REDUNDANT_CLOSURE_FOR_MET
 
 impl<'a, 'tcx> LateLintPass<'a, 'tcx> for EtaReduction {
     fn check_expr(&mut self, cx: &LateContext<'a, 'tcx>, expr: &'tcx Expr<'_>) {
-        if in_external_macro(cx.sess(), expr.span) {
+        if in_external_macro(cx.sess(), cx.tcx.hir().span(expr.hir_id)) {
             return;
         }
 
@@ -106,10 +106,10 @@ fn check_closure(cx: &LateContext<'_, '_>, expr: &Expr<'_>) {
             if compare_inputs(&mut iter_input_pats(decl, body), &mut args.iter());
 
             then {
-                span_lint_and_then(cx, REDUNDANT_CLOSURE, expr.span, "redundant closure found", |diag| {
-                    if let Some(snippet) = snippet_opt(cx, caller.span) {
+                span_lint_and_then(cx, REDUNDANT_CLOSURE, cx.tcx.hir().span(expr.hir_id), "redundant closure found", |diag| {
+                    if let Some(snippet) = snippet_opt(cx, cx.tcx.hir().span(caller.hir_id)) {
                         diag.span_suggestion(
-                            expr.span,
+                            cx.tcx.hir().span(expr.hir_id),
                             "remove closure as shown",
                             snippet,
                             Applicability::MachineApplicable,
@@ -139,7 +139,7 @@ fn check_closure(cx: &LateContext<'_, '_>, expr: &Expr<'_>) {
                 span_lint_and_sugg(
                     cx,
                     REDUNDANT_CLOSURE_FOR_METHOD_CALLS,
-                    expr.span,
+                    cx.tcx.hir().span(expr.hir_id),
                     "redundant closure found",
                     "remove closure as shown",
                     format!("{}::{}", name, path.ident.name),

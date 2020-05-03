@@ -527,9 +527,10 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
             if let Some(Node::Local(ref local)) = self.tcx.hir().find(parent_node) {
                 if let Some(ref expr) = local.init {
                     if let hir::ExprKind::Index(_, _) = expr.kind {
-                        if let Ok(snippet) = self.tcx.sess.source_map().span_to_snippet(expr.span) {
+                        let expr_span = self.tcx.hir().span(expr.hir_id);
+                        if let Ok(snippet) = self.tcx.sess.source_map().span_to_snippet(expr_span) {
                             err.span_suggestion(
-                                expr.span,
+                                expr_span,
                                 "consider borrowing here",
                                 format!("&{}", snippet),
                                 Applicability::MachineApplicable,
@@ -1115,8 +1116,9 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
                     .returns
                     .iter()
                     .map(|expr| {
-                        let snip = sm.span_to_snippet(expr.span).ok()?;
-                        Some((expr.span, format!("Box::new({})", snip)))
+                        let expr_span = self.tcx.hir().span(expr.hir_id);
+                        let snip = sm.span_to_snippet(expr_span).ok()?;
+                        Some((expr_span, format!("Box::new({})", snip)))
                     })
                     .collect::<Option<Vec<_>>>()
                 {
@@ -1172,7 +1174,8 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
             for expr in &visitor.returns {
                 if let Some(returned_ty) = tables.node_type_opt(expr.hir_id) {
                     let ty = self.resolve_vars_if_possible(&returned_ty);
-                    err.span_label(expr.span, &format!("this returned value is of type `{}`", ty));
+                    let expr_span = self.tcx.hir().span(expr.hir_id);
+                    err.span_label(expr_span, &format!("this returned value is of type `{}`", ty));
                 }
             }
         }
@@ -1493,7 +1496,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
                         );
                         ty_matches(ty)
                     })
-                    .map(|expr| expr.span);
+                    .map(|expr| self.tcx.hir().span(expr.hir_id));
                 let ty::GeneratorInteriorTypeCause { span, scope_span, yield_span, expr, .. } =
                     cause;
 

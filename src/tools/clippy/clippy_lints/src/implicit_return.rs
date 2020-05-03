@@ -61,6 +61,7 @@ fn lint(cx: &LateContext<'_, '_>, outer_span: Span, inner_span: Span, msg: &str)
 }
 
 fn expr_match(cx: &LateContext<'_, '_>, expr: &Expr<'_>) {
+    let expr_span = cx.tcx.hir().span(expr.hir_id);
     match expr.kind {
         // loops could be using `break` instead of `return`
         ExprKind::Block(block, ..) | ExprKind::Loop(block, ..) => {
@@ -75,7 +76,7 @@ fn expr_match(cx: &LateContext<'_, '_>, expr: &Expr<'_>) {
                     if let ExprKind::Break(.., break_expr) = &expr.kind;
                     if let Some(break_expr) = break_expr;
                     then {
-                            lint(cx, expr.span, break_expr.span, LINT_BREAK);
+                            lint(cx, expr_span, cx.tcx.hir().span(break_expr.hir_id), LINT_BREAK);
                     }
                 }
             }
@@ -83,7 +84,7 @@ fn expr_match(cx: &LateContext<'_, '_>, expr: &Expr<'_>) {
         // use `return` instead of `break`
         ExprKind::Break(.., break_expr) => {
             if let Some(break_expr) = break_expr {
-                lint(cx, expr.span, break_expr.span, LINT_BREAK);
+                lint(cx, expr_span, cx.tcx.hir().span(break_expr.hir_id), LINT_BREAK);
             }
         },
         ExprKind::Match(.., arms, source) => {
@@ -113,12 +114,12 @@ fn expr_match(cx: &LateContext<'_, '_>, expr: &Expr<'_>) {
                     match_def_path(cx, path_def_id, &BEGIN_PANIC_FMT);
                 then { }
                 else {
-                    lint(cx, expr.span, expr.span, LINT_RETURN)
+                    lint(cx, expr_span, expr_span, LINT_RETURN)
                 }
             }
         },
         // everything else is missing `return`
-        _ => lint(cx, expr.span, expr.span, LINT_RETURN),
+        _ => lint(cx, expr_span, expr_span, LINT_RETURN),
     }
 }
 

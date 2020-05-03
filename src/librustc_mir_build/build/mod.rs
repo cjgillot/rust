@@ -889,7 +889,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
             // Make sure we drop (parts of) the argument even when not matched on.
             self.schedule_drop(
-                arg_opt.as_ref().map_or(ast_body.span, |arg| tcx_hir.span(arg.pat.hir_id)),
+                tcx_hir.span(arg_opt.as_ref().map_or(ast_body.hir_id, |arg| arg.pat.hir_id)),
                 argument_scope,
                 local,
                 DropKind::Value,
@@ -931,7 +931,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     _ => {
                         scope = self.declare_bindings(
                             scope,
-                            ast_body.span,
+                            tcx_hir.span(ast_body.hir_id),
                             &pattern,
                             matches::ArmHasGuard(false),
                             Some((Some(&place), span)),

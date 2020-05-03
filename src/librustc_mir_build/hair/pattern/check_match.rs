@@ -192,7 +192,14 @@ impl<'tcx> MatchVisitor<'_, 'tcx> {
         // since an empty matrix can occur when there are arms, if those arms all have guards.
         let scrut_ty = self.tables.expr_ty_adjusted(scrut);
         let is_empty_match = inlined_arms.is_empty();
-        check_exhaustive(&mut cx, scrut_ty, scrut.span, &matrix, scrut.hir_id, is_empty_match);
+        check_exhaustive(
+            &mut cx,
+            scrut_ty,
+            self.tcx.hir().span(scrut.hir_id),
+            &matrix,
+            scrut.hir_id,
+            is_empty_match,
+        );
     }
 
     fn check_irrefutable(&self, pat: &'tcx Pat<'tcx>, origin: &str, sp: Option<Span>) {

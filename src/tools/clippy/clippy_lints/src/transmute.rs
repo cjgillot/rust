@@ -309,13 +309,13 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Transmute {
                     _ if from_ty == to_ty => span_lint(
                         cx,
                         USELESS_TRANSMUTE,
-                        e.span,
+                        cx.tcx.hir().span(e.hir_id),
                         &format!("transmute from a type (`{}`) to itself", from_ty),
                     ),
                     (ty::Ref(_, rty, rty_mutbl), ty::RawPtr(ptr_ty)) => span_lint_and_then(
                         cx,
                         USELESS_TRANSMUTE,
-                        e.span,
+                        cx.tcx.hir().span(e.hir_id),
                         "transmute from a reference to a pointer",
                         |diag| {
                             if let Some(arg) = sugg::Sugg::hir_opt(cx, &args[0]) {
@@ -330,19 +330,19 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Transmute {
                                     arg.as_ty(cx.tcx.mk_ptr(rty_and_mut)).as_ty(to_ty)
                                 };
 
-                                diag.span_suggestion(e.span, "try", sugg.to_string(), Applicability::Unspecified);
+                                diag.span_suggestion(cx.tcx.hir().span(e.hir_id), "try", sugg.to_string(), Applicability::Unspecified);
                             }
                         },
                     ),
                     (ty::Int(_) | ty::Uint(_), ty::RawPtr(_)) => span_lint_and_then(
                         cx,
                         USELESS_TRANSMUTE,
-                        e.span,
+                        cx.tcx.hir().span(e.hir_id),
                         "transmute from an integer to a pointer",
                         |diag| {
                             if let Some(arg) = sugg::Sugg::hir_opt(cx, &args[0]) {
                                 diag.span_suggestion(
-                                    e.span,
+                                    cx.tcx.hir().span(e.hir_id),
                                     "try",
                                     arg.as_ty(&to_ty.to_string()).to_string(),
                                     Applicability::Unspecified,
@@ -353,13 +353,13 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Transmute {
                     (ty::Float(_) | ty::Char, ty::Ref(..) | ty::RawPtr(_)) => span_lint(
                         cx,
                         WRONG_TRANSMUTE,
-                        e.span,
+                        cx.tcx.hir().span(e.hir_id),
                         &format!("transmute from a `{}` to a pointer", from_ty),
                     ),
                     (ty::RawPtr(from_ptr), _) if from_ptr.ty == to_ty => span_lint(
                         cx,
                         CROSSPOINTER_TRANSMUTE,
-                        e.span,
+                        cx.tcx.hir().span(e.hir_id),
                         &format!(
                             "transmute from a type (`{}`) to the type that it points to (`{}`)",
                             from_ty, to_ty
@@ -368,7 +368,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Transmute {
                     (_, ty::RawPtr(to_ptr)) if to_ptr.ty == from_ty => span_lint(
                         cx,
                         CROSSPOINTER_TRANSMUTE,
-                        e.span,
+                        cx.tcx.hir().span(e.hir_id),
                         &format!(
                             "transmute from a type (`{}`) to a pointer to that type (`{}`)",
                             from_ty, to_ty
@@ -377,7 +377,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Transmute {
                     (ty::RawPtr(from_pty), ty::Ref(_, to_ref_ty, mutbl)) => span_lint_and_then(
                         cx,
                         TRANSMUTE_PTR_TO_REF,
-                        e.span,
+                        cx.tcx.hir().span(e.hir_id),
                         &format!(
                             "transmute from a pointer type (`{}`) to a reference type \
                              (`{}`)",
@@ -398,7 +398,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Transmute {
                             };
 
                             diag.span_suggestion(
-                                e.span,
+                                cx.tcx.hir().span(e.hir_id),
                                 "try",
                                 sugg::make_unop(deref, arg).to_string(),
                                 Applicability::Unspecified,
@@ -409,7 +409,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Transmute {
                         span_lint_and_then(
                             cx,
                             TRANSMUTE_INT_TO_CHAR,
-                            e.span,
+                            cx.tcx.hir().span(e.hir_id),
                             &format!("transmute from a `{}` to a `char`", from_ty),
                             |diag| {
                                 let arg = sugg::Sugg::hir(cx, &args[0], "..");
@@ -419,7 +419,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Transmute {
                                     arg
                                 };
                                 diag.span_suggestion(
-                                    e.span,
+                                    cx.tcx.hir().span(e.hir_id),
                                     "consider using",
                                     format!("std::char::from_u32({}).unwrap()", arg.to_string()),
                                     Applicability::Unspecified,
@@ -442,13 +442,13 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Transmute {
                                 span_lint_and_sugg(
                                     cx,
                                     TRANSMUTE_BYTES_TO_STR,
-                                    e.span,
+                                    cx.tcx.hir().span(e.hir_id),
                                     &format!("transmute from a `{}` to a `{}`", from_ty, to_ty),
                                     "consider using",
                                     format!(
                                         "std::str::from_utf8{}({}).unwrap()",
                                         postfix,
-                                        snippet(cx, args[0].span, ".."),
+                                        snippet(cx, cx.tcx.hir().span(args[0].hir_id), ".."),
                                     ),
                                     Applicability::Unspecified,
                                 );
@@ -457,7 +457,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Transmute {
                                     span_lint_and_then(
                                         cx,
                                         TRANSMUTE_PTR_TO_PTR,
-                                        e.span,
+                                        cx.tcx.hir().span(e.hir_id),
                                         "transmute from a reference to a reference",
                                         |diag| if let Some(arg) = sugg::Sugg::hir_opt(cx, &args[0]) {
                                             let ty_from_and_mut = ty::TypeAndMut {
@@ -474,7 +474,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Transmute {
                                                 sugg_paren.addr_deref()
                                             };
                                             diag.span_suggestion(
-                                                e.span,
+                                                cx.tcx.hir().span(e.hir_id),
                                                 "try",
                                                 sugg.to_string(),
                                                 Applicability::Unspecified,
@@ -488,12 +488,12 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Transmute {
                     (ty::RawPtr(_), ty::RawPtr(to_ty)) => span_lint_and_then(
                         cx,
                         TRANSMUTE_PTR_TO_PTR,
-                        e.span,
+                        cx.tcx.hir().span(e.hir_id),
                         "transmute from a pointer to a pointer",
                         |diag| {
                             if let Some(arg) = sugg::Sugg::hir_opt(cx, &args[0]) {
                                 let sugg = arg.as_ty(cx.tcx.mk_ptr(*to_ty));
-                                diag.span_suggestion(e.span, "try", sugg.to_string(), Applicability::Unspecified);
+                                diag.span_suggestion(cx.tcx.hir().span(e.hir_id), "try", sugg.to_string(), Applicability::Unspecified);
                             }
                         },
                     ),
@@ -501,13 +501,13 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Transmute {
                         span_lint_and_then(
                             cx,
                             TRANSMUTE_INT_TO_BOOL,
-                            e.span,
+                            cx.tcx.hir().span(e.hir_id),
                             &format!("transmute from a `{}` to a `bool`", from_ty),
                             |diag| {
                                 let arg = sugg::Sugg::hir(cx, &args[0], "..");
                                 let zero = sugg::Sugg::NonParen(Cow::from("0"));
                                 diag.span_suggestion(
-                                    e.span,
+                                    cx.tcx.hir().span(e.hir_id),
                                     "consider using",
                                     sugg::make_binop(ast::BinOpKind::Ne, &arg, &zero).to_string(),
                                     Applicability::Unspecified,
@@ -518,7 +518,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Transmute {
                     (ty::Int(_) | ty::Uint(_), ty::Float(_)) => span_lint_and_then(
                         cx,
                         TRANSMUTE_INT_TO_FLOAT,
-                        e.span,
+                        cx.tcx.hir().span(e.hir_id),
                         &format!("transmute from a `{}` to a `{}`", from_ty, to_ty),
                         |diag| {
                             let arg = sugg::Sugg::hir(cx, &args[0], "..");
@@ -531,7 +531,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Transmute {
                                 arg
                             };
                             diag.span_suggestion(
-                                e.span,
+                                cx.tcx.hir().span(e.hir_id),
                                 "consider using",
                                 format!("{}::from_bits({})", to_ty, arg.to_string()),
                                 Applicability::Unspecified,
@@ -541,7 +541,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Transmute {
                     (ty::Float(float_ty), ty::Int(_) | ty::Uint(_)) => span_lint_and_then(
                         cx,
                         TRANSMUTE_FLOAT_TO_INT,
-                        e.span,
+                        cx.tcx.hir().span(e.hir_id),
                         &format!("transmute from a `{}` to a `{}`", from_ty, to_ty),
                         |diag| {
                             let mut expr = &args[0];
@@ -575,7 +575,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Transmute {
                             };
 
                             diag.span_suggestion(
-                                e.span,
+                                cx.tcx.hir().span(e.hir_id),
                                 "consider using",
                                 arg.to_string(),
                                 Applicability::Unspecified,
@@ -592,7 +592,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Transmute {
                             span_lint(
                                 cx,
                                 UNSOUND_COLLECTION_TRANSMUTE,
-                                e.span,
+                                cx.tcx.hir().span(e.hir_id),
                                 &format!(
                                     "transmute from `{}` to `{}` with mismatched layout is unsound",
                                     from_ty,

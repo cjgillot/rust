@@ -35,7 +35,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for AssertionsOnConstants {
             span_lint_and_help(
                 cx,
                 ASSERTIONS_ON_CONSTANTS,
-                e.span,
+                cx.tcx.hir().span(e.hir_id),
                 if is_debug {
                     "`debug_assert!(true)` will be optimized out by the compiler"
                 } else {
@@ -49,7 +49,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for AssertionsOnConstants {
             span_lint_and_help(
                 cx,
                 ASSERTIONS_ON_CONSTANTS,
-                e.span,
+                cx.tcx.hir().span(e.hir_id),
                 "`assert!(false)` should probably be replaced",
                 None,
                 "use `panic!()` or `unreachable!()`",
@@ -59,14 +59,14 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for AssertionsOnConstants {
             span_lint_and_help(
                 cx,
                 ASSERTIONS_ON_CONSTANTS,
-                e.span,
+                cx.tcx.hir().span(e.hir_id),
                 &format!("`assert!(false, {})` should probably be replaced", panic_message),
                 None,
                 &format!("use `panic!({})` or `unreachable!({})`", panic_message, panic_message),
             )
         };
 
-        if let Some(debug_assert_span) = is_expn_of(e.span, "debug_assert") {
+        if let Some(debug_assert_span) = is_expn_of(cx.tcx.hir().span(e.hir_id), "debug_assert") {
             if debug_assert_span.from_expansion() {
                 return;
             }
@@ -78,7 +78,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for AssertionsOnConstants {
                     lint_true(true);
                 }
             };
-        } else if let Some(assert_span) = is_direct_expn_of(e.span, "assert") {
+        } else if let Some(assert_span) = is_direct_expn_of(cx.tcx.hir().span(e.hir_id), "assert") {
             if assert_span.from_expansion() {
                 return;
             }
@@ -136,7 +136,7 @@ fn match_assert_with_message<'a, 'tcx>(cx: &LateContext<'a, 'tcx>, expr: &'tcx E
         if let Some(args) = match_function_call(cx, begin_panic_call, &paths::BEGIN_PANIC);
         if args.len() == 1;
         // bind the second argument of the `assert!` macro if it exists
-        if let panic_message = snippet_opt(cx, args[0].span);
+        if let panic_message = snippet_opt(cx, cx.tcx.hir().span(args[0].hir_id));
         // second argument of begin_panic is irrelevant
         // as is the second match arm
         then {

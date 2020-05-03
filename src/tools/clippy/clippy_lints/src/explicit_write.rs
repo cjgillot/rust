@@ -49,7 +49,8 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ExplicitWrite {
                 None
             };
             then {
-                let write_span = unwrap_args[0].span;
+                let expr_span = cx.tcx.hir().span(expr.hir_id);
+                let write_span = cx.tcx.hir().span(unwrap_args[0].hir_id);
                 let calling_macro =
                     // ordering is important here, since `writeln!` uses `write!` internally
                     if is_expn_of(write_span, "writeln").is_some() {
@@ -77,7 +78,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ExplicitWrite {
                         span_lint_and_sugg(
                             cx,
                             EXPLICIT_WRITE,
-                            expr.span,
+                            expr_span,
                             &format!(
                                 "use of `{}!({}(), ...).unwrap()`",
                                 macro_name,
@@ -91,7 +92,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ExplicitWrite {
                         span_lint_and_sugg(
                             cx,
                             EXPLICIT_WRITE,
-                            expr.span,
+                            expr_span,
                             &format!("use of `{}().write_fmt(...).unwrap()`", dest_name),
                             "try this",
                             format!("{}print!(\"{}\")", prefix, write_output.escape_default()),
@@ -104,7 +105,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ExplicitWrite {
                         span_lint(
                             cx,
                             EXPLICIT_WRITE,
-                            expr.span,
+                            expr_span,
                             &format!(
                                 "use of `{}!({}(), ...).unwrap()`. Consider using `{}{}!` instead",
                                 macro_name,
@@ -117,7 +118,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ExplicitWrite {
                         span_lint(
                             cx,
                             EXPLICIT_WRITE,
-                            expr.span,
+                            expr_span,
                             &format!("use of `{}().write_fmt(...).unwrap()`. Consider using `{}print!` instead", dest_name, prefix),
                         );
                     }

@@ -523,7 +523,7 @@ impl<'a, 'tcx> PatCtxt<'a, 'tcx> {
 
             hir::PatKind::Range(ref lo_expr, ref hi_expr, end) => {
                 let (lo_expr, hi_expr) = (lo_expr.as_deref(), hi_expr.as_deref());
-                let lo_span = lo_expr.map_or(pat_span, |e| e.span);
+                let lo_span = lo_expr.map_or(pat_span, |e| self.tcx.hir().span(e.hir_id));
                 let lo = lo_expr.map(|e| self.lower_range_expr(e));
                 let hi = hi_expr.map(|e| self.lower_range_expr(e));
 
@@ -850,22 +850,24 @@ impl<'a, 'tcx> PatCtxt<'a, 'tcx> {
     /// afterwards.
     fn lower_lit(&mut self, expr: &'tcx hir::Expr<'tcx>) -> PatKind<'tcx> {
         if let hir::ExprKind::Path(ref qpath) = expr.kind {
-            *self.lower_path(qpath, expr.hir_id, expr.span).kind
+            *self.lower_path(qpath, expr.hir_id, self.tcx.hir().span(expr.hir_id)).kind
         } else {
             let (lit, neg) = match expr.kind {
                 hir::ExprKind::Lit(ref lit) => (lit, false),
                 hir::ExprKind::Unary(hir::UnOp::UnNeg, ref expr) => {
                     let lit = match expr.kind {
                         hir::ExprKind::Lit(ref lit) => lit,
-                        _ => span_bug!(expr.span, "not a literal: {:?}", expr),
+                        _ => {
+                            span_bug!(self.tcx.hir().span(expr.hir_id), "not a literal: {:?}", expr)
+                        }
                     };
                     (lit, true)
                 }
-                _ => span_bug!(expr.span, "not a literal: {:?}", expr),
+                _ => span_bug!(self.tcx.hir().span(expr.hir_id), "not a literal: {:?}", expr),
             };
 
             let lit_input = LitToConstInput { lit: &lit.node, ty: self.tables.expr_ty(expr), neg };
-            match self.tcx.at(expr.span).lit_to_const(lit_input) {
+            match self.tcx.at(self.tcx.hir().span(expr.hir_id)).lit_to_const(lit_input) {
                 Ok(val) => *self.const_to_pat(val, expr.hir_id, lit.span, false).kind,
                 Err(LitToConstError::UnparseableFloat) => {
                     self.errors.push(PatternError::FloatBug);

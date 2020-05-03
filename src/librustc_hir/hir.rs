@@ -1346,12 +1346,11 @@ pub struct Expr<'hir> {
     pub hir_id: HirId,
     pub kind: ExprKind<'hir>,
     pub attrs: AttrVec,
-    pub span: Span,
 }
 
 // `Expr` is used a lot. Make sure it doesn't unintentionally get bigger.
 #[cfg(target_arch = "x86_64")]
-rustc_data_structures::static_assert_size!(Expr<'static>, 72);
+rustc_data_structures::static_assert_size!(Expr<'static>, 64);
 
 impl Expr<'_> {
     pub fn precedence(&self) -> ExprPrecedence {
@@ -1469,7 +1468,11 @@ impl Expr<'_> {
 ///
 /// FIXME(#60607): This function is a hack. If and when we have `QPath::Lang(...)`,
 /// we can use that instead as simpler, more reliable mechanism, as opposed to using `SourceMap`.
-pub fn is_range_literal(sm: &SourceMap, expr: &Expr<'_>) -> bool {
+pub fn is_range_literal(
+    get_span: impl FnOnce(HirId) -> Span,
+    sm: &SourceMap,
+    expr: &Expr<'_>,
+) -> bool {
     // Returns whether the given path represents a (desugared) range,
     // either in std or core, i.e. has either a `::std::ops::Range` or
     // `::core::ops::Range` prefix.
@@ -1487,8 +1490,8 @@ pub fn is_range_literal(sm: &SourceMap, expr: &Expr<'_>) -> bool {
 
     // Check whether a span corresponding to a range expression is a
     // range literal, rather than an explicit struct or `new()` call.
-    fn is_lit(sm: &SourceMap, span: &Span) -> bool {
-        let end_point = sm.end_point(*span);
+    fn is_lit(sm: &SourceMap, span: Span) -> bool {
+        let end_point = sm.end_point(span);
 
         if let Ok(end_string) = sm.span_to_snippet(end_point) {
             !(end_string.ends_with('}') || end_string.ends_with(')'))
@@ -1501,13 +1504,13 @@ pub fn is_range_literal(sm: &SourceMap, expr: &Expr<'_>) -> bool {
         // All built-in range literals but `..=` and `..` desugar to `Struct`s.
         ExprKind::Struct(ref qpath, _, _) => {
             if let QPath::Resolved(None, ref path) = **qpath {
-                return is_range_path(&path) && is_lit(sm, &expr.span);
+                return is_range_path(&path) && is_lit(sm, get_span(expr.hir_id));
             }
         }
 
         // `..` desugars to its struct path.
         ExprKind::Path(QPath::Resolved(None, ref path)) => {
-            return is_range_path(&path) && is_lit(sm, &expr.span);
+            return is_range_path(&path) && is_lit(sm, get_span(expr.hir_id));
         }
 
         // `..=` desugars into `::std::ops::RangeInclusive::new(...)`.
@@ -1515,7 +1518,7 @@ pub fn is_range_literal(sm: &SourceMap, expr: &Expr<'_>) -> bool {
             if let ExprKind::Path(QPath::TypeRelative(ref ty, ref segment)) = func.kind {
                 if let TyKind::Path(QPath::Resolved(None, ref path)) = ty.kind {
                     let new_call = segment.ident.name == sym::new;
-                    return is_range_path(&path) && is_lit(sm, &expr.span) && new_call;
+                    return is_range_path(&path) && is_lit(sm, get_span(expr.hir_id)) && new_call;
                 }
             }
         }

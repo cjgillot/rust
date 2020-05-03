@@ -33,7 +33,7 @@ pub(super) fn lint(cx: &LateContext<'_, '_>, expr: &hir::Expr<'_>, args: &[hir::
             span_lint(
                 cx,
                 UNNECESSARY_FILTER_MAP,
-                expr.span,
+                cx.tcx.hir().span(expr.hir_id),
                 "this `.filter_map` can be written more simply using `.map`",
             );
             return;
@@ -43,7 +43,7 @@ pub(super) fn lint(cx: &LateContext<'_, '_>, expr: &hir::Expr<'_>, args: &[hir::
             span_lint(
                 cx,
                 UNNECESSARY_FILTER_MAP,
-                expr.span,
+                cx.tcx.hir().span(expr.hir_id),
                 "this `.filter_map` can be written more simply using `.filter`",
             );
             return;

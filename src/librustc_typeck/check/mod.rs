@@ -1016,7 +1016,7 @@ fn typeck_tables_of_with_fallback<'tcx>(
             // Compute the fty from point of view of inside the fn.
             let fn_sig = tcx.liberate_late_bound_regions(def_id.to_def_id(), &fn_sig);
             let fn_sig = inh.normalize_associated_types_in(
-                body.value.span,
+                tcx.hir().span(body.value.hir_id),
                 body_id.hir_id,
                 param_env,
                 &fn_sig,
@@ -1034,11 +1034,16 @@ fn typeck_tables_of_with_fallback<'tcx>(
                     _ => None,
                 })
                 .unwrap_or_else(fallback);
-            let expected_type = fcx.normalize_associated_types_in(body.value.span, &expected_type);
-            fcx.require_type_is_sized(expected_type, body.value.span, traits::ConstSized);
+            let body_value_span = tcx.hir().span(body.value.hir_id);
+            let expected_type = fcx.normalize_associated_types_in(body_value_span, &expected_type);
+            fcx.require_type_is_sized(expected_type, body_value_span, traits::ConstSized);
 
             let revealed_ty = if tcx.features().impl_trait_in_bindings {
-                fcx.instantiate_opaque_types_from_value(id, &expected_type, body.value.span)
+                fcx.instantiate_opaque_types_from_value(
+                    id,
+                    &expected_type,
+                    tcx.hir().span(body.value.hir_id),
+                )
             } else {
                 expected_type
             };
@@ -1313,7 +1318,7 @@ fn check_fn<'a, 'tcx>(
         fn_sig.abi,
     );
 
-    let span = body.value.span;
+    let span = tcx.hir().span(body.value.hir_id);
 
     fn_maybe_err(tcx, span, fn_sig.abi);
 
@@ -1774,7 +1779,7 @@ fn opaque_type_cycle_error(tcx: TyCtxt<'tcx>, def_id: LocalDefId, hir_id: hir::H
                 .returns
                 .iter()
                 .filter(|expr| tables.node_type_opt(expr.hir_id).is_some())
-                .map(|expr| expr.span)
+                .map(|expr| tcx.hir().span(expr.hir_id))
                 .collect::<Vec<Span>>();
             let span_len = spans.len();
             if span_len == 1 {
@@ -1796,7 +1801,9 @@ fn opaque_type_cycle_error(tcx: TyCtxt<'tcx>, def_id: LocalDefId, hir_id: hir::H
             for (sp, ty) in visitor
                 .returns
                 .iter()
-                .filter_map(|e| tables.node_type_opt(e.hir_id).map(|t| (e.span, t)))
+                .filter_map(|e| {
+                    tables.node_type_opt(e.hir_id).map(|t| (tcx.hir().span(e.hir_id), t))
+                })
                 .filter(|(_, ty)| !matches!(ty.kind, ty::Never))
             {
                 struct VisitTypes(Vec<DefId>);
@@ -1874,7 +1881,7 @@ fn binding_opaque_type_cycle_error(
                     tcx.typeck_tables_of(tcx.hir().local_def_id(tcx.hir().get_parent_item(hir_id)));
                 if let Some(ty) = tables.node_type_opt(expr.hir_id) {
                     err.span_label(
-                        expr.span,
+                        tcx.hir().span(expr.hir_id),
                         &format!(
                             "this is of type `{}`, which doesn't constrain \
                              `{}` enough to arrive to a concrete type",
@@ -3636,7 +3643,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         for arg in substs.iter().filter(|arg| {
             matches!(arg.unpack(), GenericArgKind::Type(..) | GenericArgKind::Const(..))
         }) {
-            self.register_wf_obligation(arg, expr.span, traits::MiscObligation);
+            self.register_wf_obligation(
+                arg,
+                self.tcx.hir().span(expr.hir_id),
+                traits::MiscObligation,
+            );
         }
     }
 
@@ -3961,7 +3972,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // All the input types from the fn signature must outlive the call
         // so as to validate implied bounds.
         for (&fn_input_ty, arg_expr) in fn_inputs.iter().zip(args.iter()) {
-            self.register_wf_obligation(fn_input_ty.into(), arg_expr.span, traits::MiscObligation);
+            self.register_wf_obligation(
+                fn_input_ty.into(),
+                self.tcx.hir().span(arg_expr.hir_id),
+                traits::MiscObligation,
+            );
         }
 
         let expected_arg_count = fn_inputs.len();
@@ -3972,7 +3987,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                  c_variadic: bool,
                                  sugg_unit: bool| {
             let (span, start_span, args) = match &expr.kind {
-                hir::ExprKind::Call(hir::Expr { span, .. }, args) => (*span, *span, &args[..]),
+                hir::ExprKind::Call(hir::Expr { hir_id, .. }, args) => {
+                    let span = self.tcx.hir().span(*hir_id);
+                    (span, span, &args[..])
+                }
                 hir::ExprKind::MethodCall(path_segment, span, args, _) => (
                     *span,
                     // `sp` doesn't point at the whole `foo.bar()`, only at `bar`.
@@ -4002,7 +4020,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 // ^^^ -  -  - supplied 3 arguments
                 // |
                 // expected 2 arguments
-                args.iter().map(|arg| arg.span).collect::<Vec<Span>>()
+                args.iter().map(|arg| self.tcx.hir().span(arg.hir_id)).collect::<Vec<Span>>()
             };
 
             let mut err = tcx.sess.struct_span_err_with_code(
@@ -4028,7 +4046,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 err.span_label(def_s, "defined here");
             }
             if sugg_unit {
-                let sugg_span = tcx.sess.source_map().end_point(expr.span);
+                let sugg_span = tcx.sess.source_map().end_point(self.tcx.hir().span(expr.hir_id));
                 // remove closing `)` from the span
                 let sugg_span = sugg_span.shrink_to_lo();
                 err.span_suggestion(
@@ -4157,7 +4175,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 // Closure arguments themselves can't be diverging, but
                 // a previous argument can, e.g., `foo(panic!(), || {})`.
                 if !check_closures {
-                    self.warn_if_unreachable(arg.hir_id, arg.span, "expression");
+                    self.warn_if_unreachable(
+                        arg.hir_id,
+                        self.tcx.hir().span(arg.hir_id),
+                        "expression",
+                    );
                 }
 
                 let is_closure = match arg.kind {
@@ -4189,7 +4211,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
                 // 3. Relate the expected type and the formal one,
                 //    if the expected type was used for the coercion.
-                self.demand_suptype(arg.span, formal_ty, coerce_ty);
+                let arg_span = self.tcx.hir().span(arg.hir_id);
+                self.demand_suptype(arg_span, formal_ty, coerce_ty);
             }
         }
 
@@ -4206,21 +4229,22 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
                 // There are a few types which get autopromoted when passed via varargs
                 // in C but we just error out instead and require explicit casts.
-                let arg_ty = self.structurally_resolved_type(arg.span, arg_ty);
+                let arg_span = self.tcx.hir().span(arg.hir_id);
+                let arg_ty = self.structurally_resolved_type(arg_span, arg_ty);
                 match arg_ty.kind {
                     ty::Float(ast::FloatTy::F32) => {
-                        variadic_error(tcx.sess, arg.span, arg_ty, "c_double");
+                        variadic_error(tcx.sess, arg_span, arg_ty, "c_double");
                     }
                     ty::Int(ast::IntTy::I8 | ast::IntTy::I16) | ty::Bool => {
-                        variadic_error(tcx.sess, arg.span, arg_ty, "c_int");
+                        variadic_error(tcx.sess, arg_span, arg_ty, "c_int");
                     }
                     ty::Uint(ast::UintTy::U8 | ast::UintTy::U16) => {
-                        variadic_error(tcx.sess, arg.span, arg_ty, "c_uint");
+                        variadic_error(tcx.sess, arg_span, arg_ty, "c_uint");
                     }
                     ty::FnDef(..) => {
                         let ptr_ty = self.tcx.mk_fn_ptr(arg_ty.fn_sig(self.tcx));
                         let ptr_ty = self.resolve_vars_if_possible(&ptr_ty);
-                        variadic_error(tcx.sess, arg.span, arg_ty, &ptr_ty.to_string());
+                        variadic_error(tcx.sess, arg_span, arg_ty, &ptr_ty.to_string());
                     }
                     _ => {}
                 }
@@ -4286,7 +4310,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 if let (Some(ref_in), None) = (referenced_in.pop(), referenced_in.pop()) {
                     // We make sure that only *one* argument matches the obligation failure
                     // and we assign the obligation's span to its expression's.
-                    error.obligation.cause.make_mut().span = args[ref_in].span;
+                    error.obligation.cause.make_mut().span =
+                        self.tcx.hir().span(args[ref_in].hir_id);
                     error.points_at_arg_span = true;
                 }
             }
@@ -4589,7 +4614,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // See #44848.
         let ref_bindings = local.pat.contains_explicit_ref_binding();
 
-        let local_ty = self.local_ty(init.span, local.hir_id).revealed_ty;
+        let init_span = self.tcx.hir().span(init.hir_id);
+        let local_ty = self.local_ty(init_span, local.hir_id).revealed_ty;
         if let Some(m) = ref_bindings {
             // Somewhat subtle: if we have a `ref` binding in the pattern,
             // we want to avoid introducing coercions for the RHS. This is
@@ -4600,7 +4626,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             // type of the place it is referencing, and not some
             // supertype thereof.
             let init_ty = self.check_expr_with_needs(init, Needs::maybe_mut_place(m));
-            self.demand_eqtype(init.span, local_ty, init_ty);
+            self.demand_eqtype(init_span, local_ty, init_ty);
             init_ty
         } else {
             self.check_expr_coercable_to_type(init, local_ty, None)
@@ -4623,7 +4649,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // Does the expected pattern type originate from an expression and what is the span?
         let (origin_expr, ty_span) = match (local.ty, local.init) {
             (Some(ty), _) => (false, Some(self.tcx.hir().span(ty.hir_id))), // Bias towards the explicit user type.
-            (_, Some(init)) => (true, Some(init.span)), // No explicit type; so use the scrutinee.
+            (_, Some(init)) => (true, Some(self.tcx.hir().span(init.hir_id))), // No explicit type; so use the scrutinee.
             _ => (false, None), // We have `let $pat;`, so the expected type is unconstrained.
         };
 
@@ -4665,8 +4691,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             hir::StmtKind::Local(..) | hir::StmtKind::Expr(..) | hir::StmtKind::Semi(..) => {}
         }
 
-        let span = self.tcx.hir().span(stmt.hir_id);
-        self.warn_if_unreachable(stmt.hir_id, span, "statement");
+        self.warn_if_unreachable(stmt.hir_id, self.tcx.hir().span(stmt.hir_id), "statement");
 
         // Hide the outer diverging and `has_errors` flags.
         let old_diverges = self.diverges.replace(Diverges::Maybe);
@@ -4681,7 +4706,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             hir::StmtKind::Expr(ref expr) => {
                 // Check with expected type of `()`.
                 self.check_expr_has_type_or_error(&expr, self.tcx.mk_unit(), |err| {
-                    self.suggest_semicolon_at_end(expr.span, err);
+                    self.suggest_semicolon_at_end(self.tcx.hir().span(expr.hir_id), err);
                 });
             }
             hir::StmtKind::Semi(ref expr) => {
@@ -4724,14 +4749,17 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             if arm_ty.is_never() {
                                 None
                             } else {
-                                Some(match &arm.body.kind {
-                                    // Point at the tail expression when possible.
-                                    hir::ExprKind::Block(block, _) => {
-                                        let span = self.tcx.hir().span(block.hir_id);
-                                        block.expr.as_ref().map(|e| e.span).unwrap_or(span)
-                                    }
-                                    _ => arm.body.span,
-                                })
+                                Some(
+                                    self.tcx.hir().span(match &arm.body.kind {
+                                        // Point at the tail expression when possible.
+                                        hir::ExprKind::Block(block, _) => block
+                                            .expr
+                                            .as_ref()
+                                            .map(|e| e.hir_id)
+                                            .unwrap_or(block.hir_id),
+                                        _ => arm.body.hir_id,
+                                    }),
+                                )
                             }
                         })
                 })
@@ -4740,7 +4768,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 return arm_spans[0];
             }
         }
-        expr.span
+        self.tcx.hir().span(expr.hir_id)
     }
 
     fn check_block_with_expected(
@@ -4973,8 +5001,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             _ => return false,
         };
 
-        let sig = self.replace_bound_vars_with_fresh_vars(expr.span, infer::FnCall, &sig).0;
-        let sig = self.normalize_associated_types_in(expr.span, &sig);
+        let expr_span = self.tcx.hir().span(expr.hir_id);
+        let sig = self.replace_bound_vars_with_fresh_vars(expr_span, infer::FnCall, &sig).0;
+        let sig = self.normalize_associated_types_in(expr_span, &sig);
         if self.can_coerce(sig.output(), expected) {
             let (mut sugg_call, applicability) = if sig.inputs().is_empty() {
                 (String::new(), Applicability::MachineApplicable)
@@ -5010,10 +5039,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 }
                 Some(Node::Expr(hir::Expr {
                     kind: ExprKind::Closure(_, _, body_id, _, _),
-                    span: full_closure_span,
+                    hir_id: full_closure_id,
                     ..
                 })) => {
-                    if *full_closure_span == expr.span {
+                    let full_closure_span = hir.span(*full_closure_id);
+                    if full_closure_span == expr_span {
                         return false;
                     }
                     msg = "call this closure";
@@ -5079,7 +5109,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 _ => {}
             }
             err.span_suggestion_verbose(
-                expr.span.shrink_to_hi(),
+                expr_span.shrink_to_hi(),
                 &format!("use parentheses to {}", msg),
                 format!("({})", sugg_call),
                 applicability,
@@ -5107,10 +5137,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 err.span_label(sp, &format!("{} defined here", found));
             }
         } else if !self.check_for_cast(err, expr, found, expected, expected_ty_expr) {
+            let expr_span = self.tcx.hir().span(expr.hir_id);
             let is_struct_pat_shorthand_field =
-                self.is_hir_id_from_struct_pattern_shorthand_field(expr.hir_id, expr.span);
-            let methods = self.get_conversion_methods(expr.span, expected, found, expr.hir_id);
-            if let Ok(expr_text) = self.sess().source_map().span_to_snippet(expr.span) {
+                self.is_hir_id_from_struct_pattern_shorthand_field(expr.hir_id, expr_span);
+            let methods = self.get_conversion_methods(expr_span, expected, found, expr.hir_id);
+            if let Ok(expr_text) = self.sess().source_map().span_to_snippet(expr_span) {
                 let mut suggestions = iter::repeat(&expr_text)
                     .zip(methods.iter())
                     .filter_map(|(receiver, method)| {
@@ -5141,7 +5172,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     .peekable();
                 if suggestions.peek().is_some() {
                     err.span_suggestions(
-                        expr.span,
+                        expr_span,
                         "try using a conversion method",
                         suggestions,
                         Applicability::MaybeIncorrect,
@@ -5168,12 +5199,13 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             return;
         }
         let boxed_found = self.tcx.mk_box(found);
+        let expr_span = self.tcx.hir().span(expr.hir_id);
         if let (true, Ok(snippet)) = (
             self.can_coerce(boxed_found, expected),
-            self.sess().source_map().span_to_snippet(expr.span),
+            self.sess().source_map().span_to_snippet(expr_span),
         ) {
             err.span_suggestion(
-                expr.span,
+                expr_span,
                 "store this in the heap by calling `Box::new`",
                 format!("Box::new({})", snippet),
                 Applicability::MachineApplicable,
@@ -5210,9 +5242,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         }
         let boxed_found = self.tcx.mk_box(found);
         let new_found = self.tcx.mk_lang_item(boxed_found, PinTypeLangItem).unwrap();
+        let expr_span = self.tcx.hir().span(expr.hir_id);
         if let (true, Ok(snippet)) = (
             self.can_coerce(new_found, expected),
-            self.sess().source_map().span_to_snippet(expr.span),
+            self.sess().source_map().span_to_snippet(expr_span),
         ) {
             match found.kind {
                 ty::Adt(def, _) if def.is_box() => {
@@ -5220,7 +5253,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 }
                 _ => {
                     err.span_suggestion(
-                        expr.span,
+                        expr_span,
                         "you need to pin and box this expression",
                         format!("Box::pin({})", snippet),
                         Applicability::MachineApplicable,
@@ -5363,7 +5396,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         if let Some(body_id) = self.tcx().hir().maybe_body_owned_by(item_id) {
             let body = self.tcx().hir().body(body_id);
             if let Some(hir::GeneratorKind::Async(_)) = body.generator_kind {
-                let sp = expr.span;
+                let sp = self.tcx.hir().span(expr.hir_id);
                 // Check for `Future` implementations by constructing a predicate to
                 // prove: `<T as Future>::Output == U`
                 let future_trait = self.tcx.require_lang_item(FutureTraitLangItem, Some(sp));

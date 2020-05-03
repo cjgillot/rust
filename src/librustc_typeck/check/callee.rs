@@ -65,9 +65,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         expected: Expectation<'tcx>,
     ) -> Ty<'tcx> {
         let original_callee_ty = self.check_expr(callee_expr);
-        let expr_ty = self.structurally_resolved_type(call_expr.span, original_callee_ty);
+        let call_expr_span = self.tcx.hir().span(call_expr.hir_id);
+        let expr_ty = self.structurally_resolved_type(call_expr_span, original_callee_ty);
 
-        let mut autoderef = self.autoderef(callee_expr.span, expr_ty);
+        let mut autoderef = self.autoderef(call_expr_span, expr_ty);
         let mut result = None;
         while result.is_none() && autoderef.next().is_some() {
             result = self.try_overloaded_call_step(call_expr, callee_expr, arg_exprs, &autoderef);
@@ -94,7 +95,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         };
 
         // we must check that return type of called functions is WF:
-        self.register_wf_obligation(output.into(), call_expr.span, traits::MiscObligation);
+        self.register_wf_obligation(output.into(), call_expr_span, traits::MiscObligation);
 
         output
     }
@@ -128,10 +129,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 // haven't yet decided on whether the closure is fn vs
                 // fnmut vs fnonce. If so, we have to defer further processing.
                 if self.closure_kind(substs).is_none() {
+                    let call_expr_span = self.tcx.hir().span(call_expr.hir_id);
                     let closure_sig = substs.as_closure().sig();
                     let closure_sig = self
                         .replace_bound_vars_with_fresh_vars(
-                            call_expr.span,
+                            call_expr_span,
                             infer::FnCall,
                             &closure_sig,
                         )
@@ -205,14 +207,15 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 [self.tcx.mk_tup(arg_exprs.iter().map(|e| {
                     self.next_ty_var(TypeVariableOrigin {
                         kind: TypeVariableOriginKind::TypeInference,
-                        span: e.span,
+                        span: self.tcx.hir().span(e.hir_id),
                     })
                 }))]
             });
             let opt_input_types = opt_input_types.as_ref().map(AsRef::as_ref);
 
+            let call_expr_span = self.tcx.hir().span(call_expr.hir_id);
             if let Some(ok) = self.lookup_method_in_trait(
-                call_expr.span,
+                call_expr_span,
                 method_name,
                 trait_def_id,
                 adjusted_ty,
@@ -227,7 +230,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     {
                         (r, mutbl)
                     } else {
-                        span_bug!(call_expr.span, "input to call/call_mut is not a ref?");
+                        span_bug!(call_expr_span, "input to call/call_mut is not a ref?");
                     };
 
                     let mutbl = match mutbl {
@@ -295,16 +298,18 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 if let &ty::Adt(adt_def, ..) = t {
                     if adt_def.is_enum() {
                         if let hir::ExprKind::Call(ref expr, _) = call_expr.kind {
+                            let expr_span = self.tcx.hir().span(expr.hir_id);
                             unit_variant =
-                                self.tcx.sess.source_map().span_to_snippet(expr.span).ok();
+                                self.tcx.sess.source_map().span_to_snippet(expr_span).ok();
                         }
                     }
                 }
 
                 if let hir::ExprKind::Call(ref callee, _) = call_expr.kind {
+                    let callee_span = self.tcx.hir().span(callee.hir_id);
                     let mut err = type_error_struct!(
                         self.tcx.sess,
-                        callee.span,
+                        callee_span,
                         callee_ty,
                         E0618,
                         "expected function, found {}",
@@ -318,12 +323,13 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         &mut err,
                         call_expr.hir_id,
                         &callee.kind,
-                        callee.span,
+                        callee_span,
                     );
 
+                    let call_expr_span = self.tcx.hir().span(call_expr.hir_id);
                     if let Some(ref path) = unit_variant {
                         err.span_suggestion(
-                            call_expr.span,
+                            call_expr_span,
                             &format!(
                                 "`{}` is a unit variant, you need to write it \
                                  without the parenthesis",
@@ -344,10 +350,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             // itself another `ExprCall`, that's a clue that we might just be
                             // missing a semicolon (Issue #51055)
                             let call_is_multiline =
-                                self.tcx.sess.source_map().is_multiline(call_expr.span);
+                                self.tcx.sess.source_map().is_multiline(call_expr_span);
                             if call_is_multiline {
                                 err.span_suggestion(
-                                    callee.span.shrink_to_hi(),
+                                    callee_span.shrink_to_hi(),
                                     "try adding a semicolon",
                                     ";".to_owned(),
                                     Applicability::MaybeIncorrect,
@@ -363,7 +369,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         _ => Res::Err,
                     };
 
-                    err.span_label(call_expr.span, "call expression requires function");
+                    err.span_label(call_expr_span, "call expression requires function");
 
                     if let Some(span) = self.tcx.hir().res_span(def) {
                         let callee_ty = callee_ty.to_string();
@@ -401,24 +407,26 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             }
         };
 
+        let call_expr_span = self.tcx.hir().span(call_expr.hir_id);
+
         // Replace any late-bound regions that appear in the function
         // signature with region variables. We also have to
         // renormalize the associated types at this point, since they
         // previously appeared within a `Binder<>` and hence would not
         // have been normalized before.
         let fn_sig =
-            self.replace_bound_vars_with_fresh_vars(call_expr.span, infer::FnCall, &fn_sig).0;
-        let fn_sig = self.normalize_associated_types_in(call_expr.span, &fn_sig);
+            self.replace_bound_vars_with_fresh_vars(call_expr_span, infer::FnCall, &fn_sig).0;
+        let fn_sig = self.normalize_associated_types_in(call_expr_span, &fn_sig);
 
         // Call the generic checker.
         let expected_arg_tys = self.expected_inputs_for_expected_output(
-            call_expr.span,
+            call_expr_span,
             expected,
             fn_sig.output(),
             fn_sig.inputs(),
         );
         self.check_argument_types(
-            call_expr.span,
+            call_expr_span,
             call_expr,
             fn_sig.inputs(),
             &expected_arg_tys[..],
@@ -443,15 +451,16 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // do know the types expected for each argument and the return
         // type.
 
+        let call_expr_span = self.tcx.hir().span(call_expr.hir_id);
         let expected_arg_tys = self.expected_inputs_for_expected_output(
-            call_expr.span,
+            call_expr_span,
             expected,
             fn_sig.output().clone(),
             fn_sig.inputs(),
         );
 
         self.check_argument_types(
-            call_expr.span,
+            call_expr_span,
             call_expr,
             fn_sig.inputs(),
             &expected_arg_tys,
@@ -471,8 +480,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         expected: Expectation<'tcx>,
         method_callee: MethodCallee<'tcx>,
     ) -> Ty<'tcx> {
+        let call_expr_span = self.tcx.hir().span(call_expr.hir_id);
         let output_type = self.check_method_argument_types(
-            call_expr.span,
+            call_expr_span,
             call_expr,
             Ok(method_callee),
             arg_exprs,
@@ -518,13 +528,15 @@ impl<'a, 'tcx> DeferredCallResolution<'tcx> {
 
                 debug!("attempt_resolution: method_callee={:?}", method_callee);
 
+                let call_expr_span = fcx.tcx.hir().span(self.call_expr.hir_id);
+
                 for (method_arg_ty, self_arg_ty) in
                     method_sig.inputs().iter().skip(1).zip(self.fn_sig.inputs())
                 {
-                    fcx.demand_eqtype(self.call_expr.span, &self_arg_ty, &method_arg_ty);
+                    fcx.demand_eqtype(call_expr_span, &self_arg_ty, &method_arg_ty);
                 }
 
-                fcx.demand_eqtype(self.call_expr.span, method_sig.output(), self.fn_sig.output());
+                fcx.demand_eqtype(call_expr_span, method_sig.output(), self.fn_sig.output());
 
                 let mut adjustments = self.adjustments;
                 adjustments.extend(autoref);
@@ -533,8 +545,9 @@ impl<'a, 'tcx> DeferredCallResolution<'tcx> {
                 fcx.write_method_call(self.call_expr.hir_id, method_callee);
             }
             None => {
+                let call_expr_span = fcx.tcx.hir().span(self.call_expr.hir_id);
                 span_bug!(
-                    self.call_expr.span,
+                    call_expr_span,
                     "failed to find an overloaded call trait for closure call"
                 );
             }

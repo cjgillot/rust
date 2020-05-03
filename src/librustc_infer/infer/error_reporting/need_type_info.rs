@@ -165,7 +165,7 @@ fn closure_return_type_suggestion(
         }
         _ => vec![
             (output.span(|id| tcx.hir().span(id)), format!("{}{}{}{{ ", arrow, ret, post)),
-            (body.value.span.shrink_to_hi(), " }".to_string()),
+            (tcx.hir().span(body.value.hir_id).shrink_to_hi(), " }".to_string()),
         ],
     };
     err.multipart_suggestion(
@@ -611,7 +611,10 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
                     let sig = self.tcx.fn_sig(did);
                     let bound_output = sig.output();
                     let output = bound_output.skip_binder();
-                    err.span_label(e.span, &format!("this method call resolves to `{:?}`", output));
+                    err.span_label(
+                        self.tcx.hir().span(e.hir_id),
+                        &format!("this method call resolves to `{:?}`", output),
+                    );
                     let kind = &output.kind;
                     if let ty::Projection(proj) = kind {
                         if let Some(span) = self.tcx.hir().span_if_local(proj.item_def_id) {

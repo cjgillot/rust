@@ -105,7 +105,7 @@ impl<'a, 'tcx, 'v> Hir2Qmm<'a, 'tcx, 'v> {
         }
 
         // prevent folding of `cfg!` macros and the like
-        if !e.span.from_expansion() {
+        if !self.cx.tcx.hir().span(e.hir_id).from_expansion() {
             match &e.kind {
                 ExprKind::Unary(UnOp::UnNot, inner) => return Ok(Bool::Not(box self.run(inner)?)),
                 ExprKind::Binary(binop, lhs, rhs) => match &binop.node {
@@ -180,7 +180,7 @@ impl<'a, 'tcx, 'v> SuggestContext<'a, 'tcx, 'v> {
                         self.output.push_str(&str)
                     } else {
                         self.output.push('!');
-                        let snip = snippet_opt(self.cx, terminal.span)?;
+                        let snip = snippet_opt(self.cx, self.cx.tcx.hir().span(terminal.hir_id))?;
                         self.output.push_str(&snip);
                     }
                 },
@@ -212,7 +212,7 @@ impl<'a, 'tcx, 'v> SuggestContext<'a, 'tcx, 'v> {
                 }
             },
             &Term(n) => {
-                let snip = snippet_opt(self.cx, self.terminals[n as usize].span)?;
+                let snip = snippet_opt(self.cx, self.cx.tcx.hir().span(self.terminals[n as usize].hir_id))?;
                 self.output.push_str(&snip);
             },
         }
@@ -239,9 +239,9 @@ fn simplify_not(cx: &LateContext<'_, '_>, expr: &Expr<'_>) -> Option<String> {
             .and_then(|op| {
                 Some(format!(
                     "{}{}{}",
-                    snippet_opt(cx, lhs.span)?,
+                    snippet_opt(cx, cx.tcx.hir().span(lhs.hir_id))?,
                     op,
-                    snippet_opt(cx, rhs.span)?
+                    snippet_opt(cx, cx.tcx.hir().span(rhs.hir_id))?
                 ))
             })
         },
@@ -260,7 +260,7 @@ fn simplify_not(cx: &LateContext<'_, '_>, expr: &Expr<'_>) -> Option<String> {
                     let path: &str = &path.ident.name.as_str();
                     a == path
                 })
-                .and_then(|(_, neg_method)| Some(format!("{}.{}()", snippet_opt(cx, args[0].span)?, neg_method)))
+                .and_then(|(_, neg_method)| Some(format!("{}.{}()", snippet_opt(cx, cx.tcx.hir().span(args[0].hir_id))?, neg_method)))
         },
         _ => None,
     }
@@ -372,16 +372,16 @@ impl<'a, 'tcx> NonminimalBoolVisitor<'a, 'tcx> {
                         span_lint_and_then(
                             self.cx,
                             LOGIC_BUG,
-                            e.span,
+                            self.cx.tcx.hir().span(e.hir_id),
                             "this boolean expression contains a logic bug",
                             |diag| {
                                 diag.span_help(
-                                    h2q.terminals[i].span,
+                                    self.cx.tcx.hir().span(h2q.terminals[i].hir_id),
                                     "this expression can be optimized out by applying boolean operations to the \
                                      outer expression",
                                 );
                                 diag.span_suggestion(
-                                    e.span,
+                                    self.cx.tcx.hir().span(e.hir_id),
                                     "it would look like the following",
                                     suggest(self.cx, suggestion, &h2q.terminals),
                                     // nonminimal_bool can produce minimal but
@@ -407,11 +407,11 @@ impl<'a, 'tcx> NonminimalBoolVisitor<'a, 'tcx> {
                 span_lint_and_then(
                     self.cx,
                     NONMINIMAL_BOOL,
-                    e.span,
+                    self.cx.tcx.hir().span(e.hir_id),
                     "this boolean expression can be simplified",
                     |diag| {
                         diag.span_suggestions(
-                            e.span,
+                            self.cx.tcx.hir().span(e.hir_id),
                             "try",
                             suggestions.into_iter(),
                             // nonminimal_bool can produce minimal but
@@ -440,7 +440,7 @@ impl<'a, 'tcx> Visitor<'tcx> for NonminimalBoolVisitor<'a, 'tcx> {
     type Map = Map<'tcx>;
 
     fn visit_expr(&mut self, e: &'tcx Expr<'_>) {
-        if in_macro(e.span) {
+        if in_macro(self.cx.tcx.hir().span(e.hir_id)) {
             return;
         }
         match &e.kind {
@@ -480,7 +480,7 @@ impl<'a, 'tcx> Visitor<'tcx> for NotSimplificationVisitor<'a, 'tcx> {
                 span_lint_and_sugg(
                     self.cx,
                     NONMINIMAL_BOOL,
-                    expr.span,
+                    self.cx.tcx.hir().span(expr.hir_id),
                     "this boolean expression can be simplified",
                     "try",
                     suggestion,

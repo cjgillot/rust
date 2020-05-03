@@ -89,7 +89,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         scrutinee: ExprRef<'tcx>,
         arms: Vec<Arm<'tcx>>,
     ) -> BlockAnd<()> {
-        let scrutinee_span = scrutinee.span();
+        let scrutinee_span = scrutinee.span(self.hir.tcx());
         let scrutinee_place =
             unpack!(block = self.lower_scrutinee(block, scrutinee, scrutinee_span,));
 

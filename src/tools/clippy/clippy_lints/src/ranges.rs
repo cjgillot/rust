@@ -151,9 +151,9 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Ranges {
                      then {
                          span_lint(cx,
                                    RANGE_ZIP_WITH_LEN,
-                                   expr.span,
+                                   cx.tcx.hir().span(expr.hir_id),
                                    &format!("It is more idiomatic to use `{}.iter().enumerate()`",
-                                            snippet(cx, iter_args[0].span, "_")));
+                                            snippet(cx, cx.tcx.hir().span(iter_args[0].hir_id), "_")));
                     }
                 }
             }
@@ -175,13 +175,13 @@ fn check_exclusive_range_plus_one(cx: &LateContext<'_, '_>, expr: &Expr<'_>) {
         }) = higher::range(cx, expr);
         if let Some(y) = y_plus_one(cx, end);
         then {
-            let span = if expr.span.from_expansion() {
-                expr.span
+            let span = if cx.tcx.hir().span(expr.hir_id).from_expansion() {
+                cx.tcx.hir().span(expr.hir_id)
                     .ctxt()
                     .outer_expn_data()
                     .call_site
             } else {
-                expr.span
+                cx.tcx.hir().span(expr.hir_id)
             };
             span_lint_and_then(
                 cx,
@@ -223,13 +223,13 @@ fn check_inclusive_range_minus_one(cx: &LateContext<'_, '_>, expr: &Expr<'_>) {
             span_lint_and_then(
                 cx,
                 RANGE_MINUS_ONE,
-                expr.span,
+                cx.tcx.hir().span(expr.hir_id),
                 "an exclusive range would be more readable",
                 |diag| {
                     let start = start.map_or(String::new(), |x| Sugg::hir(cx, x, "x").to_string());
                     let end = Sugg::hir(cx, y, "y");
                     diag.span_suggestion(
-                        expr.span,
+                        cx.tcx.hir().span(expr.hir_id),
                         "use",
                         format!("{}..{}", start, end),
                         Applicability::MachineApplicable, // snippet
@@ -281,32 +281,34 @@ fn check_reversed_empty_range(cx: &LateContext<'_, '_>, expr: &Expr<'_>) {
         then {
             if inside_indexing_expr(cx, expr) {
                 // Avoid linting `N..N` as it has proven to be useful, see #5689 and #5628 ...
+                let expr_span = cx.tcx.hir().span(expr.hir_id);
                 if ordering != Ordering::Equal {
                     span_lint(
                         cx,
                         REVERSED_EMPTY_RANGES,
-                        expr.span,
+                        expr_span,
                         "this range is reversed and using it to index a slice will panic at run-time",
                     );
                 }
             // ... except in for loop arguments for backwards compatibility with `reverse_range_loop`
             } else if ordering != Ordering::Equal || is_for_loop_arg(cx, expr) {
+                let expr_span = cx.tcx.hir().span(expr.hir_id);
                 span_lint_and_then(
                     cx,
                     REVERSED_EMPTY_RANGES,
-                    expr.span,
+                    expr_span,
                     "this range is empty so it will yield no values",
                     |diag| {
                         if ordering != Ordering::Equal {
-                            let start_snippet = snippet(cx, start.span, "_");
-                            let end_snippet = snippet(cx, end.span, "_");
+                            let start_snippet = snippet(cx, cx.tcx.hir().span(start.hir_id), "_");
+                            let end_snippet = snippet(cx, cx.tcx.hir().span(end.hir_id), "_");
                             let dots = match limits {
                                 RangeLimits::HalfOpen => "..",
                                 RangeLimits::Closed => "..="
                             };
 
                             diag.span_suggestion(
-                                expr.span,
+                                expr_span,
                                 "consider using the following if you are attempting to iterate over this \
                                  range in reverse",
                                 format!("({}{}{}).rev()", end_snippet, dots, start_snippet),

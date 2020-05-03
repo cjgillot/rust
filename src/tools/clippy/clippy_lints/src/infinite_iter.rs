@@ -53,7 +53,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for InfiniteIter {
                 return;
             },
         };
-        span_lint(cx, lint, expr.span, msg)
+        span_lint(cx, lint, cx.tcx.hir().span(expr.hir_id), msg)
     }
 }
 

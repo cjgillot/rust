@@ -432,7 +432,7 @@ impl_lint_pass!(Matches => [
 
 impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Matches {
     fn check_expr(&mut self, cx: &LateContext<'a, 'tcx>, expr: &'tcx Expr<'_>) {
-        if in_external_macro(cx.sess(), expr.span) {
+        if in_external_macro(cx.sess(), cx.tcx.hir().span(expr.hir_id)) {
             return;
         }
         if let ExprKind::Match(ref ex, ref arms, MatchSource::Normal) = expr.kind {
@@ -522,7 +522,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Matches {
 #[rustfmt::skip]
 fn check_single_match(cx: &LateContext<'_, '_>, ex: &Expr<'_>, arms: &[Arm<'_>], expr: &Expr<'_>) {
     if arms.len() == 2 && arms[0].guard.is_none() && arms[1].guard.is_none() {
-        if in_macro(expr.span) {
+        if in_macro(cx.tcx.hir().span(expr.hir_id)) {
             // Don't lint match expressions present in
             // macro_rules! block
             return;
@@ -571,20 +571,20 @@ fn report_single_match_single_pattern(
 ) {
     let lint = if els.is_some() { SINGLE_MATCH_ELSE } else { SINGLE_MATCH };
     let els_str = els.map_or(String::new(), |els| {
-        format!(" else {}", expr_block(cx, els, None, "..", Some(expr.span)))
+        format!(" else {}", expr_block(cx, els, None, "..", Some(cx.tcx.hir().span(expr.hir_id))))
     });
     span_lint_and_sugg(
         cx,
         lint,
-        expr.span,
+        cx.tcx.hir().span(expr.hir_id),
         "you seem to be trying to use match for destructuring a single pattern. Consider using `if \
          let`",
         "try this",
         format!(
             "if let {} = {} {}{}",
             snippet(cx, cx.tcx.hir().span(arms[0].pat.hir_id), ".."),
-            snippet(cx, ex.span, ".."),
-            expr_block(cx, &arms[0].body, None, "..", Some(expr.span)),
+            snippet(cx, cx.tcx.hir().span(ex.hir_id), ".."),
+            expr_block(cx, &arms[0].body, None, "..", Some(cx.tcx.hir().span(expr.hir_id))),
             els_str,
         ),
         Applicability::HasPlaceholders,
@@ -633,12 +633,13 @@ fn check_single_match_opt_like(
 }
 
 fn check_match_bool(cx: &LateContext<'_, '_>, ex: &Expr<'_>, arms: &[Arm<'_>], expr: &Expr<'_>) {
+    let expr_span = cx.tcx.hir().span(expr.hir_id);
     // Type of expression is `bool`.
     if cx.tables.expr_ty(ex).kind == ty::Bool {
         span_lint_and_then(
             cx,
             MATCH_BOOL,
-            expr.span,
+            expr_span,
             "you seem to be trying to match on a boolean expression",
             move |diag| {
                 if arms.len() == 2 {
@@ -661,21 +662,21 @@ fn check_match_bool(cx: &LateContext<'_, '_>, ex: &Expr<'_>, arms: &[Arm<'_>], e
                         let sugg = match (is_unit_expr(true_expr), is_unit_expr(false_expr)) {
                             (false, false) => Some(format!(
                                 "if {} {} else {}",
-                                snippet(cx, ex.span, "b"),
-                                expr_block(cx, true_expr, None, "..", Some(expr.span)),
-                                expr_block(cx, false_expr, None, "..", Some(expr.span))
+                                snippet(cx, cx.tcx.hir().span(ex.hir_id), "b"),
+                                expr_block(cx, true_expr, None, "..", Some(expr_span)),
+                                expr_block(cx, false_expr, None, "..", Some(expr_span))
                             )),
                             (false, true) => Some(format!(
                                 "if {} {}",
-                                snippet(cx, ex.span, "b"),
-                                expr_block(cx, true_expr, None, "..", Some(expr.span))
+                                snippet(cx, cx.tcx.hir().span(ex.hir_id), "b"),
+                                expr_block(cx, true_expr, None, "..", Some(expr_span))
                             )),
                             (true, false) => {
                                 let test = Sugg::hir(cx, ex, "..");
                                 Some(format!(
                                     "if {} {}",
                                     !test,
-                                    expr_block(cx, false_expr, None, "..", Some(expr.span))
+                                    expr_block(cx, false_expr, None, "..", Some(expr_span))
                                 ))
                             },
                             (true, true) => None,
@@ -683,7 +684,7 @@ fn check_match_bool(cx: &LateContext<'_, '_>, ex: &Expr<'_>, arms: &[Arm<'_>], e
 
                         if let Some(sugg) = sugg {
                             diag.span_suggestion(
-                                expr.span,
+                                expr_span,
                                 "consider using an `if`/`else` expression",
                                 sugg,
                                 Applicability::HasPlaceholders,
@@ -877,7 +878,8 @@ fn check_wild_enum_match(cx: &LateContext<'_, '_>, ex: &Expr<'_>, arms: &[Arm<'_
 fn is_panic_block(cx: &LateContext<'_, '_>, block: &Block<'_>) -> bool {
     match (&block.expr, block.stmts.len(), block.stmts.first()) {
         (&Some(ref exp), 0, _) => {
-            is_expn_of(exp.span, "panic").is_some() && is_expn_of(exp.span, "unreachable").is_none()
+            let exp_span = cx.tcx.hir().span(exp.hir_id);
+            is_expn_of(exp_span, "panic").is_some() && is_expn_of(exp_span, "unreachable").is_none()
         },
         (&None, 1, Some(stmt)) => {
             let stmt_span = cx.tcx.hir().span(stmt.hir_id);
@@ -891,14 +893,14 @@ fn check_match_ref_pats(cx: &LateContext<'_, '_>, ex: &Expr<'_>, arms: &[Arm<'_>
     if has_only_ref_pats(arms) {
         let mut suggs = Vec::with_capacity(arms.len() + 1);
         let (title, msg) = if let ExprKind::AddrOf(BorrowKind::Ref, Mutability::Not, ref inner) = ex.kind {
-            let span = ex.span.source_callsite();
+            let span = cx.tcx.hir().span(ex.hir_id).source_callsite();
             suggs.push((span, Sugg::hir_with_macro_callsite(cx, inner, "..").to_string()));
             (
                 "you don't need to add `&` to both the expression and the patterns",
                 "try",
             )
         } else {
-            let span = ex.span.source_callsite();
+            let span = cx.tcx.hir().span(ex.hir_id).source_callsite();
             suggs.push((span, Sugg::hir_with_macro_callsite(cx, ex, "..").deref().to_string()));
             (
                 "you don't need to add `&` to all patterns",
@@ -914,8 +916,8 @@ fn check_match_ref_pats(cx: &LateContext<'_, '_>, ex: &Expr<'_>, arms: &[Arm<'_>
             }
         }));
 
-        span_lint_and_then(cx, MATCH_REF_PATS, expr.span, title, |diag| {
-            if !expr.span.from_expansion() {
+        span_lint_and_then(cx, MATCH_REF_PATS, cx.tcx.hir().span(expr.hir_id), title, |diag| {
+            if !cx.tcx.hir().span(expr.hir_id).from_expansion() {
                 multispan_sugg(diag, msg, suggs);
             }
         });
@@ -959,12 +961,12 @@ fn check_match_as_ref(cx: &LateContext<'_, '_>, ex: &Expr<'_>, arms: &[Arm<'_>],
             span_lint_and_sugg(
                 cx,
                 MATCH_AS_REF,
-                expr.span,
+                cx.tcx.hir().span(expr.hir_id),
                 &format!("use `{}()` instead", suggestion),
                 "try this",
                 format!(
                     "{}.{}(){}",
-                    snippet_with_applicability(cx, ex.span, "_", &mut applicability),
+                    snippet_with_applicability(cx, cx.tcx.hir().span(ex.hir_id), "_", &mut applicability),
                     suggestion,
                     cast,
                 ),
@@ -993,16 +995,16 @@ fn check_wild_in_or_pats(cx: &LateContext<'_, '_>, arms: &[Arm<'_>]) {
 }
 
 fn check_match_single_binding<'a>(cx: &LateContext<'_, 'a>, ex: &Expr<'a>, arms: &[Arm<'_>], expr: &Expr<'_>) {
-    if in_macro(expr.span) || arms.len() != 1 || is_refutable(cx, arms[0].pat) {
+    if in_macro(cx.tcx.hir().span(expr.hir_id)) || arms.len() != 1 || is_refutable(cx, arms[0].pat) {
         return;
     }
-    let matched_vars = ex.span;
+    let matched_vars = cx.tcx.hir().span(ex.hir_id);
     let bind_names = cx.tcx.hir().span(arms[0].pat.hir_id);
     let match_body = remove_blocks(&arms[0].body);
-    let mut snippet_body = if match_body.span.from_expansion() {
+    let mut snippet_body = if cx.tcx.hir().span(match_body.hir_id).from_expansion() {
         Sugg::hir_with_macro_callsite(cx, match_body, "..").to_string()
     } else {
-        snippet_block(cx, match_body.span, "..", Some(expr.span)).to_string()
+        snippet_block(cx, cx.tcx.hir().span(match_body.hir_id), "..", Some(cx.tcx.hir().span(expr.hir_id))).to_string()
     };
 
     // Do we need to add ';' to suggestion ?
@@ -1032,14 +1034,14 @@ fn check_match_single_binding<'a>(cx: &LateContext<'_, 'a>, ex: &Expr<'a>, arms:
                         "let {} = {};\n{}let {} = {};",
                         snippet_with_applicability(cx, bind_names, "..", &mut applicability),
                         snippet_with_applicability(cx, matched_vars, "..", &mut applicability),
-                        " ".repeat(indent_of(cx, expr.span).unwrap_or(0)),
+                        " ".repeat(indent_of(cx, cx.tcx.hir().span(expr.hir_id)).unwrap_or(0)),
                         snippet_with_applicability(cx, cx.tcx.hir().span(parent_let_node.pat.hir_id), "..", &mut applicability),
                         snippet_body
                     ),
                 )
             } else {
                 // If we are in closure, we need curly braces around suggestion
-                let mut indent = " ".repeat(indent_of(cx, ex.span).unwrap_or(0));
+                let mut indent = " ".repeat(indent_of(cx, cx.tcx.hir().span(ex.hir_id)).unwrap_or(0));
                 let (mut cbrace_start, mut cbrace_end) = ("".to_string(), "".to_string());
                 if let Some(parent_expr) = get_parent_expr(cx, expr) {
                     if let ExprKind::Closure(..) = parent_expr.kind {
@@ -1050,7 +1052,7 @@ fn check_match_single_binding<'a>(cx: &LateContext<'_, 'a>, ex: &Expr<'a>, arms:
                     }
                 };
                 (
-                    expr.span,
+                    cx.tcx.hir().span(expr.hir_id),
                     format!(
                         "{}let {} = {};\n{}{}{}",
                         cbrace_start,
@@ -1076,7 +1078,7 @@ fn check_match_single_binding<'a>(cx: &LateContext<'_, 'a>, ex: &Expr<'a>, arms:
             span_lint_and_sugg(
                 cx,
                 MATCH_SINGLE_BINDING,
-                expr.span,
+                cx.tcx.hir().span(expr.hir_id),
                 "this match could be replaced by its body itself",
                 "consider using the match body instead",
                 snippet_body,

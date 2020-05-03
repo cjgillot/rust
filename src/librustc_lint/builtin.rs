@@ -877,7 +877,9 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for MutableTransmutes {
             if to_mt == hir::Mutability::Mut && from_mt == hir::Mutability::Not {
                 let msg = "mutating transmuted &mut T from &T may cause undefined behavior, \
                                consider instead using an UnsafeCell";
-                cx.struct_span_lint(MUTABLE_TRANSMUTES, expr.span, |lint| lint.build(msg).emit());
+                cx.struct_span_lint(MUTABLE_TRANSMUTES, cx.tcx.hir().span(expr.hir_id), |lint| {
+                    lint.build(msg).emit()
+                });
             }
         }
 
@@ -2013,7 +2015,8 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for InvalidValue {
             // We are extremely conservative with what we warn about.
             let conjured_ty = cx.tables.expr_ty(expr);
             if let Some((msg, span)) = ty_find_init_error(cx.tcx, conjured_ty, init) {
-                cx.struct_span_lint(INVALID_VALUE, expr.span, |lint| {
+                let expr_span = cx.tcx.hir().span(expr.hir_id);
+                cx.struct_span_lint(INVALID_VALUE, expr_span, |lint| {
                     let mut err = lint.build(&format!(
                         "the type `{}` does not permit {}",
                         conjured_ty,
@@ -2022,9 +2025,9 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for InvalidValue {
                             InitKind::Uninit => "being left uninitialized",
                         },
                     ));
-                    err.span_label(expr.span, "this code causes undefined behavior when executed");
+                    err.span_label(expr_span, "this code causes undefined behavior when executed");
                     err.span_label(
-                        expr.span,
+                        expr_span,
                         "help: use `MaybeUninit<T>` instead, \
                             and only call `assume_init` after initialization is done",
                     );

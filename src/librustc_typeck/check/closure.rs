@@ -86,9 +86,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // as they immediately unified with the actual type below, including
         // the `InferCtxt::closure_sig` and `ClosureSubsts::sig_ty` methods.
         let tupled_upvars_idx = base_substs.len() + if generator_types.is_some() { 4 } else { 2 };
+        let expr_span = self.tcx.hir().span(expr.hir_id);
         let substs =
             base_substs.extend_to(self.tcx, expr_def_id.to_def_id(), |param, _| match param.kind {
-                GenericParamDefKind::Lifetime => span_bug!(expr.span, "closure has lifetime param"),
+                GenericParamDefKind::Lifetime => span_bug!(expr_span, "closure has lifetime param"),
                 GenericParamDefKind::Type { .. } => if param.index as usize == tupled_upvars_idx {
                     self.tcx.mk_tup(self.tcx.upvars_mentioned(expr_def_id).iter().flat_map(
                         |upvars| {
@@ -111,19 +112,19 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     // inference phase (`upvar.rs`)
                     self.infcx.next_ty_var(TypeVariableOrigin {
                         kind: TypeVariableOriginKind::ClosureSynthetic,
-                        span: expr.span,
+                        span: expr_span,
                     })
                 }
                 .into(),
-                GenericParamDefKind::Const => span_bug!(expr.span, "closure has const param"),
+                GenericParamDefKind::Const => span_bug!(expr_span, "closure has const param"),
             });
         if let Some(GeneratorTypes { resume_ty, yield_ty, interior, movability }) = generator_types
         {
             let generator_substs = substs.as_generator();
-            self.demand_eqtype(expr.span, resume_ty, generator_substs.resume_ty());
-            self.demand_eqtype(expr.span, yield_ty, generator_substs.yield_ty());
-            self.demand_eqtype(expr.span, liberated_sig.output(), generator_substs.return_ty());
-            self.demand_eqtype(expr.span, interior, generator_substs.witness());
+            self.demand_eqtype(expr_span, resume_ty, generator_substs.resume_ty());
+            self.demand_eqtype(expr_span, yield_ty, generator_substs.yield_ty());
+            self.demand_eqtype(expr_span, liberated_sig.output(), generator_substs.return_ty());
+            self.demand_eqtype(expr_span, interior, generator_substs.witness());
 
             // HACK(eddyb) this forces the types equated above into `substs` but
             // it should rely on `GeneratorSubsts` providing a constructor, instead.
@@ -150,10 +151,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         );
 
         let sig_fn_ptr_ty = self.tcx.mk_fn_ptr(sig);
-        self.demand_eqtype(expr.span, sig_fn_ptr_ty, substs.as_closure().sig_as_fn_ptr_ty());
+        self.demand_eqtype(expr_span, sig_fn_ptr_ty, substs.as_closure().sig_as_fn_ptr_ty());
 
         if let Some(kind) = opt_kind {
-            self.demand_eqtype(expr.span, kind.to_ty(self.tcx), substs.as_closure().kind_ty());
+            self.demand_eqtype(expr_span, kind.to_ty(self.tcx), substs.as_closure().kind_ty());
         }
 
         // HACK(eddyb) this forces the types equated above into `substs` but
@@ -730,7 +731,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     ) -> ClosureSignatures<'tcx> {
         let liberated_sig = self.tcx().liberate_late_bound_regions(expr_def_id, &bound_sig);
         let liberated_sig = self.inh.normalize_associated_types_in(
-            body.value.span,
+            self.tcx().hir().span(body.value.hir_id),
             body.value.hir_id,
             self.param_env,
             &liberated_sig,

@@ -54,8 +54,10 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for LetReturn {
             if let ExprKind::Path(qpath) = &retexpr.kind;
             if match_qpath(qpath, &[&*ident.name.as_str()]);
             if !last_statement_borrows(cx, initexpr);
-            if !in_external_macro(cx.sess(), initexpr.span);
-            if !in_external_macro(cx.sess(), retexpr.span);
+            let initexpr_span = cx.tcx.hir().span(initexpr.hir_id);
+            if !in_external_macro(cx.sess(), initexpr_span);
+            let retexpr_span = cx.tcx.hir().span(retexpr.hir_id);
+            if !in_external_macro(cx.sess(), retexpr_span);
             let local_span = cx.tcx.hir().span(local.hir_id);
             if !in_external_macro(cx.sess(), local_span);
             if !in_macro(local_span);
@@ -63,22 +65,22 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for LetReturn {
                 span_lint_and_then(
                     cx,
                     LET_AND_RETURN,
-                    retexpr.span,
+                    retexpr_span,
                     "returning the result of a `let` binding from a block",
                     |err| {
                         err.span_label(local_span, "unnecessary `let` binding");
 
-                        if let Some(snippet) = snippet_opt(cx, initexpr.span) {
+                        if let Some(snippet) = snippet_opt(cx, initexpr_span) {
                             err.multipart_suggestion(
                                 "return the expression directly",
                                 vec![
                                     (local_span, String::new()),
-                                    (retexpr.span, snippet),
+                                    (retexpr_span, snippet),
                                 ],
                                 Applicability::MachineApplicable,
                             );
                         } else {
-                            err.span_help(initexpr.span, "this expression can be directly returned");
+                            err.span_help(initexpr_span, "this expression can be directly returned");
                         }
                     },
                 );

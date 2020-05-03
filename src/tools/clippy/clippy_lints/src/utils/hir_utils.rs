@@ -68,7 +68,7 @@ impl<'a, 'tcx> SpanlessEq<'a, 'tcx> {
 
     #[allow(clippy::similar_names)]
     pub fn eq_expr(&mut self, left: &Expr<'_>, right: &Expr<'_>) -> bool {
-        if self.ignore_fn && differing_macro_contexts(left.span, right.span) {
+        if self.ignore_fn && differing_macro_contexts(self.cx.tcx.hir().span(left.hir_id), self.cx.tcx.hir().span(right.hir_id)) {
             return false;
         }
 

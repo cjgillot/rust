@@ -201,9 +201,9 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 ExprKind::Paren(ref ex) => {
                     let mut ex = self.lower_expr_mut(ex);
                     // Include parens in span, but only if it is a super-span.
-                    if e.span.contains(ex.span) {
-                        ex.span = e.span;
-                        self.spans[ex.hir_id] = e.span;
+                    let ex_span = &mut self.spans[ex.hir_id];
+                    if e.span.contains(*ex_span) {
+                        *ex_span = e.span;
                     }
                     // Merge attributes into the inner expression.
                     let mut attrs = e.attrs.clone();
@@ -223,7 +223,6 @@ impl<'hir> LoweringContext<'_, 'hir> {
             hir::Expr {
                 hir_id: self.lower_node_id(e.id, e.span),
                 kind,
-                span: e.span,
                 attrs: e.attrs.iter().map(|a| self.lower_attr(a)).collect::<Vec<_>>().into(),
             }
         })
@@ -340,8 +339,11 @@ impl<'hir> LoweringContext<'_, 'hir> {
             _ => {
                 // Lower condition:
                 let cond = self.lower_expr(cond);
-                let span_block =
-                    self.mark_span_with_reason(DesugaringKind::CondTemporary, cond.span, None);
+                let span_block = self.mark_span_with_reason(
+                    DesugaringKind::CondTemporary,
+                    self.spans[cond.hir_id],
+                    None,
+                );
                 // Wrap in a construct equivalent to `{ let _t = $cond; _t }`
                 // to preserve drop semantics since `if cond { ... }` does not
                 // let temporaries live outside of `cond`.
@@ -404,8 +406,11 @@ impl<'hir> LoweringContext<'_, 'hir> {
 
                 // Lower condition:
                 let cond = self.with_loop_condition_scope(|this| this.lower_expr(cond));
-                let span_block =
-                    self.mark_span_with_reason(DesugaringKind::CondTemporary, cond.span, None);
+                let span_block = self.mark_span_with_reason(
+                    DesugaringKind::CondTemporary,
+                    self.spans[cond.hir_id],
+                    None,
+                );
                 // Wrap in a construct equivalent to `{ let _t = $cond; _t }`
                 // to preserve drop semantics since `while cond { ... }` does not
                 // let temporaries live outside of `cond`.
@@ -444,8 +449,11 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 .take()
                 .unwrap_or_else(|| this.expr_unit(this.sess.source_map().end_point(try_span)));
 
-            let ok_wrapped_span =
-                this.mark_span_with_reason(DesugaringKind::TryBlock, tail_expr.span, None);
+            let ok_wrapped_span = this.mark_span_with_reason(
+                DesugaringKind::TryBlock,
+                this.spans[tail_expr.hir_id],
+                None,
+            );
 
             // `::std::ops::Try::from_ok($tail_expr)`
             block.expr = Some(this.wrap_in_try_constructor(
@@ -550,7 +558,6 @@ impl<'hir> LoweringContext<'_, 'hir> {
         let generator = hir::Expr {
             hir_id: self.lower_node_id(closure_node_id, span),
             kind: generator_kind,
-            span,
             attrs: ThinVec::new(),
         };
 
@@ -716,7 +723,6 @@ impl<'hir> LoweringContext<'_, 'hir> {
         let loop_expr = self.arena.alloc(hir::Expr {
             hir_id: loop_hir_id,
             kind: hir::ExprKind::Loop(loop_block, None, hir::LoopSource::Loop),
-            span,
             attrs: ThinVec::new(),
         });
 
@@ -1360,9 +1366,9 @@ impl<'hir> LoweringContext<'_, 'hir> {
         opt_label: Option<Label>,
     ) -> hir::Expr<'hir> {
         // expand <head>
-        let mut head = self.lower_expr_mut(head);
-        let desugared_span = self.mark_span_with_reason(DesugaringKind::ForLoop, head.span, None);
-        head.span = desugared_span;
+        let head = self.lower_expr_mut(head);
+        let desugared_span =
+            self.mark_span_with_reason(DesugaringKind::ForLoop, self.spans[head.hir_id], None);
         self.spans[head.hir_id] = desugared_span;
 
         let iter = Ident::with_dummy_span(sym::iter);
@@ -1450,7 +1456,6 @@ impl<'hir> LoweringContext<'_, 'hir> {
         let loop_expr = self.arena.alloc(hir::Expr {
             hir_id: self.lower_node_id(e.id, e.span),
             kind,
-            span: e.span,
             attrs: ThinVec::new(),
         });
 
@@ -1758,7 +1763,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
     }
 
     fn expr_unsafe(&mut self, expr: &'hir hir::Expr<'hir>) -> hir::Expr<'hir> {
-        let span = expr.span;
+        let span = self.spans[expr.hir_id];
         let hir_id = self.next_id(span);
         self.expr(
             span,
@@ -1797,7 +1802,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         kind: hir::ExprKind<'hir>,
         attrs: AttrVec,
     ) -> hir::Expr<'hir> {
-        hir::Expr { hir_id: self.next_id(span), kind, span, attrs }
+        hir::Expr { hir_id: self.next_id(span), kind, attrs }
     }
 
     fn field(&mut self, ident: Ident, expr: &'hir hir::Expr<'hir>, span: Span) -> hir::Field<'hir> {
@@ -1805,6 +1810,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
     }
 
     fn arm(&mut self, pat: &'hir hir::Pat<'hir>, expr: &'hir hir::Expr<'hir>) -> hir::Arm<'hir> {
-        hir::Arm { hir_id: self.next_id(expr.span), attrs: &[], pat, guard: None, body: expr }
+        let span = self.spans[expr.hir_id];
+        hir::Arm { hir_id: self.next_id(span), attrs: &[], pat, guard: None, body: expr }
     }
 }

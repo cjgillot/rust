@@ -232,7 +232,7 @@ impl<'c, 'cc> ConstEvalLateContext<'c, 'cc> {
             ExprKind::Repeat(ref value, _) => {
                 let n = match self.tables.expr_ty(e).kind {
                     ty::Array(_, n) => n.try_eval_usize(self.lcx.tcx, self.lcx.param_env)?,
-                    _ => span_bug!(e.span, "typeck error"),
+                    _ => span_bug!(self.lcx.tcx.hir().span(e.hir_id), "typeck error"),
                 };
                 self.expr(value).map(|v| Constant::Repeat(Box::new(v), n))
             },

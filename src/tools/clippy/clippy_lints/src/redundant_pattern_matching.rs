@@ -105,11 +105,11 @@ fn find_sugg_for_if_let<'a, 'tcx>(
         |diag| {
             // while let ... = ... { ... }
             // ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-            let expr_span = expr.span;
+            let expr_span = cx.tcx.hir().span(expr.hir_id);
 
             // while let ... = ... { ... }
             //                 ^^^
-            let op_span = op.span.source_callsite();
+            let op_span = cx.tcx.hir().span(op.hir_id).source_callsite();
 
             // while let ... = ... { ... }
             // ^^^^^^^^^^^^^^^^^^^
@@ -172,14 +172,14 @@ fn find_sugg_for_match<'a, 'tcx>(cx: &LateContext<'a, 'tcx>, expr: &'tcx Expr<'_
             span_lint_and_then(
                 cx,
                 REDUNDANT_PATTERN_MATCHING,
-                expr.span,
+                cx.tcx.hir().span(expr.hir_id),
                 &format!("redundant pattern matching, consider using `{}`", good_method),
                 |diag| {
-                    let span = expr.span.to(op.span);
+                    let span = cx.tcx.hir().span(expr.hir_id).to(cx.tcx.hir().span(op.hir_id));
                     diag.span_suggestion(
                         span,
                         "try this",
-                        format!("{}.{}", snippet(cx, op.span, "_"), good_method),
+                        format!("{}.{}", snippet(cx, cx.tcx.hir().span(op.hir_id), "_"), good_method),
                         Applicability::MaybeIncorrect, // snippet
                     );
                 },

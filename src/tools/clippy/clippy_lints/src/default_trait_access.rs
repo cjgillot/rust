@@ -60,7 +60,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for DefaultTraitAccess {
                             span_lint_and_sugg(
                                 cx,
                                 DEFAULT_TRAIT_ACCESS,
-                                expr.span,
+                                cx.tcx.hir().span(expr.hir_id),
                                 &format!("Calling `{}` is more clear than this expression", replacement),
                                 "try",
                                 replacement,

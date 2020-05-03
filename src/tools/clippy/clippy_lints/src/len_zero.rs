@@ -88,30 +88,31 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for LenZero {
     }
 
     fn check_expr(&mut self, cx: &LateContext<'a, 'tcx>, expr: &'tcx Expr<'_>) {
-        if expr.span.from_expansion() {
+        let expr_span = cx.tcx.hir().span(expr.hir_id);
+        if expr_span.from_expansion() {
             return;
         }
 
         if let ExprKind::Binary(Spanned { node: cmp, .. }, ref left, ref right) = expr.kind {
             match cmp {
                 BinOpKind::Eq => {
-                    check_cmp(cx, expr.span, left, right, "", 0); // len == 0
-                    check_cmp(cx, expr.span, right, left, "", 0); // 0 == len
+                    check_cmp(cx, expr_span, left, right, "", 0); // len == 0
+                    check_cmp(cx, expr_span, right, left, "", 0); // 0 == len
                 },
                 BinOpKind::Ne => {
-                    check_cmp(cx, expr.span, left, right, "!", 0); // len != 0
-                    check_cmp(cx, expr.span, right, left, "!", 0); // 0 != len
+                    check_cmp(cx, expr_span, left, right, "!", 0); // len != 0
+                    check_cmp(cx, expr_span, right, left, "!", 0); // 0 != len
                 },
                 BinOpKind::Gt => {
-                    check_cmp(cx, expr.span, left, right, "!", 0); // len > 0
-                    check_cmp(cx, expr.span, right, left, "", 1); // 1 > len
+                    check_cmp(cx, expr_span, left, right, "!", 0); // len > 0
+                    check_cmp(cx, expr_span, right, left, "", 1); // 1 > len
                 },
                 BinOpKind::Lt => {
-                    check_cmp(cx, expr.span, left, right, "", 1); // len < 1
-                    check_cmp(cx, expr.span, right, left, "!", 0); // 0 < len
+                    check_cmp(cx, expr_span, left, right, "", 1); // len < 1
+                    check_cmp(cx, expr_span, right, left, "!", 0); // 0 < len
                 },
-                BinOpKind::Ge => check_cmp(cx, expr.span, left, right, "!", 1), // len >= 1
-                BinOpKind::Le => check_cmp(cx, expr.span, right, left, "!", 1), // 1 <= len
+                BinOpKind::Ge => check_cmp(cx, expr_span, left, right, "!", 1), // len >= 1
+                BinOpKind::Le => check_cmp(cx, expr_span, right, left, "!", 1), // 1 <= len
                 _ => (),
             }
         }
@@ -249,7 +250,7 @@ fn check_len(
                 format!(
                     "{}{}.is_empty()",
                     op,
-                    snippet_with_applicability(cx, args[0].span, "_", &mut applicability)
+                    snippet_with_applicability(cx, cx.tcx.hir().span(args[0].hir_id), "_", &mut applicability)
                 ),
                 applicability,
             );

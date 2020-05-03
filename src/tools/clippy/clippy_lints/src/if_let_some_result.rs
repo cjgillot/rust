@@ -44,14 +44,15 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for OkIfLet {
             if let MatchSource::IfLetDesugar { .. } = source; //test if it is an If Let
             if let ExprKind::MethodCall(_, ok_span, ref result_types, _) = op.kind; //check is expr.ok() has type Result<T,E>.ok(, _)
             if let PatKind::TupleStruct(QPath::Resolved(_, ref x), ref y, _)  = body[0].pat.kind; //get operation
-            if method_chain_args(op, &["ok"]).is_some(); //test to see if using ok() methoduse std::marker::Sized;
+            if method_chain_args(cx, op, &["ok"]).is_some(); //test to see if using ok() methoduse std::marker::Sized;
             if is_type_diagnostic_item(cx, cx.tables.expr_ty(&result_types[0]), sym!(result_type));
             if rustc_hir_pretty::to_string(rustc_hir_pretty::NO_ANN, |s| s.print_path(x, false)) == "Some";
 
             then {
                 let mut applicability = Applicability::MachineApplicable;
                 let some_expr_string = snippet_with_applicability(cx, cx.tcx.hir().span(y[0].hir_id), "", &mut applicability);
-                let trimmed_ok = snippet_with_applicability(cx, op.span.until(ok_span), "", &mut applicability);
+                let op_span = cx.tcx.hir().span(op.hir_id);
+                let trimmed_ok = snippet_with_applicability(cx, op_span.until(ok_span), "", &mut applicability);
                 let sugg = format!(
                     "if let Ok({}) = {}",
                     some_expr_string,
@@ -60,7 +61,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for OkIfLet {
                 span_lint_and_sugg(
                     cx,
                     IF_LET_SOME_RESULT,
-                    expr.span.with_hi(op.span.hi()),
+                    cx.tcx.hir().span(expr.hir_id).with_hi(op_span.hi()),
                     "Matching on `Some` with `ok()` is redundant",
                     &format!("Consider matching on `Ok({})` and removing the call to `ok` instead", some_expr_string),
                     sugg,

@@ -36,7 +36,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for IntegerDivision {
             span_lint_and_help(
                 cx,
                 INTEGER_DIVISION,
-                expr.span,
+                cx.tcx.hir().span(expr.hir_id),
                 "integer division",
                 None,
                 "division of integers may cause loss of precision. consider using floats.",

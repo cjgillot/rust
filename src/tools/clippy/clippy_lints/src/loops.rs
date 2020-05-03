@@ -445,21 +445,23 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Loops {
             // we don't want to check expanded macros
             // this check is not at the top of the function
             // since higher::for_loop expressions are marked as expansions
-            if body.span.from_expansion() {
+            if cx.tcx.hir().span(body.hir_id).from_expansion() {
                 return;
             }
             check_for_loop(cx, pat, arg, body, expr);
         }
 
+        let expr_span = cx.tcx.hir().span(expr.hir_id);
+
         // we don't want to check expanded macros
-        if expr.span.from_expansion() {
+        if expr_span.from_expansion() {
             return;
         }
 
         // check for never_loop
         if let ExprKind::Loop(ref block, _, _) = expr.kind {
             match never_loop_block(block, expr.hir_id) {
-                NeverLoopResult::AlwaysBreak => span_lint(cx, NEVER_LOOP, expr.span, "this loop never actually loops"),
+                NeverLoopResult::AlwaysBreak => span_lint(cx, NEVER_LOOP, expr_span, "this loop never actually loops"),
                 NeverLoopResult::MayContinueMainLoop | NeverLoopResult::Otherwise => (),
             }
         }
@@ -473,7 +475,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Loops {
                 span_lint(
                     cx,
                     EMPTY_LOOP,
-                    expr.span,
+                    expr_span,
                     "empty `loop {}` detected. You may want to either use `panic!()` or add \
                      `std::thread::sleep(..);` to the loop body.",
                 );
@@ -492,7 +494,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Loops {
                                 && arms[1].guard.is_none()
                                 && is_simple_break_expr(&arms[1].body)
                             {
-                                if in_external_macro(cx.sess(), expr.span) {
+                                if in_external_macro(cx.sess(), expr_span) {
                                     return;
                                 }
 
@@ -505,13 +507,13 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Loops {
                                 span_lint_and_sugg(
                                     cx,
                                     WHILE_LET_LOOP,
-                                    expr.span,
+                                    expr_span,
                                     "this loop could be written as a `while let` loop",
                                     "try",
                                     format!(
                                         "while let {} = {} {{ .. }}",
                                         snippet_with_applicability(cx, cx.tcx.hir().span(arms[0].pat.hir_id), "..", &mut applicability),
-                                        snippet_with_applicability(cx, matchexpr.span, "..", &mut applicability),
+                                        snippet_with_applicability(cx, cx.tcx.hir().span(matchexpr.hir_id), "..", &mut applicability),
                                     ),
                                     applicability,
                                 );
@@ -552,7 +554,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Loops {
                             && !is_nested(cx, expr, &method_args[0]))
                 {
                     let mut applicability = Applicability::MachineApplicable;
-                    let iterator = snippet_with_applicability(cx, method_args[0].span, "_", &mut applicability);
+                    let iterator = snippet_with_applicability(cx, cx.tcx.hir().span(method_args[0].hir_id), "_", &mut applicability);
                     let loop_var = if pat_args.is_empty() {
                         "_".to_string()
                     } else {
@@ -561,7 +563,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Loops {
                     span_lint_and_sugg(
                         cx,
                         WHILE_LET_ON_ITERATOR,
-                        expr.span.with_hi(match_expr.span.hi()),
+                        expr_span.with_hi(cx.tcx.hir().span(match_expr.hir_id).hi()),
                         "this loop could be written as a `for` loop",
                         "try",
                         format!("for {} in {}", loop_var, iterator),
@@ -821,7 +823,7 @@ fn get_offset<'a, 'tcx>(cx: &LateContext<'a, 'tcx>, idx: &Expr<'_>, var: HirId) 
                 ast::LitKind::Int(x, _ty) => Some(x.to_string()),
                 _ => None,
             },
-            ExprKind::Path(..) if !same_var(cx, e, var) => Some(snippet_opt(cx, e.span).unwrap_or_else(|| "??".into())),
+            ExprKind::Path(..) if !same_var(cx, e, var) => Some(snippet_opt(cx, cx.tcx.hir().span(e.hir_id)).unwrap_or_else(|| "??".into())),
             _ => None,
         }
     }
@@ -922,7 +924,7 @@ fn build_manual_memcpy_suggestion<'a, 'tcx>(
             if var_def_id(cx, arg) == var_def_id(cx, var);
             then {
                 match offset.sign {
-                    OffsetSign::Negative => format!("({} - {})", snippet(cx, end.span, "<src>.len()"), offset.value),
+                    OffsetSign::Negative => format!("({} - {})", snippet(cx, cx.tcx.hir().span(end.hir_id), "<src>.len()"), offset.value),
                     OffsetSign::Positive => "".into(),
                 }
             } else {
@@ -931,7 +933,7 @@ fn build_manual_memcpy_suggestion<'a, 'tcx>(
                         let end = sugg::Sugg::hir(cx, end, "<count>");
                         format!("{}", end + sugg::ONE)
                     },
-                    ast::RangeLimits::HalfOpen => format!("{}", snippet(cx, end.span, "..")),
+                    ast::RangeLimits::HalfOpen => format!("{}", snippet(cx, cx.tcx.hir().span(end.hir_id), "..")),
                 };
 
                 print_sum(&end_str, &offset)
@@ -939,14 +941,14 @@ fn build_manual_memcpy_suggestion<'a, 'tcx>(
         }
     };
 
-    let start_str = snippet(cx, start.span, "").to_string();
+    let start_str = snippet(cx, cx.tcx.hir().span(start.hir_id), "").to_string();
     let dst_offset = print_offset(&start_str, &dst_var.offset);
     let dst_limit = print_limit(end, dst_var.offset, dst_var.var);
     let src_offset = print_offset(&start_str, &src_var.offset);
     let src_limit = print_limit(end, src_var.offset, src_var.var);
 
-    let dst_var_name = snippet_opt(cx, dst_var.var.span).unwrap_or_else(|| "???".into());
-    let src_var_name = snippet_opt(cx, src_var.var.span).unwrap_or_else(|| "???".into());
+    let dst_var_name = snippet_opt(cx, cx.tcx.hir().span(dst_var.var.hir_id)).unwrap_or_else(|| "???".into());
+    let src_var_name = snippet_opt(cx, cx.tcx.hir().span(src_var.var.hir_id)).unwrap_or_else(|| "???".into());
 
     let dst = if dst_offset == "" && dst_limit == "" {
         dst_var_name
@@ -1010,7 +1012,7 @@ fn detect_manual_memcpy<'a, 'tcx>(
                 span_lint_and_sugg(
                     cx,
                     MANUAL_MEMCPY,
-                    expr.span,
+                    cx.tcx.hir().span(expr.hir_id),
                     "it looks like you're manually copying between slices",
                     "try replacing the loop by",
                     big_sugg,
@@ -1087,7 +1089,7 @@ fn check_for_loop_range<'a, 'tcx>(
                 let skip = if starts_at_zero {
                     String::new()
                 } else {
-                    format!(".skip({})", snippet(cx, start.span, ".."))
+                    format!(".skip({})", snippet(cx, cx.tcx.hir().span(start.hir_id), ".."))
                 };
 
                 let mut end_is_start_plus_val = false;
@@ -1118,7 +1120,7 @@ fn check_for_loop_range<'a, 'tcx>(
                                 let take_expr = sugg::Sugg::hir(cx, take_expr, "<count>");
                                 format!(".take({})", take_expr + sugg::ONE)
                             },
-                            ast::RangeLimits::HalfOpen => format!(".take({})", snippet(cx, take_expr.span, "..")),
+                            ast::RangeLimits::HalfOpen => format!(".take({})", snippet(cx, cx.tcx.hir().span(take_expr.hir_id), "..")),
                         }
                     }
                 } else {
@@ -1143,7 +1145,7 @@ fn check_for_loop_range<'a, 'tcx>(
                     span_lint_and_then(
                         cx,
                         NEEDLESS_RANGE_LOOP,
-                        expr.span,
+                        cx.tcx.hir().span(expr.hir_id),
                         &format!("the loop variable `{}` is used to index `{}`", ident.name, indexed),
                         |diag| {
                             multispan_sugg(
@@ -1152,7 +1154,7 @@ fn check_for_loop_range<'a, 'tcx>(
                                 vec![
                                     (cx.tcx.hir().span(pat.hir_id), format!("({}, <item>)", ident.name)),
                                     (
-                                        arg.span,
+                                        cx.tcx.hir().span(arg.hir_id),
                                         format!("{}.{}().enumerate(){}{}", indexed, method, method_1, method_2),
                                     ),
                                 ],
@@ -1169,7 +1171,7 @@ fn check_for_loop_range<'a, 'tcx>(
                     span_lint_and_then(
                         cx,
                         NEEDLESS_RANGE_LOOP,
-                        expr.span,
+                        cx.tcx.hir().span(expr.hir_id),
                         &format!(
                             "the loop variable `{}` is only used to index `{}`.",
                             ident.name, indexed
@@ -1178,7 +1180,7 @@ fn check_for_loop_range<'a, 'tcx>(
                             multispan_sugg(
                                 diag,
                                 "consider using an iterator",
-                                vec![(cx.tcx.hir().span(pat.hir_id), "<item>".to_string()), (arg.span, repl)],
+                                vec![(cx.tcx.hir().span(pat.hir_id), "<item>".to_string()), (cx.tcx.hir().span(arg.hir_id), repl)],
                             );
                         },
                     );
@@ -1228,12 +1230,12 @@ fn is_end_eq_array_len<'tcx>(
 
 fn lint_iter_method(cx: &LateContext<'_, '_>, args: &[Expr<'_>], arg: &Expr<'_>, method_name: &str) {
     let mut applicability = Applicability::MachineApplicable;
-    let object = snippet_with_applicability(cx, args[0].span, "_", &mut applicability);
+    let object = snippet_with_applicability(cx, cx.tcx.hir().span(args[0].hir_id), "_", &mut applicability);
     let muta = if method_name == "iter_mut" { "mut " } else { "" };
     span_lint_and_sugg(
         cx,
         EXPLICIT_ITER_LOOP,
-        arg.span,
+        cx.tcx.hir().span(arg.hir_id),
         "it is more concise to loop over references to containers instead of using explicit \
          iteration methods",
         "to write this more concisely, try",
@@ -1258,11 +1260,11 @@ fn check_for_loop_arg(cx: &LateContext<'_, '_>, pat: &Pat<'_>, arg: &Expr<'_>, e
                 let receiver_ty_adjusted = cx.tables.expr_ty_adjusted(&args[0]);
                 if TyS::same_type(receiver_ty, receiver_ty_adjusted) {
                     let mut applicability = Applicability::MachineApplicable;
-                    let object = snippet_with_applicability(cx, args[0].span, "_", &mut applicability);
+                    let object = snippet_with_applicability(cx, cx.tcx.hir().span(args[0].hir_id), "_", &mut applicability);
                     span_lint_and_sugg(
                         cx,
                         EXPLICIT_INTO_ITER_LOOP,
-                        arg.span,
+                        cx.tcx.hir().span(arg.hir_id),
                         "it is more concise to loop over containers instead of using explicit \
                          iteration methods",
                         "to write this more concisely, try",
@@ -1285,7 +1287,7 @@ fn check_for_loop_arg(cx: &LateContext<'_, '_>, pat: &Pat<'_>, arg: &Expr<'_>, e
                 span_lint(
                     cx,
                     ITER_NEXT_LOOP,
-                    expr.span,
+                    cx.tcx.hir().span(expr.hir_id),
                     "you are iterating over `Iterator::next()` which is an Option; this will compile but is \
                     probably not what you want",
                 );
@@ -1305,34 +1307,34 @@ fn check_arg_type(cx: &LateContext<'_, '_>, pat: &Pat<'_>, arg: &Expr<'_>) {
         span_lint_and_help(
             cx,
             FOR_LOOPS_OVER_FALLIBLES,
-            arg.span,
+            cx.tcx.hir().span(arg.hir_id),
             &format!(
                 "for loop over `{0}`, which is an `Option`. This is more readably written as an \
                 `if let` statement.",
-                snippet(cx, arg.span, "_")
+                snippet(cx, cx.tcx.hir().span(arg.hir_id), "_")
             ),
             None,
             &format!(
                 "consider replacing `for {0} in {1}` with `if let Some({0}) = {1}`",
                 snippet(cx, cx.tcx.hir().span(pat.hir_id), "_"),
-                snippet(cx, arg.span, "_")
+                snippet(cx, cx.tcx.hir().span(arg.hir_id), "_")
             ),
         );
     } else if is_type_diagnostic_item(cx, ty, sym!(result_type)) {
         span_lint_and_help(
             cx,
             FOR_LOOPS_OVER_FALLIBLES,
-            arg.span,
+            cx.tcx.hir().span(arg.hir_id),
             &format!(
                 "for loop over `{0}`, which is a `Result`. This is more readably written as an \
                 `if let` statement.",
-                snippet(cx, arg.span, "_")
+                snippet(cx, cx.tcx.hir().span(arg.hir_id), "_")
             ),
             None,
             &format!(
                 "consider replacing `for {0} in {1}` with `if let Ok({0}) = {1}`",
                 snippet(cx, cx.tcx.hir().span(pat.hir_id), "_"),
-                snippet(cx, arg.span, "_")
+                snippet(cx, cx.tcx.hir().span(arg.hir_id), "_")
             ),
         );
     }
@@ -1376,7 +1378,7 @@ fn check_for_loop_explicit_counter<'a, 'tcx>(
                     // for some reason this is the only way to get the `Span`
                     // of the entire `for` loop
                     let for_span = if let ExprKind::Match(_, arms, _) = &expr.kind {
-                        arms[0].body.span
+                        cx.tcx.hir().span(arms[0].body.hir_id)
                     } else {
                         unreachable!()
                     };
@@ -1384,7 +1386,7 @@ fn check_for_loop_explicit_counter<'a, 'tcx>(
                     span_lint_and_sugg(
                         cx,
                         EXPLICIT_COUNTER_LOOP,
-                        for_span.with_hi(arg.span.hi()),
+                        for_span.with_hi(cx.tcx.hir().span(arg.hir_id).hi()),
                         &format!("the variable `{}` is used as a loop counter.", name),
                         "consider using",
                         format!(
@@ -1448,7 +1450,7 @@ fn check_for_loop_over_map_kv<'a, 'tcx>(
 
     if let PatKind::Tuple(ref pat, _) = pat.kind {
         if pat.len() == 2 {
-            let arg_span = arg.span;
+            let arg_span = cx.tcx.hir().span(arg.hir_id);
             let (new_pat_span, kind, ty, mutbl) = match cx.tables.expr_ty(arg).kind {
                 ty::Ref(_, ty, mutbl) => match (&pat[0].kind, &pat[1].kind) {
                     (key, _) if pat_is_wild(key, body) => (cx.tcx.hir().span(pat[1].hir_id), "value", ty, mutbl),
@@ -1470,7 +1472,7 @@ fn check_for_loop_over_map_kv<'a, 'tcx>(
                 span_lint_and_then(
                     cx,
                     FOR_KV_MAP,
-                    expr.span,
+                    cx.tcx.hir().span(expr.hir_id),
                     &format!("you seem to want to iterate on a map's {}s", kind),
                     |diag| {
                         let map = sugg::Sugg::hir(cx, arg, "map");
@@ -2274,7 +2276,7 @@ fn check_infinite_loop<'a, 'tcx>(cx: &LateContext<'a, 'tcx>, cond: &'tcx Expr<'_
         span_lint_and_then(
             cx,
             WHILE_IMMUTABLE_CONDITION,
-            cond.span,
+            cx.tcx.hir().span(cond.hir_id),
             "variables in the condition are not mutated in the loop body",
             |diag| {
                 diag.note("this may lead to an infinite or to a never running loop");
@@ -2383,7 +2385,7 @@ fn check_needless_collect<'a, 'tcx>(expr: &'tcx Expr<'_>, cx: &LateContext<'a, '
                 match_type(cx, ty, &paths::BTREEMAP) ||
                 is_type_diagnostic_item(cx, ty, sym!(hashmap_type)) {
                 if method.ident.name == sym!(len) {
-                    let span = shorten_span(expr, sym!(collect));
+                    let span = shorten_span(cx, expr, sym!(collect));
                     span_lint_and_sugg(
                         cx,
                         NEEDLESS_COLLECT,
@@ -2395,7 +2397,7 @@ fn check_needless_collect<'a, 'tcx>(expr: &'tcx Expr<'_>, cx: &LateContext<'a, '
                     );
                 }
                 if method.ident.name == sym!(is_empty) {
-                    let span = shorten_span(expr, sym!(iter));
+                    let span = shorten_span(cx, expr, sym!(iter));
                     span_lint_and_sugg(
                         cx,
                         NEEDLESS_COLLECT,
@@ -2407,8 +2409,8 @@ fn check_needless_collect<'a, 'tcx>(expr: &'tcx Expr<'_>, cx: &LateContext<'a, '
                     );
                 }
                 if method.ident.name == sym!(contains) {
-                    let contains_arg = snippet(cx, args[1].span, "??");
-                    let span = shorten_span(expr, sym!(collect));
+                    let contains_arg = snippet(cx, cx.tcx.hir().span(args[1].hir_id), "??");
+                    let span = shorten_span(cx, expr, sym!(collect));
                     span_lint_and_then(
                         cx,
                         NEEDLESS_COLLECT,
@@ -2437,11 +2439,11 @@ fn check_needless_collect<'a, 'tcx>(expr: &'tcx Expr<'_>, cx: &LateContext<'a, '
     }
 }
 
-fn shorten_span(expr: &Expr<'_>, target_fn_name: Symbol) -> Span {
+fn shorten_span(cx: &LateContext<'_, '_>, expr: &Expr<'_>, target_fn_name: Symbol) -> Span {
     let mut current_expr = expr;
     while let ExprKind::MethodCall(ref path, ref span, ref args, _) = current_expr.kind {
         if path.ident.name == target_fn_name {
-            return expr.span.with_lo(span.lo());
+            return cx.tcx.hir().span(expr.hir_id).with_lo(span.lo());
         }
         current_expr = &args[0];
     }

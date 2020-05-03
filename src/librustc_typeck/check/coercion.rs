@@ -844,7 +844,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let source = self.resolve_vars_with_obligations(expr_ty);
         debug!("coercion::try({:?}: {:?} -> {:?})", expr, source, target);
 
-        let cause = self.cause(expr.span, ObligationCauseCode::ExprAssignable);
+        let cause =
+            self.cause(self.tcx.hir().span(expr.hir_id), ObligationCauseCode::ExprAssignable);
         let coerce = Coerce::new(self, cause, allow_two_phase);
         let ok = self.commit_if_ok(|_| coerce.coerce(source, target))?;
 
@@ -953,9 +954,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             }
         };
         if let (Some(a_sig), Some(b_sig)) = (a_sig, b_sig) {
+            let new_span = self.tcx.hir().span(new.hir_id);
+
             // The signature must match.
-            let a_sig = self.normalize_associated_types_in(new.span, &a_sig);
-            let b_sig = self.normalize_associated_types_in(new.span, &b_sig);
+            let a_sig = self.normalize_associated_types_in(new_span, &a_sig);
+            let b_sig = self.normalize_associated_types_in(new_span, &b_sig);
             let sig = self
                 .at(cause, self.param_env)
                 .trace(prev_ty, new_ty)
@@ -1416,9 +1419,10 @@ impl<'tcx, 'exprs, E: AsCoercionSite> CoerceMany<'tcx, 'exprs, E> {
                 expected.is_unit(),
                 pointing_at_return_type,
             ) {
-                if match_expr.span.desugaring_kind().is_none() {
-                    err.span_label(match_expr.span, "expected this to be `()`");
-                    fcx.suggest_semicolon_at_end(match_expr.span, &mut err);
+                let match_expr_span = fcx.tcx.hir().span(match_expr.hir_id);
+                if match_expr_span.desugaring_kind().is_none() {
+                    err.span_label(match_expr_span, "expected this to be `()`");
+                    fcx.suggest_semicolon_at_end(match_expr_span, &mut err);
                 }
             }
             fcx.get_node_fn_decl(parent).map(|(fn_decl, _, is_main)| (fn_decl, is_main))

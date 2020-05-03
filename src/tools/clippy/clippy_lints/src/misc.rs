@@ -294,7 +294,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for MiscLints {
             if !higher::is_from_for_desugar(local);
             then {
                 if an == BindingAnnotation::Ref || an == BindingAnnotation::RefMut {
-                    let sugg_init = if init.span.from_expansion() {
+                    let sugg_init = if cx.tcx.hir().span(init.hir_id).from_expansion() {
                         Sugg::hir_with_macro_callsite(cx, init, "..")
                     } else {
                         Sugg::hir(cx, init, "..")
@@ -351,7 +351,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for MiscLints {
                             format!(
                                 "if {} {{ {}; }}",
                                 sugg,
-                                &snippet(cx, b.span, ".."),
+                                &snippet(cx, cx.tcx.hir().span(b.hir_id), ".."),
                             ),
                             Applicability::MachineApplicable, // snippet
                         );
@@ -361,9 +361,10 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for MiscLints {
     }
 
     fn check_expr(&mut self, cx: &LateContext<'a, 'tcx>, expr: &'tcx Expr<'_>) {
+        let expr_span = cx.tcx.hir().span(expr.hir_id);
         match expr.kind {
             ExprKind::Cast(ref e, ref ty) => {
-                check_cast(cx, expr.span, e, ty);
+                check_cast(cx, expr_span, e, ty);
                 return;
             },
             ExprKind::Binary(ref cmp, ref left, ref right) => {
@@ -400,13 +401,13 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for MiscLints {
                         is_named_constant(cx, left) || is_named_constant(cx, right),
                         is_comparing_arrays,
                     );
-                    span_lint_and_then(cx, lint, expr.span, msg, |diag| {
+                    span_lint_and_then(cx, lint, expr_span, msg, |diag| {
                         let lhs = Sugg::hir(cx, left, "..");
                         let rhs = Sugg::hir(cx, right, "..");
 
                         if !is_comparing_arrays {
                             diag.span_suggestion(
-                                expr.span,
+                                expr_span,
                                 "consider comparing them within some error",
                                 format!(
                                     "({}).abs() {} error",
@@ -419,12 +420,12 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for MiscLints {
                         diag.note("`f32::EPSILON` and `f64::EPSILON` are available for the `error`");
                     });
                 } else if op == BinOpKind::Rem && is_integer_const(cx, right, 1) {
-                    span_lint(cx, MODULO_ONE, expr.span, "any number modulo 1 will be 0");
+                    span_lint(cx, MODULO_ONE, expr_span, "any number modulo 1 will be 0");
                 }
             },
             _ => {},
         }
-        if in_attributes_expansion(expr) || expr.span.is_desugaring(DesugaringKind::Await) {
+        if in_attributes_expansion(cx, expr) || expr_span.is_desugaring(DesugaringKind::Await) {
             // Don't lint things expanded by #[derive(...)], etc or `await` desugaring
             return;
         }
@@ -457,7 +458,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for MiscLints {
             span_lint(
                 cx,
                 USED_UNDERSCORE_BINDING,
-                expr.span,
+                expr_span,
                 &format!(
                     "used binding `{}` which is prefixed with an underscore. A leading \
                      underscore signals that a binding will not be used.",
@@ -508,7 +509,7 @@ fn check_nan(cx: &LateContext<'_, '_>, expr: &Expr<'_>, cmp_expr: &Expr<'_>) {
                 span_lint(
                     cx,
                     CMP_NAN,
-                    cmp_expr.span,
+                    cx.tcx.hir().span(cmp_expr.hir_id),
                     "doomed comparison with `NAN`, use `{f32,f64}::is_nan()` instead",
                 );
             }
@@ -574,7 +575,7 @@ fn check_to_owned(cx: &LateContext<'_, '_>, expr: &Expr<'_>, other: &Expr<'_>) {
     let (arg_ty, snip) = match expr.kind {
         ExprKind::MethodCall(.., ref args, _) if args.len() == 1 => {
             if match_trait_method(cx, expr, &paths::TO_STRING) || match_trait_method(cx, expr, &paths::TO_OWNED) {
-                (cx.tables.expr_ty_adjusted(&args[0]), snippet(cx, args[0].span, ".."))
+                (cx.tables.expr_ty_adjusted(&args[0]), snippet(cx, cx.tcx.hir().span(args[0].hir_id), ".."))
             } else {
                 return;
             }
@@ -582,7 +583,7 @@ fn check_to_owned(cx: &LateContext<'_, '_>, expr: &Expr<'_>, other: &Expr<'_>) {
         ExprKind::Call(ref path, ref v) if v.len() == 1 => {
             if let ExprKind::Path(ref path) = path.kind {
                 if match_qpath(path, &["String", "from_str"]) || match_qpath(path, &["String", "from"]) {
-                    (cx.tables.expr_ty_adjusted(&v[0]), snippet(cx, v[0].span, ".."))
+                    (cx.tables.expr_ty_adjusted(&v[0]), snippet(cx, cx.tcx.hir().span(v[0].hir_id), ".."))
                 } else {
                     return;
                 }
@@ -617,9 +618,9 @@ fn check_to_owned(cx: &LateContext<'_, '_>, expr: &Expr<'_>, other: &Expr<'_>) {
     };
 
     let lint_span = if other_gets_derefed {
-        expr.span.to(other.span)
+        cx.tcx.hir().span(expr.hir_id).to(cx.tcx.hir().span(other.hir_id))
     } else {
-        expr.span
+        cx.tcx.hir().span(expr.hir_id)
     };
 
     span_lint_and_then(
@@ -670,10 +671,11 @@ fn is_used(cx: &LateContext<'_, '_>, expr: &Expr<'_>) -> bool {
 
 /// Tests whether an expression is in a macro expansion (e.g., something
 /// generated by `#[derive(...)]` or the like).
-fn in_attributes_expansion(expr: &Expr<'_>) -> bool {
+fn in_attributes_expansion(cx: &LateContext<'_, '_>, expr: &Expr<'_>) -> bool {
     use rustc_span::hygiene::MacroKind;
-    if expr.span.from_expansion() {
-        let data = expr.span.ctxt().outer_expn_data();
+    let expr_span = cx.tcx.hir().span(expr.hir_id);
+    if expr_span.from_expansion() {
+        let data = expr_span.ctxt().outer_expn_data();
 
         if let ExpnKind::Macro(MacroKind::Attr, _) = data.kind {
             true

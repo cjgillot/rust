@@ -191,7 +191,8 @@ impl<'tcx> Visitor<'tcx> for CheckConstVisitor<'tcx> {
             _ if self.const_kind.is_none() => {}
 
             hir::ExprKind::Loop(_, _, source) => {
-                self.const_check_violated(NonConstExpr::Loop(*source), e.span);
+                let span = self.tcx.hir().span(e.hir_id);
+                self.const_check_violated(NonConstExpr::Loop(*source), span);
             }
 
             hir::ExprKind::Match(_, _, source) => {
@@ -205,7 +206,8 @@ impl<'tcx> Visitor<'tcx> for CheckConstVisitor<'tcx> {
                 };
 
                 if let Some(expr) = non_const_expr {
-                    self.const_check_violated(expr, e.span);
+                    let span = self.tcx.hir().span(e.hir_id);
+                    self.const_check_violated(expr, span);
                 }
             }
 

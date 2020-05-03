@@ -255,7 +255,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for NonCopyConst {
                 cx.tables.expr_ty(dereferenced_expr)
             };
 
-            verify_ty_bound(cx, ty, Source::Expr { expr: expr.span });
+            verify_ty_bound(cx, ty, Source::Expr { expr: cx.tcx.hir().span(expr.hir_id) });
         }
     }
 }

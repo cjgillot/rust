@@ -38,7 +38,7 @@ declare_lint_pass!(ImplicitSaturatingSub => [IMPLICIT_SATURATING_SUB]);
 
 impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ImplicitSaturatingSub {
     fn check_expr(&mut self, cx: &LateContext<'a, 'tcx>, expr: &'tcx Expr<'tcx>) {
-        if in_macro(expr.span) {
+        if in_macro(cx.tcx.hir().span(expr.hir_id)) {
             return;
         }
         if_chain! {
@@ -157,7 +157,7 @@ fn print_lint_and_sugg(cx: &LateContext<'_, '_>, var_name: &str, expr: &Expr<'_>
     span_lint_and_sugg(
         cx,
         IMPLICIT_SATURATING_SUB,
-        expr.span,
+        cx.tcx.hir().span(expr.hir_id),
         "Implicitly performing saturating subtraction",
         "try",
         format!("{} = {}.saturating_sub({});", var_name, var_name, 1.to_string()),

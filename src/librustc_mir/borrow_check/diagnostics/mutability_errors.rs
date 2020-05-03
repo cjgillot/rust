@@ -503,7 +503,7 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, 'tcx> {
             let arg_pos = args
                 .iter()
                 .enumerate()
-                .filter(|(_, arg)| arg.span == self.body.span)
+                .filter(|(_, arg)| hir.span(arg.hir_id) == self.body.span)
                 .map(|(pos, _)| pos)
                 .next();
             let def_id = hir.local_def_id(item_id);
@@ -544,7 +544,7 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, 'tcx> {
                 };
                 if let Some(span) = arg {
                     err.span_label(span, "change this to accept `FnMut` instead of `Fn`");
-                    err.span_label(func.span, "expects `Fn` instead of `FnMut`");
+                    err.span_label(hir.span(func.hir_id), "expects `Fn` instead of `FnMut`");
                     if self.infcx.tcx.sess.source_map().is_multiline(self.body.span) {
                         err.span_label(self.body.span, "in this closure");
                     }

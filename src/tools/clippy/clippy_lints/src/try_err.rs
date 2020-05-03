@@ -55,7 +55,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for TryErr {
         //         val,
         // };
         if_chain! {
-            if !in_external_macro(cx.tcx.sess, expr.span);
+            if !in_external_macro(cx.tcx.sess, cx.tcx.hir().span(expr.hir_id));
             if let ExprKind::Match(ref match_arg, _, MatchSource::TryDesugar) = expr.kind;
             if let ExprKind::Call(ref match_fun, ref try_args) = match_arg.kind;
             if let ExprKind::Path(ref match_fun_path) = match_fun.kind;
@@ -69,10 +69,10 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for TryErr {
 
             then {
                 let err_type = cx.tables.expr_ty(err_arg);
-                let origin_snippet = if err_arg.span.from_expansion() {
-                    snippet_with_macro_callsite(cx, err_arg.span, "_")
+                let origin_snippet = if cx.tcx.hir().span(err_arg.hir_id).from_expansion() {
+                    snippet_with_macro_callsite(cx, cx.tcx.hir().span(err_arg.hir_id), "_")
                 } else {
-                    snippet(cx, err_arg.span, "_")
+                    snippet(cx, cx.tcx.hir().span(err_arg.hir_id), "_")
                 };
                 let suggestion = if err_type == return_type {
                     format!("return Err({})", origin_snippet)
@@ -83,7 +83,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for TryErr {
                 span_lint_and_sugg(
                     cx,
                     TRY_ERR,
-                    expr.span,
+                    cx.tcx.hir().span(expr.hir_id),
                     "returning an `Err(_)` with the `?` operator",
                     "try this",
                     suggestion,

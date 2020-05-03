@@ -52,7 +52,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for LargeStackArrays {
                 span_lint_and_help(
                     cx,
                     LARGE_STACK_ARRAYS,
-                    expr.span,
+                    cx.tcx.hir().span(expr.hir_id),
                     &format!(
                         "allocating a local array larger than {} bytes",
                         self.maximum_allowed_size
@@ -60,7 +60,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for LargeStackArrays {
                     None,
                     &format!(
                         "consider allocating on the heap with `vec!{}.into_boxed_slice()`",
-                        snippet(cx, expr.span, "[...]")
+                        snippet(cx, cx.tcx.hir().span(expr.hir_id), "[...]")
                     ),
                 );
             }

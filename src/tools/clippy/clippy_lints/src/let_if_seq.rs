@@ -71,7 +71,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for LetIfSeq {
                 if let Some(value) = check_assign(cx, canonical_id, &*then);
                 if !used_in_expr(cx, canonical_id, value);
                 then {
-                    let span = cx.tcx.hir().span(stmt.hir_id).to(if_.span);
+                    let span = cx.tcx.hir().span(stmt.hir_id).to(cx.tcx.hir().span(if_.hir_id));
 
                     let has_interior_mutability = !cx.tables.node_type(canonical_id).is_freeze(
                         cx.tcx,
@@ -110,11 +110,11 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for LetIfSeq {
                         "let {mut}{name} = if {cond} {{{then} {value} }} else {{{else} {default} }};",
                         mut=mutability,
                         name=ident.name,
-                        cond=snippet(cx, cond.span, "_"),
+                        cond=snippet(cx, cx.tcx.hir().span(cond.hir_id), "_"),
                         then=if then.stmts.len() > 1 { " ..;" } else { "" },
                         else=if default_multi_stmts { " ..;" } else { "" },
-                        value=snippet(cx, value.span, "<value>"),
-                        default=snippet(cx, default.span, "<default>"),
+                        value=snippet(cx, cx.tcx.hir().span(value.hir_id), "<value>"),
+                        default=snippet(cx, cx.tcx.hir().span(default.hir_id), "<default>"),
                     );
                     span_lint_and_then(cx,
                                        USELESS_LET_IF_SEQ,

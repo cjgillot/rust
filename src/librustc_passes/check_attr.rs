@@ -379,13 +379,14 @@ impl CheckAttrVisitor<'tcx> {
             _ => Target::Expression,
         };
         for attr in expr.attrs.iter() {
+            let expr_span = self.tcx.hir().span(expr.hir_id);
             if attr.check_name(sym::inline) {
-                self.check_inline(expr.hir_id, attr, &expr.span, target);
+                self.check_inline(expr.hir_id, attr, &expr_span, target);
             }
             if attr.check_name(sym::repr) {
                 self.emit_repr_error(
                     attr.span,
-                    expr.span,
+                    expr_span,
                     "attribute should not be applied to an expression",
                     "not defining a struct, enum, or union",
                 );

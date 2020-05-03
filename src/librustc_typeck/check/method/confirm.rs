@@ -450,7 +450,7 @@ impl<'a, 'tcx> ConfirmContext<'a, 'tcx> {
             ty::TraitContainer(trait_def_id) => callee::check_legal_trait_for_method_call(
                 self.tcx,
                 self.span,
-                Some(self.self_expr.span),
+                Some(self.tcx.hir().span(self.self_expr.hir_id)),
                 trait_def_id,
             ),
             ty::ImplContainer(..) => {}

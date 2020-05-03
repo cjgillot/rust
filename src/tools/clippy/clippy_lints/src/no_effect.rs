@@ -43,7 +43,7 @@ declare_clippy_lint! {
 }
 
 fn has_no_effect(cx: &LateContext<'_, '_>, expr: &Expr<'_>) -> bool {
-    if expr.span.from_expansion() {
+    if cx.tcx.hir().span(expr.hir_id).from_expansion() {
         return false;
     }
     match expr.kind {
@@ -95,10 +95,10 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for NoEffect {
             } else if let Some(reduced) = reduce_expression(cx, expr) {
                 let mut snippet = String::new();
                 for e in reduced {
-                    if e.span.from_expansion() {
+                    if cx.tcx.hir().span(e.hir_id).from_expansion() {
                         return;
                     }
-                    if let Some(snip) = snippet_opt(cx, e.span) {
+                    if let Some(snip) = snippet_opt(cx, cx.tcx.hir().span(e.hir_id)) {
                         snippet.push_str(&snip);
                         snippet.push(';');
                     } else {
@@ -120,7 +120,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for NoEffect {
 }
 
 fn reduce_expression<'a>(cx: &LateContext<'_, '_>, expr: &'a Expr<'a>) -> Option<Vec<&'a Expr<'a>>> {
-    if expr.span.from_expansion() {
+    if cx.tcx.hir().span(expr.hir_id).from_expansion() {
         return None;
     }
     match expr.kind {

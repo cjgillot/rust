@@ -44,7 +44,7 @@ declare_lint_pass!(CheckedConversions => [CHECKED_CONVERSIONS]);
 impl<'a, 'tcx> LateLintPass<'a, 'tcx> for CheckedConversions {
     fn check_expr(&mut self, cx: &LateContext<'_, '_>, item: &Expr<'_>) {
         let result = if_chain! {
-            if !in_external_macro(cx.sess(), item.span);
+            if !in_external_macro(cx.sess(), cx.tcx.hir().span(item.hir_id));
             if let ExprKind::Binary(op, ref left, ref right) = &item.kind;
 
             then {
@@ -61,11 +61,13 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for CheckedConversions {
         if let Some(cv) = result {
             if let Some(to_type) = cv.to_type {
                 let mut applicability = Applicability::MachineApplicable;
-                let snippet = snippet_with_applicability(cx, cv.expr_to_cast.span, "_", &mut applicability);
+                let snippet = snippet_with_applicability(
+                    cx, cx.tcx.hir().span(cv.expr_to_cast.hir_id), "_", &mut applicability
+                );
                 span_lint_and_sugg(
                     cx,
                     CHECKED_CONVERSIONS,
-                    item.span,
+                    cx.tcx.hir().span(item.hir_id),
                     "Checked cast can be simplified.",
                     "try",
                     format!("{}::try_from({}).is_ok()", to_type, snippet),

@@ -69,22 +69,23 @@ fn check_method_call(cx: &LateContext<'_, '_>, call: &hir::Expr<'_>, expr: &hir:
         let symbol = &*path.ident.as_str();
         let read_trait = match_trait_method(cx, call, &paths::IO_READ);
         let write_trait = match_trait_method(cx, call, &paths::IO_WRITE);
+        let expr_span = cx.tcx.hir().span(expr.hir_id);
 
         match (read_trait, write_trait, symbol) {
             (true, _, "read") => span_lint(
                 cx,
                 UNUSED_IO_AMOUNT,
-                expr.span,
+                expr_span,
                 "read amount is not handled. Use `Read::read_exact` instead",
             ),
-            (true, _, "read_vectored") => span_lint(cx, UNUSED_IO_AMOUNT, expr.span, "read amount is not handled"),
+            (true, _, "read_vectored") => span_lint(cx, UNUSED_IO_AMOUNT, expr_span, "read amount is not handled"),
             (_, true, "write") => span_lint(
                 cx,
                 UNUSED_IO_AMOUNT,
-                expr.span,
+                expr_span,
                 "written amount is not handled. Use `Write::write_all` instead",
             ),
-            (_, true, "write_vectored") => span_lint(cx, UNUSED_IO_AMOUNT, expr.span, "written amount is not handled"),
+            (_, true, "write_vectored") => span_lint(cx, UNUSED_IO_AMOUNT, expr_span, "written amount is not handled"),
             _ => (),
         }
     }

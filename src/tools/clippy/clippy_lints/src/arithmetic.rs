@@ -64,8 +64,9 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Arithmetic {
             return;
         }
 
+        let expr_span = cx.tcx.hir().span(expr.hir_id);
         if let Some(span) = self.const_span {
-            if span.contains(expr.span) {
+            if span.contains(expr_span) {
                 return;
             }
         }
@@ -88,22 +89,22 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Arithmetic {
 
                 let (l_ty, r_ty) = (cx.tables.expr_ty(l), cx.tables.expr_ty(r));
                 if l_ty.peel_refs().is_integral() && r_ty.peel_refs().is_integral() {
-                    span_lint(cx, INTEGER_ARITHMETIC, expr.span, "integer arithmetic detected");
-                    self.expr_span = Some(expr.span);
+                    span_lint(cx, INTEGER_ARITHMETIC, expr_span, "integer arithmetic detected");
+                    self.expr_span = Some(expr_span);
                 } else if l_ty.peel_refs().is_floating_point() && r_ty.peel_refs().is_floating_point() {
-                    span_lint(cx, FLOAT_ARITHMETIC, expr.span, "floating-point arithmetic detected");
-                    self.expr_span = Some(expr.span);
+                    span_lint(cx, FLOAT_ARITHMETIC, expr_span, "floating-point arithmetic detected");
+                    self.expr_span = Some(expr_span);
                 }
             },
             hir::ExprKind::Unary(hir::UnOp::UnNeg, arg) => {
                 let ty = cx.tables.expr_ty(arg);
                 if constant_simple(cx, cx.tables, expr).is_none() {
                     if ty.is_integral() {
-                        span_lint(cx, INTEGER_ARITHMETIC, expr.span, "integer arithmetic detected");
-                        self.expr_span = Some(expr.span);
+                        span_lint(cx, INTEGER_ARITHMETIC, expr_span, "integer arithmetic detected");
+                        self.expr_span = Some(expr_span);
                     } else if ty.is_floating_point() {
-                        span_lint(cx, FLOAT_ARITHMETIC, expr.span, "floating-point arithmetic detected");
-                        self.expr_span = Some(expr.span);
+                        span_lint(cx, FLOAT_ARITHMETIC, expr_span, "floating-point arithmetic detected");
+                        self.expr_span = Some(expr_span);
                     }
                 }
             },
@@ -111,8 +112,8 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Arithmetic {
         }
     }
 
-    fn check_expr_post(&mut self, _: &LateContext<'a, 'tcx>, expr: &'tcx hir::Expr<'_>) {
-        if Some(expr.span) == self.expr_span {
+    fn check_expr_post(&mut self, cx: &LateContext<'a, 'tcx>, expr: &'tcx hir::Expr<'_>) {
+        if Some(cx.tcx.hir().span(expr.hir_id)) == self.expr_span {
             self.expr_span = None;
         }
     }

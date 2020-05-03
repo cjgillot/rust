@@ -107,7 +107,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 let inputs = inputs
                     .into_iter()
                     .map(|input| {
-                        (input.span(), unpack!(block = this.as_local_operand(block, input)))
+                        (input.span(this.hir.tcx()), unpack!(block = this.as_local_operand(block, input)))
                     })
                     .collect::<Vec<_>>()
                     .into_boxed_slice();
@@ -150,9 +150,10 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                                     break;
                                 }
                             }
+                            let expr_span = this.hir.tcx().hir().span(expr.hir_id);
                             this.block_context
-                                .push(BlockFrame::TailExpr { tail_result_is_ignored: true, span: expr.span });
-                            return Some(expr.span);
+                                .push(BlockFrame::TailExpr { tail_result_is_ignored: true, span: expr_span });
+                            return Some(expr_span);
                         }
                     }
                     None

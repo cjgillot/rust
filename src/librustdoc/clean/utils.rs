@@ -559,9 +559,10 @@ pub fn is_literal_expr(cx: &DocContext<'_>, hir_id: hir::HirId) -> bool {
 
 pub fn print_const_expr(cx: &DocContext<'_>, body: hir::BodyId) -> String {
     let value = &cx.tcx.hir().body(body).value;
+    let value_span = cx.tcx.hir().span(value.hir_id);
 
-    let snippet = if !value.span.from_expansion() {
-        cx.sess().source_map().span_to_snippet(value.span).ok()
+    let snippet = if !value_span.from_expansion() {
+        cx.sess().source_map().span_to_snippet(value_span).ok()
     } else {
         None
     };

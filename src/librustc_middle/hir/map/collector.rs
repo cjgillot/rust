@@ -424,11 +424,7 @@ impl<'a, 'hir> Visitor<'hir> for NodeCollector<'a, 'hir> {
     }
 
     fn visit_anon_const(&mut self, constant: &'hir AnonConst) {
-        self.insert(
-            self.krate.body(constant.body).value.span,
-            constant.hir_id,
-            Node::AnonConst(constant),
-        );
+        self.insert(DUMMY_SP, constant.hir_id, Node::AnonConst(constant));
 
         self.with_parent(constant.hir_id, |this| {
             intravisit::walk_anon_const(this, constant);
@@ -436,7 +432,7 @@ impl<'a, 'hir> Visitor<'hir> for NodeCollector<'a, 'hir> {
     }
 
     fn visit_expr(&mut self, expr: &'hir Expr<'hir>) {
-        self.insert(expr.span, expr.hir_id, Node::Expr(expr));
+        self.insert(DUMMY_SP, expr.hir_id, Node::Expr(expr));
 
         self.with_parent(expr.hir_id, |this| {
             intravisit::walk_expr(this, expr);
