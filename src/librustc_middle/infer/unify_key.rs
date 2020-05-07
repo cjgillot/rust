@@ -5,7 +5,7 @@ use rustc_data_structures::unify::{
     self, EqUnifyValue, InPlace, NoError, UnificationTable, UnifyKey, UnifyValue,
 };
 use rustc_span::symbol::Symbol;
-use rustc_span::{Span, DUMMY_SP};
+use rustc_span::{SpanId, DUMMY_SPID};
 
 use std::cmp;
 use std::marker::PhantomData;
@@ -116,7 +116,7 @@ impl ToType for FloatVarValue {
 #[derive(Copy, Clone, Debug)]
 pub struct ConstVariableOrigin {
     pub kind: ConstVariableOriginKind,
-    pub span: Span,
+    pub span: SpanId,
 }
 
 /// Reasons to create a const inference variable
@@ -206,7 +206,7 @@ impl<'tcx> UnifyValue for ConstVarValue<'tcx> {
         Ok(ConstVarValue {
             origin: ConstVariableOrigin {
                 kind: ConstVariableOriginKind::ConstInference,
-                span: DUMMY_SP,
+                span: DUMMY_SPID,
             },
             val,
         })

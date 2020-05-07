@@ -24,7 +24,7 @@ use rustc_middle::ty::fold::{TypeFoldable, TypeFolder};
 use rustc_middle::ty::subst::{InternalSubsts, Subst};
 use rustc_middle::ty::{self, ToPolyTraitRef, ToPredicate, Ty, TyCtxt, WithConstness};
 use rustc_span::symbol::{sym, Ident};
-use rustc_span::DUMMY_SP;
+use rustc_span::DUMMY_SPID;
 
 pub use rustc_middle::traits::Reveal;
 
@@ -423,7 +423,7 @@ pub fn normalize_projection_type<'a, 'b, 'tcx>(
         let def_id = projection_ty.item_def_id;
         let ty_var = selcx.infcx().next_ty_var(TypeVariableOrigin {
             kind: TypeVariableOriginKind::NormalizeProjectionType,
-            span: tcx.real_def_span(def_id),
+            span: tcx.def_span(def_id),
         });
         let projection = ty::Binder::dummy(ty::ProjectionPredicate { projection_ty, ty: ty_var });
         let obligation =
@@ -756,7 +756,7 @@ fn normalize_to_error<'a, 'tcx>(
     let def_id = projection_ty.item_def_id;
     let new_value = selcx.infcx().next_ty_var(TypeVariableOrigin {
         kind: TypeVariableOriginKind::NormalizeProjectionType,
-        span: tcx.real_def_span(def_id),
+        span: tcx.def_span(def_id),
     });
     Normalized { value: new_value, obligations: vec![trait_obligation] }
 }
@@ -1400,7 +1400,7 @@ fn confirm_impl_candidate<'cx, 'tcx>(
     };
     if substs.len() != tcx.generics_of(assoc_ty.item.def_id).count() {
         tcx.sess
-            .delay_span_bug(DUMMY_SP, "impl item and trait item have different parameter counts");
+            .delay_span_bug(DUMMY_SPID, "impl item and trait item have different parameter counts");
         Progress { ty: tcx.types.err, obligations: nested }
     } else {
         Progress { ty: ty.subst(tcx, substs), obligations: nested }

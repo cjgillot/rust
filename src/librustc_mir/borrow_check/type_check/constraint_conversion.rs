@@ -7,7 +7,7 @@ use rustc_infer::infer::{self, InferCtxt, SubregionOrigin};
 use rustc_middle::mir::ConstraintCategory;
 use rustc_middle::ty::subst::GenericArgKind;
 use rustc_middle::ty::{self, TyCtxt};
-use rustc_span::DUMMY_SP;
+use rustc_span::DUMMY_SPID;
 
 use crate::borrow_check::{
     constraints::OutlivesConstraint,
@@ -100,7 +100,7 @@ impl<'a, 'tcx> ConstraintConversion<'a, 'tcx> {
             GenericArgKind::Type(t1) => {
                 // we don't actually use this for anything, but
                 // the `TypeOutlives` code needs an origin.
-                let origin = infer::RelateParamBound(DUMMY_SP, t1);
+                let origin = infer::RelateParamBound(DUMMY_SPID, t1);
 
                 TypeOutlives::new(
                     &mut *self,

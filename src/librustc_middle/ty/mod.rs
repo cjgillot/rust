@@ -39,7 +39,7 @@ use rustc_serialize::{self, Encodable, Encoder};
 use rustc_session::DataTypeKind;
 use rustc_span::hygiene::ExpnId;
 use rustc_span::symbol::{kw, sym, Ident, Symbol};
-use rustc_span::{Span, SpanId};
+use rustc_span::SpanId;
 use rustc_target::abi::{Align, VariantIdx};
 
 use std::cell::RefCell;
@@ -123,7 +123,7 @@ pub struct ResolverOutputs {
     pub extern_crate_map: NodeMap<CrateNum>,
     pub trait_map: TraitMap<NodeId>,
     pub maybe_unused_trait_imports: NodeSet,
-    pub maybe_unused_extern_crates: Vec<(NodeId, Span)>,
+    pub maybe_unused_extern_crates: Vec<(NodeId, SpanId)>,
     pub export_map: ExportMap<NodeId>,
     pub glob_map: GlobMap,
     /// Extern prelude entries. The value is `true` if the entry was introduced
@@ -990,7 +990,7 @@ pub struct Generics {
     pub param_def_id_to_index: FxHashMap<DefId, u32>,
 
     pub has_self: bool,
-    pub has_late_bound_regions: Option<Span>,
+    pub has_late_bound_regions: Option<SpanId>,
 }
 
 impl<'tcx> Generics {
@@ -2856,10 +2856,10 @@ impl<'tcx> TyCtxt<'tcx> {
 
     /// Looks up the span of `impl_did` if the impl is local; otherwise returns `Err`
     /// with the name of the crate containing the impl.
-    pub fn span_of_impl(self, impl_did: DefId) -> Result<Span, Symbol> {
+    pub fn span_of_impl(self, impl_did: DefId) -> Result<SpanId, Symbol> {
         if let Some(impl_did) = impl_did.as_local() {
             let hir_id = self.hir().as_local_hir_id(impl_did);
-            Ok(self.hir().span(hir_id))
+            Ok(self.hir().span(hir_id).into())
         } else {
             Err(self.crate_name(impl_did.krate))
         }

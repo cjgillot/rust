@@ -11,13 +11,13 @@ use crate::ty::{self, TyCtxt};
 
 use rustc_hir::def_id::DefId;
 use rustc_hir::LangItem;
-use rustc_span::Span;
+use rustc_span::SpanId;
 use rustc_target::spec::PanicStrategy;
 
 impl<'tcx> TyCtxt<'tcx> {
     /// Returns the `DefId` for a given `LangItem`.
     /// If not found, fatally aborts compilation.
-    pub fn require_lang_item(&self, lang_item: LangItem, span: Option<Span>) -> DefId {
+    pub fn require_lang_item(&self, lang_item: LangItem, span: Option<SpanId>) -> DefId {
         self.lang_items().require(lang_item).unwrap_or_else(|msg| {
             if let Some(span) = span {
                 self.sess.span_fatal(span, &msg)

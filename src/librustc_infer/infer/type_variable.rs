@@ -1,7 +1,7 @@
 use rustc_hir::def_id::DefId;
 use rustc_middle::ty::{self, Ty, TyVid};
 use rustc_span::symbol::Symbol;
-use rustc_span::Span;
+use rustc_span::SpanId;
 
 use crate::infer::InferCtxtUndoLogs;
 
@@ -99,7 +99,7 @@ pub struct TypeVariableTable<'a, 'tcx> {
 #[derive(Copy, Clone, Debug)]
 pub struct TypeVariableOrigin {
     pub kind: TypeVariableOriginKind,
-    pub span: Span,
+    pub span: SpanId,
 }
 
 /// Reasons to create a type inference variable

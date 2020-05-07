@@ -304,12 +304,12 @@ pub struct ResolvedOpaqueTy<'tcx> {
 pub struct GeneratorInteriorTypeCause<'tcx> {
     /// Type of the captured binding.
     pub ty: Ty<'tcx>,
-    /// Span of the binding that was captured.
-    pub span: Span,
-    /// Span of the scope of the captured binding.
-    pub scope_span: Option<Span>,
-    /// Span of `.await` or `yield` expression.
-    pub yield_span: Span,
+    /// SpanId of the binding that was captured.
+    pub span: SpanId,
+    /// SpanId of the scope of the captured binding.
+    pub scope_span: Option<SpanId>,
+    /// SpanId of `.await` or `yield` expression.
+    pub yield_span: SpanId,
     /// Expr which the type evaluated from.
     pub expr: Option<hir::HirId>,
 }
@@ -380,7 +380,7 @@ pub struct TypeckTables<'tcx> {
 
     /// Records the reasons that we picked the kind of each closure;
     /// not all closures are present in the map.
-    closure_kind_origins: ItemLocalMap<(Span, Symbol)>,
+    closure_kind_origins: ItemLocalMap<(SpanId, Symbol)>,
 
     /// For each fn, records the "liberated" types of its arguments
     /// and return type. Liberated means that all bound regions
@@ -598,7 +598,7 @@ impl<'tcx> TypeckTables<'tcx> {
         }
     }
 
-    pub fn extract_binding_mode(&self, s: &Session, id: HirId, sp: Span) -> Option<BindingMode> {
+    pub fn extract_binding_mode(&self, s: &Session, id: HirId, sp: SpanId) -> Option<BindingMode> {
         self.pat_binding_modes().get(id).copied().or_else(|| {
             s.delay_span_bug(sp, "missing binding mode");
             None
@@ -625,11 +625,11 @@ impl<'tcx> TypeckTables<'tcx> {
         self.upvar_capture_map[&upvar_id]
     }
 
-    pub fn closure_kind_origins(&self) -> LocalTableInContext<'_, (Span, Symbol)> {
+    pub fn closure_kind_origins(&self) -> LocalTableInContext<'_, (SpanId, Symbol)> {
         LocalTableInContext { hir_owner: self.hir_owner, data: &self.closure_kind_origins }
     }
 
-    pub fn closure_kind_origins_mut(&mut self) -> LocalTableInContextMut<'_, (Span, Symbol)> {
+    pub fn closure_kind_origins_mut(&mut self) -> LocalTableInContextMut<'_, (SpanId, Symbol)> {
         LocalTableInContextMut { hir_owner: self.hir_owner, data: &mut self.closure_kind_origins }
     }
 
@@ -740,7 +740,7 @@ pub type CanonicalUserTypeAnnotations<'tcx> =
 #[derive(Clone, Debug, RustcEncodable, RustcDecodable, HashStable, TypeFoldable, Lift)]
 pub struct CanonicalUserTypeAnnotation<'tcx> {
     pub user_ty: CanonicalUserType<'tcx>,
-    pub span: Span,
+    pub span: SpanId,
     pub inferred_ty: Ty<'tcx>,
 }
 
@@ -1428,7 +1428,7 @@ impl<'tcx> TyCtxt<'tcx> {
         })
     }
 
-    pub fn return_type_impl_trait(&self, scope_def_id: DefId) -> Option<(Ty<'tcx>, Span)> {
+    pub fn return_type_impl_trait(&self, scope_def_id: DefId) -> Option<(Ty<'tcx>, SpanId)> {
         // HACK: `type_of_def_id()` will fail on these (#55796), so return `None`.
         let hir_id = self.hir().as_local_hir_id(scope_def_id.expect_local());
         match self.hir().get(hir_id) {
@@ -1450,7 +1450,7 @@ impl<'tcx> TyCtxt<'tcx> {
                 let output = self.erase_late_bound_regions(&sig.output());
                 if output.is_impl_trait() {
                     let fn_decl = self.hir().fn_decl_by_hir_id(hir_id).unwrap();
-                    Some((output, fn_decl.output.span()))
+                    Some((output, fn_decl.output.span().into()))
                 } else {
                     None
                 }

@@ -5,7 +5,7 @@ use crate::traits::{FulfillmentContext, ObligationCause, TraitEngine};
 use rustc_hir as hir;
 use rustc_infer::traits::TraitEngineExt as _;
 use rustc_middle::ty::{self, Ty};
-use rustc_span::source_map::Span;
+use rustc_span::source_map::SpanId;
 
 pub use rustc_middle::traits::query::OutlivesBound;
 
@@ -15,7 +15,7 @@ pub trait InferCtxtExt<'tcx> {
         param_env: ty::ParamEnv<'tcx>,
         body_id: hir::HirId,
         ty: Ty<'tcx>,
-        span: Span,
+        span: SpanId,
     ) -> Vec<OutlivesBound<'tcx>>;
 }
 
@@ -46,7 +46,7 @@ impl<'cx, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'cx, 'tcx> {
         param_env: ty::ParamEnv<'tcx>,
         body_id: hir::HirId,
         ty: Ty<'tcx>,
-        span: Span,
+        span: SpanId,
     ) -> Vec<OutlivesBound<'tcx>> {
         debug!("implied_outlives_bounds(ty = {:?})", ty);
 

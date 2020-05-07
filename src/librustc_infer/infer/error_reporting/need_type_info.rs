@@ -11,13 +11,13 @@ use rustc_middle::ty::subst::{GenericArg, GenericArgKind};
 use rustc_middle::ty::{self, DefIdTree, Ty};
 use rustc_span::source_map::DesugaringKind;
 use rustc_span::symbol::kw;
-use rustc_span::Span;
+use rustc_span::SpanId;
 use std::borrow::Cow;
 
 struct FindHirNodeVisitor<'a, 'tcx> {
     infcx: &'a InferCtxt<'a, 'tcx>,
     target: GenericArg<'tcx>,
-    target_span: Span,
+    target_span: SpanId,
     found_node_ty: Option<Ty<'tcx>>,
     found_local_pattern: Option<&'tcx Pat<'tcx>>,
     found_arg_pattern: Option<&'tcx Pat<'tcx>>,
@@ -27,7 +27,7 @@ struct FindHirNodeVisitor<'a, 'tcx> {
 }
 
 impl<'a, 'tcx> FindHirNodeVisitor<'a, 'tcx> {
-    fn new(infcx: &'a InferCtxt<'a, 'tcx>, target: GenericArg<'tcx>, target_span: Span) -> Self {
+    fn new(infcx: &'a InferCtxt<'a, 'tcx>, target: GenericArg<'tcx>, target_span: SpanId) -> Self {
         Self {
             infcx,
             target,
@@ -108,7 +108,7 @@ impl<'a, 'tcx> Visitor<'tcx> for FindHirNodeVisitor<'a, 'tcx> {
 
     fn visit_expr(&mut self, expr: &'tcx Expr<'tcx>) {
         if let ExprKind::MethodCall(_, call_span, exprs) = expr.kind {
-            if call_span == self.target_span
+            if call_span == self.infcx.tcx.reify_span(self.target_span)
                 && Some(self.target)
                     == self.infcx.in_progress_tables.and_then(|tables| {
                         tables.borrow().node_type_opt(exprs.first().unwrap().hir_id).map(Into::into)
@@ -131,7 +131,7 @@ impl<'a, 'tcx> Visitor<'tcx> for FindHirNodeVisitor<'a, 'tcx> {
 
 /// Suggest giving an appropriate return type to a closure expression.
 fn closure_return_type_suggestion(
-    span: Span,
+    span: SpanId,
     err: &mut DiagnosticBuilder<'_>,
     output: &FnRetTy<'_>,
     body: &Body<'_>,
@@ -192,7 +192,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
         &self,
         ty: Ty<'tcx>,
         highlight: Option<ty::print::RegionHighlightMode>,
-    ) -> (String, Option<Span>, Cow<'static, str>, Option<String>, Option<&'static str>) {
+    ) -> (String, Option<SpanId>, Cow<'static, str>, Option<String>, Option<&'static str>) {
         if let ty::Infer(ty::TyVar(ty_vid)) = ty.kind {
             let mut inner = self.inner.borrow_mut();
             let ty_vars = &inner.type_variables();
@@ -238,7 +238,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
     pub fn need_type_info_err(
         &self,
         body_id: Option<hir::BodyId>,
-        span: Span,
+        span: SpanId,
         ty: Ty<'tcx>,
         error_code: TypeAnnotationNeeded,
     ) -> DiagnosticBuilder<'tcx> {
@@ -274,7 +274,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
             local_visitor.visit_expr(expr);
         }
         let err_span = if let Some(pattern) = local_visitor.found_arg_pattern {
-            pattern.span
+            pattern.span.into()
         } else if let Some(span) = name_sp {
             // `span` here lets us point at `sum` instead of the entire right hand side expr:
             // error[E0282]: type annotations needed
@@ -294,7 +294,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
             //   |                             ^^^^^^^ cannot infer type
             //   |
             //   = note: cannot resolve `<_ as std::ops::Try>::Ok == _`
-            if span.contains(*call_span) { *call_span } else { span }
+            if self.tcx.reify_span(span).contains(*call_span) { (*call_span).into() } else { span }
         } else {
             span
         };
@@ -567,7 +567,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
     pub fn need_type_info_err_in_generator(
         &self,
         kind: hir::GeneratorKind,
-        span: Span,
+        span: SpanId,
         ty: Ty<'tcx>,
     ) -> DiagnosticBuilder<'tcx> {
         let ty = self.resolve_vars_if_possible(&ty);

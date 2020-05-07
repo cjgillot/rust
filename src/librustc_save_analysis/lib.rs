@@ -113,6 +113,7 @@ impl<'l, 'tcx> SaveContext<'l, 'tcx> {
                     continue;
                 }
             };
+            let span = self.tcx.reify_span(span);
             let lo_loc = self.span_utils.sess.source_map().lookup_char_pos(span.lo());
             result.push(ExternalCrateData {
                 // FIXME: change file_name field to PathBuf in rls-data

@@ -18,7 +18,7 @@ use rustc_session::lint::{BuiltinLintDiagnostics, Lint, LintBuffer};
 use rustc_session::parse::feature_err_issue;
 use rustc_session::{DiagnosticMessageId, Session};
 use rustc_span::symbol::{sym, Symbol};
-use rustc_span::{MultiSpan, Span};
+use rustc_span::{MultiSpan, Span, SpanId};
 
 use std::num::NonZeroU32;
 
@@ -155,7 +155,7 @@ pub fn deprecation_in_effect(since: &str) -> bool {
 pub fn deprecation_suggestion(
     diag: &mut DiagnosticBuilder<'_>,
     suggestion: Option<Symbol>,
-    span: Span,
+    span: SpanId,
 ) {
     if let Some(suggestion) = suggestion {
         diag.span_suggestion(
@@ -214,10 +214,10 @@ fn late_report_deprecation(
     message: &str,
     suggestion: Option<Symbol>,
     lint: &'static Lint,
-    span: Span,
+    span: SpanId,
     hir_id: HirId,
 ) {
-    if span.in_derive_expansion() {
+    if tcx.reify_span(span).in_derive_expansion() {
         return;
     }
 
@@ -280,7 +280,7 @@ impl<'tcx> TyCtxt<'tcx> {
     /// If `id` is `Some(_)`, this function will also check if the item at `def_id` has been
     /// deprecated. If the item is indeed deprecated, we will emit a deprecation lint attached to
     /// `id`.
-    pub fn eval_stability(self, def_id: DefId, id: Option<HirId>, span: Span) -> EvalResult {
+    pub fn eval_stability(self, def_id: DefId, id: Option<HirId>, span: SpanId) -> EvalResult {
         // Deprecated attributes apply in-crate and cross-crate.
         if let Some(id) = id {
             if let Some(depr_entry) = self.lookup_deprecation_entry(def_id) {
@@ -335,7 +335,7 @@ impl<'tcx> TyCtxt<'tcx> {
             Some(&Stability {
                 level: attr::Unstable { reason, issue, is_soft }, feature, ..
             }) => {
-                if span.allows_unstable(feature) {
+                if self.reify_span(span).allows_unstable(feature) {
                     debug!("stability: skipping span={:?} since it is internal", span);
                     return EvalResult::Allow;
                 }
@@ -376,7 +376,7 @@ impl<'tcx> TyCtxt<'tcx> {
     ///
     /// Additionally, this function will also check if the item is deprecated. If so, and `id` is
     /// not `None`, a deprecated lint attached to `id` will be emitted.
-    pub fn check_stability(self, def_id: DefId, id: Option<HirId>, span: Span) {
+    pub fn check_stability(self, def_id: DefId, id: Option<HirId>, span: SpanId) {
         let soft_handler = |lint, span, msg: &_| {
             self.struct_span_lint_hir(lint, id.unwrap_or(hir::CRATE_HIR_ID), span, |lint| {
                 lint.build(msg).emit()
@@ -385,6 +385,7 @@ impl<'tcx> TyCtxt<'tcx> {
         match self.eval_stability(def_id, id, span) {
             EvalResult::Allow => {}
             EvalResult::Deny { feature, reason, issue, is_soft } => {
+                let span = self.reify_span(span);
                 report_unstable(self.sess, feature, reason, issue, is_soft, span, soft_handler)
             }
             EvalResult::Unmarked => {

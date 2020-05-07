@@ -7,20 +7,20 @@ use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::symbol::Symbol;
-use rustc_span::Span;
+use rustc_span::SpanId;
 use std::fmt;
 
 impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
     pub fn report_extra_impl_obligation(
         &self,
-        error_span: Span,
+        error_span: SpanId,
         item_name: Symbol,
         _impl_item_def_id: DefId,
         trait_item_def_id: DefId,
         requirement: &dyn fmt::Display,
     ) -> DiagnosticBuilder<'tcx> {
         let msg = "impl has stricter requirements than trait";
-        let sp = self.tcx.sess.source_map().guess_head_span(error_span);
+        let sp = self.tcx.sess.source_map().guess_head_span(self.tcx.reify_span(error_span));
 
         let mut err = struct_span_err!(self.tcx.sess, sp, E0276, "{}", msg);
 
@@ -37,7 +37,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
 
 pub fn report_object_safety_error(
     tcx: TyCtxt<'tcx>,
-    span: Span,
+    span: SpanId,
     trait_def_id: DefId,
     violations: &[ObjectSafetyViolation],
 ) -> DiagnosticBuilder<'tcx> {
@@ -46,7 +46,7 @@ pub fn report_object_safety_error(
         hir::Node::Item(item) => Some(item.ident.span),
         _ => None,
     });
-    let span = tcx.sess.source_map().guess_head_span(span);
+    let span = tcx.sess.source_map().guess_head_span(tcx.reify_span(span));
     let mut err = struct_span_err!(
         tcx.sess,
         span,
@@ -62,7 +62,7 @@ pub fn report_object_safety_error(
         if let ObjectSafetyViolation::SizedSelf(sp) = &violation {
             if !sp.is_empty() {
                 // Do not report `SizedSelf` without spans pointing at `SizedSelf` obligations
-                // with a `Span`.
+                // with a `SpanId`.
                 reported_violations.insert(ObjectSafetyViolation::SizedSelf(vec![].into()));
             }
         }

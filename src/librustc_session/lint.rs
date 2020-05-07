@@ -3,7 +3,7 @@ use rustc_ast::node_id::{NodeId, NodeMap};
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, ToStableHashKey};
 use rustc_errors::{pluralize, Applicability, DiagnosticBuilder};
 use rustc_span::edition::Edition;
-use rustc_span::{sym, symbol::Ident, MultiSpanId, Span, Symbol};
+use rustc_span::{sym, symbol::Ident, MultiSpanId, Span, SpanId, Symbol};
 
 pub mod builtin;
 
@@ -184,12 +184,12 @@ pub enum BuiltinLintDiagnostics {
     Normal,
     BareTraitObject(Span, /* is_global */ bool),
     AbsPathWithModule(Span),
-    ProcMacroDeriveResolutionFallback(Span),
-    MacroExpandedMacroExportsAccessedByAbsolutePaths(Span),
+    ProcMacroDeriveResolutionFallback(SpanId),
+    MacroExpandedMacroExportsAccessedByAbsolutePaths(SpanId),
     ElidedLifetimesInPaths(usize, Span, bool, Span, String),
-    UnknownCrateTypes(Span, String, String),
-    UnusedImports(String, Vec<(Span, String)>),
-    RedundantImport(Vec<(Span, bool)>, Ident),
+    UnknownCrateTypes(SpanId, String, String),
+    UnusedImports(String, Vec<(SpanId, String)>),
+    RedundantImport(Vec<(SpanId, bool)>, Ident),
     DeprecatedMacro(Option<Symbol>, Span),
     UnusedDocComment(Span),
 }

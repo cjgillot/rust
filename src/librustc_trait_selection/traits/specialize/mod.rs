@@ -23,7 +23,7 @@ use rustc_middle::ty::subst::{InternalSubsts, Subst, SubstsRef};
 use rustc_middle::ty::{self, TyCtxt};
 use rustc_session::lint::builtin::COHERENCE_LEAK_CHECK;
 use rustc_session::lint::builtin::ORDER_DEPENDENT_TRAIT_OBJECTS;
-use rustc_span::DUMMY_SP;
+use rustc_span::DUMMY_SPID;
 
 use super::util::impl_trait_ref_and_oblig;
 use super::{FulfillmentContext, SelectionContext};
@@ -188,7 +188,7 @@ fn fulfill_implication<'a, 'tcx>(
     );
 
     let selcx = &mut SelectionContext::new(&infcx);
-    let target_substs = infcx.fresh_substs_for_item(DUMMY_SP, target_impl);
+    let target_substs = infcx.fresh_substs_for_item(DUMMY_SPID, target_impl);
     let (target_trait_ref, obligations) =
         impl_trait_ref_and_oblig(selcx, param_env, target_impl, target_substs);
 
@@ -338,7 +338,7 @@ fn report_negative_positive_conflict(
     let impl_span = tcx
         .sess
         .source_map()
-        .guess_head_span(tcx.span_of_impl(local_impl_def_id.to_def_id()).unwrap());
+        .guess_head_span(tcx.reify_span(tcx.span_of_impl(local_impl_def_id.to_def_id()).unwrap()));
 
     let mut err = struct_span_err!(
         tcx.sess,
@@ -352,7 +352,7 @@ fn report_negative_positive_conflict(
     match tcx.span_of_impl(negative_impl_def_id) {
         Ok(span) => {
             err.span_label(
-                tcx.sess.source_map().guess_head_span(span),
+                tcx.sess.source_map().guess_head_span(tcx.reify_span(span)),
                 "negative implementation here".to_string(),
             );
         }
@@ -364,7 +364,7 @@ fn report_negative_positive_conflict(
     match tcx.span_of_impl(positive_impl_def_id) {
         Ok(span) => {
             err.span_label(
-                tcx.sess.source_map().guess_head_span(span),
+                tcx.sess.source_map().guess_head_span(tcx.reify_span(span)),
                 "positive implementation here".to_string(),
             );
         }
@@ -384,8 +384,10 @@ fn report_conflicting_impls(
     used_to_be_allowed: Option<FutureCompatOverlapErrorKind>,
     sg: &mut specialization_graph::Graph,
 ) {
-    let impl_span =
-        tcx.sess.source_map().guess_head_span(tcx.span_of_impl(impl_def_id.to_def_id()).unwrap());
+    let impl_span = tcx
+        .sess
+        .source_map()
+        .guess_head_span(tcx.reify_span(tcx.span_of_impl(impl_def_id.to_def_id()).unwrap()));
 
     // Work to be done after we've built the DiagnosticBuilder. We have to define it
     // now because the struct_lint methods don't return back the DiagnosticBuilder
@@ -404,7 +406,7 @@ fn report_conflicting_impls(
         match tcx.span_of_impl(overlap.with_impl) {
             Ok(span) => {
                 err.span_label(
-                    tcx.sess.source_map().guess_head_span(span),
+                    tcx.sess.source_map().guess_head_span(tcx.reify_span(span)),
                     "first implementation here".to_string(),
                 );
 

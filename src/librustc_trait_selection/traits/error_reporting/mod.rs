@@ -24,7 +24,7 @@ use rustc_middle::ty::{
     TypeFoldable, WithConstness,
 };
 use rustc_session::DiagnosticMessageId;
-use rustc_span::{ExpnKind, Span, DUMMY_SP};
+use rustc_span::{ExpnKind, SpanId, DUMMY_SP, DUMMY_SPID};
 use std::fmt;
 
 use crate::traits::query::evaluate_obligation::InferCtxtExt as _;
@@ -64,15 +64,15 @@ pub trait InferCtxtExt<'tcx> {
     /// returns a span and `ArgKind` information that describes the
     /// arguments it expects. This can be supplied to
     /// `report_arg_count_mismatch`.
-    fn get_fn_like_arguments(&self, node: Node<'_>) -> Option<(Span, Vec<ArgKind>)>;
+    fn get_fn_like_arguments(&self, node: Node<'_>) -> Option<(SpanId, Vec<ArgKind>)>;
 
     /// Reports an error when the number of arguments needed by a
     /// trait match doesn't match the number that the expression
     /// provides.
     fn report_arg_count_mismatch(
         &self,
-        span: Span,
-        found_span: Option<Span>,
+        span: SpanId,
+        found_span: Option<SpanId>,
         expected_args: Vec<ArgKind>,
         found_args: Vec<ArgKind>,
         is_closure: bool,
@@ -110,12 +110,13 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
         for (index, error) in errors.iter().enumerate() {
             // We want to ignore desugarings here: spans are equivalent even
             // if one is the result of a desugaring and the other is not.
-            let mut span = error.obligation.cause.span;
+            let mut span = self.tcx.reify_span(error.obligation.cause.span);
             let expn_data = span.ctxt().outer_expn_data();
             if let ExpnKind::Desugaring(_) = expn_data.kind {
                 span = expn_data.call_site;
             }
 
+            let span = span.into();
             error_map.entry(span).or_default().push(ErrorDescriptor {
                 predicate: error.obligation.predicate,
                 index: Some(index),
@@ -274,6 +275,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
                         let OnUnimplementedNote { message, label, note, enclosing_scope } =
                             self.on_unimplemented_note(trait_ref, obligation);
                         let have_alt_message = message.is_some() || label.is_some();
+                        let span = self.tcx.reify_span(span);
                         let is_try = self
                             .tcx
                             .sess
@@ -398,9 +400,14 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
                         self.suggest_borrow_on_unsized_slice(&obligation.cause.code, &mut err);
                         self.suggest_fn_call(&obligation, &mut err, &trait_ref, points_at_arg);
                         self.suggest_remove_reference(&obligation, &mut err, &trait_ref);
-                        self.suggest_semicolon_removal(&obligation, &mut err, span, &trait_ref);
+                        self.suggest_semicolon_removal(
+                            &obligation,
+                            &mut err,
+                            span.into(),
+                            &trait_ref,
+                        );
                         self.note_version_mismatch(&mut err, &trait_ref);
-                        if self.suggest_impl_trait(&mut err, span, &obligation, &trait_ref) {
+                        if self.suggest_impl_trait(&mut err, span.into(), &obligation, &trait_ref) {
                             err.emit();
                             return;
                         }
@@ -618,7 +625,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
 
                 let found_span = found_did
                     .and_then(|did| self.tcx.hir().span_if_local(did))
-                    .map(|sp| self.tcx.sess.source_map().guess_head_span(sp)); // the sp could be an fn def
+                    .map(|sp| self.tcx.sess.source_map().guess_head_span(sp).into()); // the sp could be an fn def
 
                 if self.reported_closure_mismatch.borrow().contains(&(span, found_span)) {
                     // We check closures twice, with obligations flowing in different directions,
@@ -721,7 +728,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
     /// returns a span and `ArgKind` information that describes the
     /// arguments it expects. This can be supplied to
     /// `report_arg_count_mismatch`.
-    fn get_fn_like_arguments(&self, node: Node<'_>) -> Option<(Span, Vec<ArgKind>)> {
+    fn get_fn_like_arguments(&self, node: Node<'_>) -> Option<(SpanId, Vec<ArgKind>)> {
         let sm = self.tcx.sess.source_map();
         let hir = self.tcx.hir();
         Some(match node {
@@ -729,7 +736,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
                 kind: hir::ExprKind::Closure(_, ref _decl, id, span, _),
                 ..
             }) => (
-                sm.guess_head_span(span),
+                sm.guess_head_span(span).into(),
                 hir.body(id)
                     .params
                     .iter()
@@ -738,7 +745,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
                             *arg.pat
                         {
                             Some(ArgKind::Tuple(
-                                Some(span),
+                                Some(span.into()),
                                 args.iter()
                                     .map(|pat| {
                                         sm.span_to_snippet(pat.span)
@@ -765,13 +772,13 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
                 kind: hir::TraitItemKind::Fn(ref sig, _),
                 ..
             }) => (
-                sm.guess_head_span(span),
+                sm.guess_head_span(span).into(),
                 sig.decl
                     .inputs
                     .iter()
                     .map(|arg| match arg.clone().kind {
                         hir::TyKind::Tup(ref tys) => ArgKind::Tuple(
-                            Some(arg.span),
+                            Some(arg.span.into()),
                             vec![("_".to_owned(), "_".to_owned()); tys.len()],
                         ),
                         _ => ArgKind::empty(),
@@ -780,7 +787,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
             ),
             Node::Ctor(ref variant_data) => {
                 let span = variant_data.ctor_hir_id().map(|id| hir.span(id)).unwrap_or(DUMMY_SP);
-                let span = sm.guess_head_span(span);
+                let span = sm.guess_head_span(span).into();
                 (span, vec![ArgKind::empty(); variant_data.fields().len()])
             }
             _ => panic!("non-FnLike node found: {:?}", node),
@@ -792,8 +799,8 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
     /// provides.
     fn report_arg_count_mismatch(
         &self,
-        span: Span,
-        found_span: Option<Span>,
+        span: SpanId,
+        found_span: Option<SpanId>,
         expected_args: Vec<ArgKind>,
         found_args: Vec<ArgKind>,
         is_closure: bool,
@@ -835,6 +842,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
         err.span_label(span, format!("expected {} that takes {}", kind, expected_str));
 
         if let Some(found_span) = found_span {
+            let found_span = self.tcx.reify_span(found_span);
             err.span_label(found_span, format!("takes {}", found_str));
 
             // move |_| { ... }
@@ -959,7 +967,7 @@ trait InferCtxtPrivExt<'tcx> {
     fn get_parent_trait_ref(
         &self,
         code: &ObligationCauseCode<'tcx>,
-    ) -> Option<(String, Option<Span>)>;
+    ) -> Option<(String, Option<SpanId>)>;
 
     /// If the `Self` type of the unsatisfied trait `trait_ref` implements a trait
     /// with the same path as `trait_ref`, a help message about
@@ -1287,7 +1295,7 @@ impl<'a, 'tcx> InferCtxtPrivExt<'tcx> for InferCtxt<'a, 'tcx> {
     fn get_parent_trait_ref(
         &self,
         code: &ObligationCauseCode<'tcx>,
-    ) -> Option<(String, Option<Span>)> {
+    ) -> Option<(String, Option<SpanId>)> {
         match code {
             &ObligationCauseCode::BuiltinDerivedObligation(ref data) => {
                 let parent_trait_ref = self.resolve_vars_if_possible(&data.parent_trait_ref);
@@ -1295,8 +1303,8 @@ impl<'a, 'tcx> InferCtxtPrivExt<'tcx> for InferCtxt<'a, 'tcx> {
                     Some(t) => Some(t),
                     None => {
                         let ty = parent_trait_ref.skip_binder().self_ty();
-                        let span = TyCategory::from_ty(ty)
-                            .map(|(_, def_id)| self.tcx.real_def_span(def_id));
+                        let span =
+                            TyCategory::from_ty(ty).map(|(_, def_id)| self.tcx.def_span(def_id));
                         Some((ty.to_string(), span))
                     }
                 }
@@ -1429,9 +1437,10 @@ impl<'a, 'tcx> InferCtxtPrivExt<'tcx> for InferCtxt<'a, 'tcx> {
                 } else if let (
                     Ok(ref snippet),
                     ObligationCauseCode::BindingObligation(ref def_id, _),
-                ) =
-                    (self.tcx.sess.source_map().span_to_snippet(span), &obligation.cause.code)
-                {
+                ) = (
+                    self.tcx.sess.source_map().span_to_snippet(self.tcx.reify_span(span)),
+                    &obligation.cause.code,
+                ) {
                     let generics = self.tcx.generics_of(*def_id);
                     if generics.params.iter().any(|p| p.name.as_str() != "Self")
                         && !snippet.ends_with('>')
@@ -1458,7 +1467,7 @@ impl<'a, 'tcx> InferCtxtPrivExt<'tcx> for InferCtxt<'a, 'tcx> {
                         //    = note: cannot satisfy `_: Tt`
 
                         err.span_suggestion_verbose(
-                            span.shrink_to_hi(),
+                            self.tcx.reify_span(span).shrink_to_hi(),
                             &format!(
                                 "consider specifying the type argument{} in the function call",
                                 pluralize!(generics.params.len()),
@@ -1565,7 +1574,7 @@ impl<'a, 'tcx> InferCtxtPrivExt<'tcx> for InferCtxt<'a, 'tcx> {
                     self.var_map.entry(ty).or_insert_with(|| {
                         infcx.next_ty_var(TypeVariableOrigin {
                             kind: TypeVariableOriginKind::TypeParameterDefinition(name, None),
-                            span: DUMMY_SP,
+                            span: DUMMY_SPID,
                         })
                     })
                 } else {
@@ -1631,7 +1640,8 @@ impl<'a, 'tcx> InferCtxtPrivExt<'tcx> for InferCtxt<'a, 'tcx> {
                 Some(pred.def_id()) == self.tcx.lang_items().sized_trait(),
             ) {
                 for param in generics.params {
-                    if param.span == *span
+                    let span = self.tcx.reify_span(*span);
+                    if param.span == span
                         && !param.bounds.iter().any(|bound| {
                             bound.trait_ref().and_then(|trait_ref| trait_ref.trait_def_id())
                                 == self.tcx.lang_items().sized_trait()
@@ -1703,7 +1713,7 @@ pub enum ArgKind {
     /// the locationo in the source of the pattern. For a "expected"
     /// argument, it will be None. The vector is a list of (name, ty)
     /// strings for the components of the tuple.
-    Tuple(Option<Span>, Vec<(String, String)>),
+    Tuple(Option<SpanId>, Vec<(String, String)>),
 }
 
 impl ArgKind {
@@ -1713,7 +1723,7 @@ impl ArgKind {
 
     /// Creates an `ArgKind` from the expected type of an
     /// argument. It has no name (`_`) and an optional source span.
-    pub fn from_expected_ty(t: Ty<'_>, span: Option<Span>) -> ArgKind {
+    pub fn from_expected_ty(t: Ty<'_>, span: Option<SpanId>) -> ArgKind {
         match t.kind {
             ty::Tuple(ref tys) => ArgKind::Tuple(
                 span,

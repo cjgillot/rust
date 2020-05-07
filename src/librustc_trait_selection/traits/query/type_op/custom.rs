@@ -7,7 +7,7 @@ use crate::infer::canonical::QueryRegionConstraints;
 use crate::traits::engine::TraitEngineExt as _;
 use crate::traits::{ObligationCause, TraitEngine};
 use rustc_infer::traits::TraitEngineExt as _;
-use rustc_span::source_map::DUMMY_SP;
+use rustc_span::source_map::DUMMY_SPID;
 use std::rc::Rc;
 
 pub struct CustomTypeOp<F, G> {
@@ -82,7 +82,7 @@ fn scrape_region_constraints<'tcx, R>(
     fulfill_cx.register_predicate_obligations(infcx, obligations);
     if let Err(e) = fulfill_cx.select_all_or_error(infcx) {
         infcx.tcx.sess.diagnostic().delay_span_bug(
-            DUMMY_SP,
+            DUMMY_SPID,
             &format!("errors selecting obligation during MIR typeck: {:?}", e),
         );
     }

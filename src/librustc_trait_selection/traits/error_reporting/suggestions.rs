@@ -16,7 +16,7 @@ use rustc_middle::ty::{
     TyCtxt, TypeFoldable, WithConstness,
 };
 use rustc_span::symbol::{kw, sym, Symbol};
-use rustc_span::{MultiSpanId, Span, DUMMY_SP};
+use rustc_span::{MultiSpanId, SpanId, DUMMY_SPID};
 use std::fmt;
 
 use super::InferCtxtPrivExt;
@@ -80,16 +80,16 @@ pub trait InferCtxtExt<'tcx> {
         &self,
         obligation: &PredicateObligation<'tcx>,
         err: &mut DiagnosticBuilder<'tcx>,
-        span: Span,
+        span: SpanId,
         trait_ref: &ty::Binder<ty::TraitRef<'tcx>>,
     );
 
-    fn return_type_span(&self, obligation: &PredicateObligation<'tcx>) -> Option<Span>;
+    fn return_type_span(&self, obligation: &PredicateObligation<'tcx>) -> Option<SpanId>;
 
     fn suggest_impl_trait(
         &self,
         err: &mut DiagnosticBuilder<'tcx>,
-        span: Span,
+        span: SpanId,
         obligation: &PredicateObligation<'tcx>,
         trait_ref: &ty::Binder<ty::TraitRef<'tcx>>,
     ) -> bool;
@@ -102,8 +102,8 @@ pub trait InferCtxtExt<'tcx> {
 
     fn report_closure_arg_mismatch(
         &self,
-        span: Span,
-        found_span: Option<Span>,
+        span: SpanId,
+        found_span: Option<SpanId>,
         expected_ref: ty::PolyTraitRef<'tcx>,
         found: ty::PolyTraitRef<'tcx>,
     ) -> DiagnosticBuilder<'tcx>;
@@ -112,7 +112,7 @@ pub trait InferCtxtExt<'tcx> {
         &self,
         err: &mut DiagnosticBuilder<'_>,
         def_id: DefId,
-        span: Span,
+        span: SpanId,
         trait_ref: DefId,
     );
 
@@ -125,9 +125,9 @@ pub trait InferCtxtExt<'tcx> {
     fn note_obligation_cause_for_async_await(
         &self,
         err: &mut DiagnosticBuilder<'_>,
-        target_span: Span,
-        scope_span: &Option<Span>,
-        await_span: Span,
+        target_span: SpanId,
+        scope_span: &Option<SpanId>,
+        await_span: SpanId,
         expr: Option<hir::HirId>,
         snippet: String,
         inner_generator_body: Option<&hir::Body<'_>>,
@@ -137,7 +137,7 @@ pub trait InferCtxtExt<'tcx> {
         tables: &ty::TypeckTables<'_>,
         obligation: &PredicateObligation<'tcx>,
         next_code: Option<&ObligationCauseCode<'tcx>>,
-        from_awaited_ty: Option<Span>,
+        from_awaited_ty: Option<SpanId>,
     );
 
     fn note_obligation_cause_code<T>(
@@ -152,9 +152,9 @@ pub trait InferCtxtExt<'tcx> {
     fn suggest_new_overflow_limit(&self, err: &mut DiagnosticBuilder<'_>);
 }
 
-fn predicate_constraint(generics: &hir::Generics<'_>, pred: String) -> (Span, String) {
+fn predicate_constraint(generics: &hir::Generics<'_>, pred: String) -> (SpanId, String) {
     (
-        generics.where_clause.span_for_predicates_or_empty_place().shrink_to_hi(),
+        generics.where_clause.span_for_predicates_or_empty_place().shrink_to_hi().into(),
         format!(
             "{} {} ",
             if !generics.where_clause.predicates.is_empty() { "," } else { " where" },
@@ -238,11 +238,11 @@ fn suggest_restriction(
             {
                 // `fn foo(t: impl Trait)`
                 //        ^ suggest `<T: Trait>` here
-                None => (generics.span, format!("<{}>", type_param)),
+                None => (generics.span.into(), format!("<{}>", type_param)),
                 // `fn foo<A>(t: impl Trait)`
                 //        ^^^ suggest `<A, T: Trait>` here
                 Some(param) => (
-                    param.bounds_span().unwrap_or(param.span).shrink_to_hi(),
+                    param.bounds_span().unwrap_or(param.span).shrink_to_hi().into(),
                     format!(", {}", type_param),
                 ),
             },
@@ -250,7 +250,7 @@ fn suggest_restriction(
             //                       ^ suggest `where <T as Trait>::A: Bound`
             predicate_constraint(generics, pred),
         ];
-        sugg.extend(ty_spans.into_iter().map(|s| (s, type_param_name.to_string())));
+        sugg.extend(ty_spans.into_iter().map(|s| (s.into(), type_param_name.to_string())));
 
         // Suggest `fn foo<T: Trait>(t: T) where <T as Trait>::A: Bound`.
         // FIXME: once `#![feature(associated_type_bounds)]` is stabilized, we should suggest
@@ -524,7 +524,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
             // of the argument, so we can provide a suggestion. This is signaled
             // by `points_at_arg`. Otherwise, we give a more general note.
             err.span_suggestion_verbose(
-                obligation.cause.span.shrink_to_hi(),
+                self.tcx.reify_span(obligation.cause.span).shrink_to_hi(),
                 &msg,
                 sugg,
                 Applicability::HasPlaceholders,
@@ -563,7 +563,9 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
                 new_trait_ref.without_const().to_predicate(),
             );
             if self.predicate_must_hold_modulo_regions(&new_obligation) {
-                if let Ok(snippet) = self.tcx.sess.source_map().span_to_snippet(span) {
+                if let Ok(snippet) =
+                    self.tcx.sess.source_map().span_to_snippet(self.tcx.reify_span(span))
+                {
                     // We have a very specific type of error, where just borrowing this argument
                     // might solve the problem. In cases like this, the important part is the
                     // original type obligation, not the last one that failed, which is arbitrary.
@@ -613,7 +615,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
         trait_ref: &ty::Binder<ty::TraitRef<'tcx>>,
     ) {
         let trait_ref = trait_ref.skip_binder();
-        let span = obligation.cause.span;
+        let span = self.tcx.reify_span(obligation.cause.span);
 
         if let Ok(snippet) = self.tcx.sess.source_map().span_to_snippet(span) {
             let refs_number =
@@ -675,7 +677,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
         trait_ref: &ty::Binder<ty::TraitRef<'tcx>>,
         points_at_arg: bool,
     ) {
-        let span = obligation.cause.span;
+        let span = self.tcx.reify_span(obligation.cause.span);
         if let Ok(snippet) = self.tcx.sess.source_map().span_to_snippet(span) {
             let refs_number =
                 snippet.chars().filter(|c| !c.is_whitespace()).take_while(|c| *c == '&').count();
@@ -743,7 +745,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
         &self,
         obligation: &PredicateObligation<'tcx>,
         err: &mut DiagnosticBuilder<'tcx>,
-        span: Span,
+        span: SpanId,
         trait_ref: &ty::Binder<ty::TraitRef<'tcx>>,
     ) {
         let hir = self.tcx.hir();
@@ -755,7 +757,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
         {
             let body = hir.body(*body_id);
             if let hir::ExprKind::Block(blk, _) = &body.value.kind {
-                if sig.decl.output.span().overlaps(span)
+                if sig.decl.output.span().overlaps(self.tcx.reify_span(span))
                     && blk.expr.is_none()
                     && "()" == &trait_ref.self_ty().to_string()
                 {
@@ -772,7 +774,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
         }
     }
 
-    fn return_type_span(&self, obligation: &PredicateObligation<'tcx>) -> Option<Span> {
+    fn return_type_span(&self, obligation: &PredicateObligation<'tcx>) -> Option<SpanId> {
         let hir = self.tcx.hir();
         let parent_node = hir.get_parent_node(obligation.cause.body_id);
         let sig = match hir.find(parent_node) {
@@ -780,7 +782,11 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
             _ => return None,
         };
 
-        if let hir::FnRetTy::Return(ret_ty) = sig.decl.output { Some(ret_ty.span) } else { None }
+        if let hir::FnRetTy::Return(ret_ty) = sig.decl.output {
+            Some(ret_ty.span.into())
+        } else {
+            None
+        }
     }
 
     /// If all conditions are met to identify a returned `dyn Trait`, suggest using `impl Trait` if
@@ -789,7 +795,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
     fn suggest_impl_trait(
         &self,
         err: &mut DiagnosticBuilder<'tcx>,
-        span: Span,
+        span: SpanId,
         obligation: &PredicateObligation<'tcx>,
         trait_ref: &ty::Binder<ty::TraitRef<'tcx>>,
     ) -> bool {
@@ -877,7 +883,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
             if let Some(ty_ret_ty) = tables.node_type_opt(ret_ty.hir_id) {
                 match ty_ret_ty.kind {
                     ty::Dynamic(predicates, _) => {
-                        let cause = ObligationCause::misc(ret_ty.span, ret_ty.hir_id);
+                        let cause = ObligationCause::misc(ret_ty.span.into(), ret_ty.hir_id);
                         let param_env = ty::ParamEnv::empty();
                         only_never_return
                             || ret_types.all(|returned_ty| {
@@ -897,7 +903,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
         let sm = self.tcx.sess.source_map();
         let snippet = if let (true, hir::TyKind::TraitObject(..), Ok(snippet), true) = (
             // Verify that we're dealing with a return `dyn Trait`
-            ret_ty.span.overlaps(span),
+            ret_ty.span.overlaps(self.tcx.reify_span(span)),
             &ret_ty.kind,
             sm.span_to_snippet(ret_ty.span),
             // If any of the return types does not conform to the trait, then we can't
@@ -924,7 +930,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
             // Suggest `-> T`, `-> impl Trait`, and if `Trait` is object safe, `-> Box<dyn Trait>`.
             suggest_trait_object_return_type_alternatives(
                 err,
-                ret_ty.span,
+                ret_ty.span.into(),
                 trait_obj,
                 is_object_safe,
             );
@@ -1014,8 +1020,8 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
 
     fn report_closure_arg_mismatch(
         &self,
-        span: Span,
-        found_span: Option<Span>,
+        span: SpanId,
+        found_span: Option<SpanId>,
         expected_ref: ty::PolyTraitRef<'tcx>,
         found: ty::PolyTraitRef<'tcx>,
     ) -> DiagnosticBuilder<'tcx> {
@@ -1073,7 +1079,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
         &self,
         err: &mut DiagnosticBuilder<'_>,
         def_id: DefId,
-        span: Span,
+        span: SpanId,
         trait_ref: DefId,
     ) {
         if let Some(assoc_item) = self.tcx.opt_associated_item(def_id) {
@@ -1312,12 +1318,12 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
                         );
                         ty_matches(ty)
                     })
-                    .map(|expr| expr.span);
+                    .map(|expr| expr.span.into());
                 let ty::GeneratorInteriorTypeCause { span, scope_span, yield_span, expr, .. } =
                     cause;
                 (
                     span,
-                    source_map.span_to_snippet(*span),
+                    source_map.span_to_snippet(self.tcx.reify_span(*span)).into(),
                     scope_span,
                     yield_span,
                     expr,
@@ -1360,9 +1366,9 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
     fn note_obligation_cause_for_async_await(
         &self,
         err: &mut DiagnosticBuilder<'_>,
-        target_span: Span,
-        scope_span: &Option<Span>,
-        yield_span: Span,
+        target_span: SpanId,
+        scope_span: &Option<SpanId>,
+        yield_span: SpanId,
         expr: Option<hir::HirId>,
         snippet: String,
         inner_generator_body: Option<&hir::Body<'_>>,
@@ -1372,7 +1378,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
         tables: &ty::TypeckTables<'_>,
         obligation: &PredicateObligation<'tcx>,
         next_code: Option<&ObligationCauseCode<'tcx>>,
-        from_awaited_ty: Option<Span>,
+        from_awaited_ty: Option<SpanId>,
     ) {
         let source_map = self.tcx.sess.source_map();
 
@@ -1468,8 +1474,9 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
 
             // If available, use the scope span to annotate the drop location.
             if let Some(scope_span) = scope_span {
+                let scope_span = self.tcx.reify_span(*scope_span);
                 span.push_span_label(
-                    source_map.end_point(*scope_span).into(),
+                    source_map.end_point(scope_span).into(),
                     format!("`{}` is later dropped here", snippet),
                 );
             }
@@ -1594,6 +1601,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
                 let msg = format!("required by this bound in `{}`", item_name);
                 if let Some(ident) = tcx.opt_item_name(item_def_id) {
                     let sm = tcx.sess.source_map();
+                    let span = self.tcx.reify_span(span);
                     let same_line =
                         match (sm.lookup_line(ident.span.hi()), sm.lookup_line(span.lo())) {
                             (Ok(l), Ok(r)) => l.line == r.line,
@@ -1603,7 +1611,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
                         err.span_label(ident.span, "required by a bound in this");
                     }
                 }
-                if span != DUMMY_SP {
+                if span != DUMMY_SPID {
                     err.span_label(span, &msg);
                 } else {
                     err.note(&msg);
@@ -1883,7 +1891,7 @@ impl NextTypeParamName for &[hir::GenericParam<'_>] {
 
 fn suggest_trait_object_return_type_alternatives(
     err: &mut DiagnosticBuilder<'tcx>,
-    ret_ty: Span,
+    ret_ty: SpanId,
     trait_obj: &str,
     is_object_safe: bool,
 ) {

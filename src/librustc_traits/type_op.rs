@@ -9,7 +9,7 @@ use rustc_middle::ty::subst::{GenericArg, Subst, UserSelfTy, UserSubsts};
 use rustc_middle::ty::{
     FnSig, Lift, ParamEnv, ParamEnvAnd, PolyFnSig, Predicate, Ty, TyCtxt, TypeFoldable, Variance,
 };
-use rustc_span::DUMMY_SP;
+use rustc_span::DUMMY_SPID;
 use rustc_trait_selection::infer::InferCtxtBuilderExt;
 use rustc_trait_selection::infer::InferCtxtExt;
 use rustc_trait_selection::traits::query::normalize::AtExt;
@@ -68,7 +68,7 @@ impl AscribeUserTypeCx<'me, 'tcx> {
     {
         self.infcx
             .partially_normalize_associated_types_in(
-                DUMMY_SP,
+                DUMMY_SPID,
                 hir::CRATE_HIR_ID,
                 self.param_env,
                 &value,

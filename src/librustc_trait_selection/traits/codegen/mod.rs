@@ -49,7 +49,7 @@ pub fn codegen_fulfill_obligation<'tcx>(
                 // overflow bug, since I believe this is the only case
                 // where ambiguity can result.
                 infcx.tcx.sess.delay_span_bug(
-                    rustc_span::DUMMY_SP,
+                    rustc_span::DUMMY_SPID,
                     &format!(
                         "encountered ambiguity selecting `{:?}` during codegen, presuming due to \
                          overflow or prior type error",

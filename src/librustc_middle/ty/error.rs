@@ -7,7 +7,7 @@ use rustc_errors::{pluralize, DiagnosticBuilder};
 use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
 use rustc_span::symbol::{sym, Symbol};
-use rustc_span::{BytePos, MultiSpan, Span};
+use rustc_span::{BytePos, MultiSpanId, Span, SpanId};
 use rustc_target::spec::abi;
 
 use std::borrow::Cow;
@@ -336,7 +336,7 @@ impl<'tcx> TyCtxt<'tcx> {
         db: &mut DiagnosticBuilder<'_>,
         err: &TypeError<'tcx>,
         cause: &ObligationCause<'tcx>,
-        sp: Span,
+        sp: SpanId,
         body_owner_def_id: DefId,
     ) {
         use self::TypeError::*;
@@ -364,6 +364,7 @@ impl<'tcx> TyCtxt<'tcx> {
                 }
                 match (&values.expected.kind, &values.found.kind) {
                     (ty::Float(_), ty::Infer(ty::IntVar(_))) => {
+                        let sp = self.reify_span(sp);
                         if let Ok(
                             // Issue #53280
                             snippet,
@@ -381,6 +382,7 @@ impl<'tcx> TyCtxt<'tcx> {
                     }
                     (ty::Param(expected), ty::Param(found)) => {
                         let generics = self.generics_of(body_owner_def_id);
+                        let sp = self.reify_span(sp);
                         let e_span = self.real_def_span(generics.type_param(expected, self).def_id);
                         if !sp.contains(e_span) {
                             db.span_label(e_span, "expected type parameter");
@@ -404,6 +406,7 @@ impl<'tcx> TyCtxt<'tcx> {
                     }
                     (ty::Param(p), ty::Projection(proj)) | (ty::Projection(proj), ty::Param(p)) => {
                         let generics = self.generics_of(body_owner_def_id);
+                        let sp = self.reify_span(sp);
                         let p_span = self.real_def_span(generics.type_param(p, self).def_id);
                         if !sp.contains(p_span) {
                             db.span_label(p_span, "this type parameter");
@@ -446,6 +449,7 @@ impl<'tcx> TyCtxt<'tcx> {
                     (ty::Param(p), ty::Dynamic(..) | ty::Opaque(..))
                     | (ty::Dynamic(..) | ty::Opaque(..), ty::Param(p)) => {
                         let generics = self.generics_of(body_owner_def_id);
+                        let sp = self.reify_span(sp);
                         let p_span = self.real_def_span(generics.type_param(p, self).def_id);
                         if !sp.contains(p_span) {
                             db.span_label(p_span, "this type parameter");
@@ -486,6 +490,7 @@ impl<T> Trait<T> for X {
                     }
                     (ty::Param(p), _) | (_, ty::Param(p)) => {
                         let generics = self.generics_of(body_owner_def_id);
+                        let sp = self.reify_span(sp);
                         let p_span = self.real_def_span(generics.type_param(p, self).def_id);
                         if !sp.contains(p_span) {
                             db.span_label(p_span, "this type parameter");
@@ -753,7 +758,7 @@ fn foo(&self) -> Self::T { String::new() }
         // Find all the methods in the trait that could be called to construct the
         // expected associated type.
         // FIXME: consider suggesting the use of associated `const`s.
-        let methods: Vec<(Span, String)> = items
+        let methods: Vec<(SpanId, String)> = items
             .items
             .iter()
             .filter(|(name, item)| {
@@ -766,7 +771,10 @@ fn foo(&self) -> Self::T { String::new() }
                         if item_def_id == proj_ty_item_def_id =>
                     {
                         Some((
-                            self.sess.source_map().guess_head_span(self.real_def_span(item.def_id)),
+                            self.sess
+                                .source_map()
+                                .guess_head_span(self.real_def_span(item.def_id))
+                                .into(),
                             format!("consider calling `{}`", self.def_path_str(item.def_id)),
                         ))
                     }
@@ -777,8 +785,8 @@ fn foo(&self) -> Self::T { String::new() }
         if !methods.is_empty() {
             // Use a single `help:` to show all the methods in the trait that can
             // be used to construct the expected associated type.
-            let mut span: MultiSpan =
-                methods.iter().map(|(sp, _)| *sp).collect::<Vec<Span>>().into();
+            let mut span: MultiSpanId =
+                methods.iter().map(|(sp, _)| *sp).collect::<Vec<SpanId>>().into();
             let msg = format!(
                 "{some} method{s} {are} available that return{r} `{ty}`",
                 some = if methods.len() == 1 { "a" } else { "some" },

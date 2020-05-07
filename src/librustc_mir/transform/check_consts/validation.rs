@@ -671,10 +671,9 @@ fn check_short_circuiting_in_const_local(ccx: &ConstCx<'_, 'tcx>) {
 fn check_return_ty_is_sync(tcx: TyCtxt<'tcx>, body: &Body<'tcx>, hir_id: HirId) {
     let ty = body.return_ty();
     tcx.infer_ctxt().enter(|infcx| {
-        let body_span = tcx.reify_span(body.span);
-        let cause = traits::ObligationCause::new(body_span, hir_id, traits::SharedStatic);
+        let cause = traits::ObligationCause::new(body.span, hir_id, traits::SharedStatic);
         let mut fulfillment_cx = traits::FulfillmentContext::new();
-        let sync_def_id = tcx.require_lang_item(lang_items::SyncTraitLangItem, Some(body_span));
+        let sync_def_id = tcx.require_lang_item(lang_items::SyncTraitLangItem, Some(body.span));
         fulfillment_cx.register_bound(&infcx, ty::ParamEnv::empty(), ty, sync_def_id, cause);
         if let Err(err) = fulfillment_cx.select_all_or_error(&infcx) {
             infcx.report_fulfillment_errors(&err, None, false);

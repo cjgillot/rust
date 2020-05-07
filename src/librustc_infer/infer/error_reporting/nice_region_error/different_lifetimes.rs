@@ -115,7 +115,7 @@ impl<'a, 'tcx> NiceRegionError<'a, 'tcx> {
                         format!("...but data{} flows{} here", span_label_var1, span_label_var2),
                     )
                 };
-                (ty_sup.span, ty_sub.span, main_label_1, span_label_1)
+                (ty_sup.span, ty_sub.span.into(), main_label_1, span_label_1)
             }
 
             (Some(ret_span), _) => (

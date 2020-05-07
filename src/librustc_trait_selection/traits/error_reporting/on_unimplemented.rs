@@ -159,7 +159,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
             flags.push((sym::parent_trait, Some(t)));
         }
 
-        if let Some(k) = obligation.cause.span.desugaring_kind() {
+        if let Some(k) = self.tcx.reify_span(obligation.cause.span).desugaring_kind() {
             flags.push((sym::from_desugaring, None));
             flags.push((sym::from_desugaring, Some(format!("{:?}", k))));
         }

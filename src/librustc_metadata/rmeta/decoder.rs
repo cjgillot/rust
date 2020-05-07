@@ -34,7 +34,7 @@ use rustc_serialize::{opaque, Decodable, Decoder, SpecializedDecoder};
 use rustc_session::Session;
 use rustc_span::source_map::{respan, Spanned};
 use rustc_span::symbol::{sym, Ident, Symbol};
-use rustc_span::{self, hygiene::MacroKind, BytePos, Pos, Span, SpanId, DUMMY_SP};
+use rustc_span::{self, hygiene::MacroKind, BytePos, Pos, Span, SpanId, DUMMY_SP, DUMMY_SPID};
 
 use log::debug;
 use proc_macro::bridge::client::ProcMacro;
@@ -690,6 +690,10 @@ impl<'a, 'tcx> CrateMetadataRef<'a> {
         self.root.tables.span.get(self, index).unwrap().decode((self, sess))
     }
 
+    fn get_spanid(&self, index: DefIndex, sess: &Session) -> SpanId {
+        SpanId::Span(self.get_span(index, sess))
+    }
+
     fn load_proc_macro(&self, id: DefIndex, sess: &Session) -> SyntaxExtension {
         let (name, kind, helper_attrs) = match *self.raw_proc_macro(id) {
             ProcMacro::CustomDerive { trait_name, attributes, client } => {
@@ -969,7 +973,7 @@ impl<'a, 'tcx> CrateMetadataRef<'a> {
                         self.local_def_id(def_index),
                     );
                     let ident = Ident::from_str(raw_macro.name());
-                    callback(Export { ident, res, vis: ty::Visibility::Public, span: DUMMY_SP });
+                    callback(Export { ident, res, vis: ty::Visibility::Public, span: DUMMY_SPID });
                 }
             }
             return;
@@ -1013,13 +1017,7 @@ impl<'a, 'tcx> CrateMetadataRef<'a> {
                                 res: Res::Def(kind, self.local_def_id(child_index)),
                                 ident: self.item_ident(child_index, sess),
                                 vis: self.get_visibility(child_index),
-                                span: self
-                                    .root
-                                    .tables
-                                    .span
-                                    .get(self, child_index)
-                                    .unwrap()
-                                    .decode((self, sess)),
+                                span: self.get_spanid(child_index, sess),
                             });
                         }
                         continue;
@@ -1030,7 +1028,7 @@ impl<'a, 'tcx> CrateMetadataRef<'a> {
                 }
 
                 let def_key = self.def_key(child_index);
-                let span = self.get_span(child_index, sess);
+                let span = self.get_spanid(child_index, sess);
                 if def_key.disambiguated_data.data.get_opt_name().is_some() {
                     let kind = self.def_kind(child_index);
                     let ident = self.item_ident(child_index, sess);

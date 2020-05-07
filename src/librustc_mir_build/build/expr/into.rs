@@ -107,14 +107,14 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     true_block,
                     source_info,
                     destination,
-                    Constant { span: expr_span, user_ty: None, literal: this.hir.true_literal() },
+                    Constant { span: expr_span.into(), user_ty: None, literal: this.hir.true_literal() },
                 );
 
                 this.cfg.push_assign_constant(
                     false_block,
                     source_info,
                     destination,
-                    Constant { span: expr_span, user_ty: None, literal: this.hir.false_literal() },
+                    Constant { span: expr_span.into(), user_ty: None, literal: this.hir.false_literal() },
                 );
 
                 // Link up both branches:
@@ -341,7 +341,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 // value is Sized. Usually, this is caught in type checking, but
                 // in the case of box expr there is no such check.
                 if !destination.projection.is_empty() {
-                    this.local_decls.push(LocalDecl::new(expr.ty, expr.span));
+                    this.local_decls.push(LocalDecl::new(expr.ty, expr.span.into()));
                 }
 
                 debug_assert!(Category::of(&expr.kind) == Some(Category::Place));

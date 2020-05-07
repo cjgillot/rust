@@ -1,15 +1,15 @@
 // These functions are used by macro expansion for bug! and span_bug!
 
 use crate::ty::{tls, TyCtxt};
-use rustc_span::{MultiSpanId, Span};
+use rustc_span::{MultiSpanId, SpanId};
 use std::fmt;
 
 #[cold]
 #[inline(never)]
 pub fn bug_fmt(file: &'static str, line: u32, args: fmt::Arguments<'_>) -> ! {
     // this wrapper mostly exists so I don't have to write a fully
-    // qualified path of None::<Span> inside the bug!() macro definition
-    opt_span_bug_fmt(file, line, None::<Span>, args);
+    // qualified path of None::<SpanId> inside the bug!() macro definition
+    opt_span_bug_fmt(file, line, None::<SpanId>, args);
 }
 
 #[cold]

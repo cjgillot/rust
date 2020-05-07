@@ -6,7 +6,7 @@ use rustc_infer::traits::TraitEngineExt as _;
 use rustc_middle::ty::query::Providers;
 use rustc_middle::ty::subst::{InternalSubsts, Subst};
 use rustc_middle::ty::{self, ParamEnvAnd, Ty, TyCtxt};
-use rustc_span::source_map::{Span, DUMMY_SP};
+use rustc_span::source_map::{SpanId, DUMMY_SPID};
 use rustc_trait_selection::traits::query::dropck_outlives::trivial_dropck_outlives;
 use rustc_trait_selection::traits::query::dropck_outlives::{
     DropckOutlivesResult, DtorckConstraint,
@@ -28,7 +28,7 @@ fn dropck_outlives<'tcx>(
     debug!("dropck_outlives(goal={:#?})", canonical_goal);
 
     tcx.infer_ctxt().enter_with_canonical(
-        DUMMY_SP,
+        DUMMY_SPID,
         &canonical_goal,
         |ref infcx, goal, canonical_inference_vars| {
             let tcx = infcx.tcx;
@@ -86,7 +86,7 @@ fn dropck_outlives<'tcx>(
                     result.overflows.len(),
                     ty_stack.len()
                 );
-                dtorck_constraint_for_ty(tcx, DUMMY_SP, for_ty, depth, ty, &mut constraints)?;
+                dtorck_constraint_for_ty(tcx, DUMMY_SPID, for_ty, depth, ty, &mut constraints)?;
 
                 // "outlives" represent types/regions that may be touched
                 // by a destructor.
@@ -155,7 +155,7 @@ fn dropck_outlives<'tcx>(
 /// order for `ty` to be valid for destruction.
 fn dtorck_constraint_for_ty<'tcx>(
     tcx: TyCtxt<'tcx>,
-    span: Span,
+    span: SpanId,
     for_ty: Ty<'tcx>,
     depth: usize,
     ty: Ty<'tcx>,
@@ -289,7 +289,7 @@ crate fn adt_dtorck_constraint(
     def_id: DefId,
 ) -> Result<DtorckConstraint<'_>, NoSolution> {
     let def = tcx.adt_def(def_id);
-    let span = tcx.real_def_span(def_id);
+    let span = tcx.def_span(def_id);
     debug!("dtorck_constraint: {:?}", def);
 
     if def.is_phantom_data() {

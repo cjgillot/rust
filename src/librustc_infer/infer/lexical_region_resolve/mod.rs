@@ -20,7 +20,7 @@ use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_middle::ty::{ReEarlyBound, ReEmpty, ReErased, ReFree, ReStatic};
 use rustc_middle::ty::{ReLateBound, RePlaceholder, ReScope, ReVar};
 use rustc_middle::ty::{Region, RegionVid};
-use rustc_span::Span;
+use rustc_span::SpanId;
 use std::fmt;
 
 mod graphviz;
@@ -112,7 +112,7 @@ pub enum RegionResolutionError<'tcx> {
     /// Indicates a failure of a `MemberConstraint`. These arise during
     /// impl trait processing explicitly -- basically, the impl trait's hidden type
     /// included some region that it was not supposed to.
-    MemberConstraintFailure { span: Span, hidden_ty: Ty<'tcx>, member_region: Region<'tcx> },
+    MemberConstraintFailure { span: SpanId, hidden_ty: Ty<'tcx>, member_region: Region<'tcx> },
 }
 
 struct RegionAndOrigin<'tcx> {
@@ -664,7 +664,7 @@ impl<'cx, 'tcx> LexicalResolver<'cx, 'tcx> {
                 .iter()
                 .map(|&choice_region| var_data.normalize(self.tcx(), choice_region));
             if !choice_regions.clone().any(|choice_region| member_region == choice_region) {
-                let span = self.tcx().real_def_span(member_constraint.opaque_type_def_id);
+                let span = self.tcx().def_span(member_constraint.opaque_type_def_id);
                 errors.push(RegionResolutionError::MemberConstraintFailure {
                     span,
                     hidden_ty: member_constraint.hidden_ty,

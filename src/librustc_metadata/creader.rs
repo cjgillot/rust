@@ -881,7 +881,7 @@ impl<'a> CrateLoader<'a> {
                     cnum,
                     ExternCrate {
                         src: ExternCrateSource::Extern(def_id.to_def_id()),
-                        span: item.span,
+                        span: item.span.into(),
                         path_len,
                         dependency_of: LOCAL_CRATE,
                     },
@@ -899,7 +899,7 @@ impl<'a> CrateLoader<'a> {
             cnum,
             ExternCrate {
                 src: ExternCrateSource::Path,
-                span,
+                span: span.into(),
                 // to have the least priority in `update_extern_crate`
                 path_len: usize::max_value(),
                 dependency_of: LOCAL_CRATE,

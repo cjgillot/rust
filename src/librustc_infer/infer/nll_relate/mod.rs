@@ -260,13 +260,13 @@ where
         value_ty: Ty<'tcx>,
     ) -> Ty<'tcx> {
         use crate::infer::type_variable::{TypeVariableOrigin, TypeVariableOriginKind};
-        use rustc_span::DUMMY_SP;
+        use rustc_span::DUMMY_SPID;
 
         match value_ty.kind {
             ty::Projection(other_projection_ty) => {
                 let var = self.infcx.next_ty_var(TypeVariableOrigin {
                     kind: TypeVariableOriginKind::MiscVariable,
-                    span: DUMMY_SP,
+                    span: DUMMY_SPID,
                 });
                 self.relate_projection_ty(projection_ty, var);
                 self.relate_projection_ty(other_projection_ty, var);

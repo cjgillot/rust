@@ -27,7 +27,7 @@ use rustc_index::vec::IndexVec;
 use rustc_middle::ty::fold::TypeFoldable;
 use rustc_middle::ty::subst::GenericArg;
 use rustc_middle::ty::{self, BoundVar, List};
-use rustc_span::source_map::Span;
+use rustc_span::source_map::SpanId;
 
 pub use rustc_middle::infer::canonical::*;
 use substitute::CanonicalExt;
@@ -52,7 +52,7 @@ impl<'cx, 'tcx> InferCtxt<'cx, 'tcx> {
 
     pub fn instantiate_canonical_with_fresh_inference_vars<T>(
         &self,
-        span: Span,
+        span: SpanId,
         canonical: &Canonical<'tcx, T>,
     ) -> (T, CanonicalVarValues<'tcx>)
     where
@@ -81,7 +81,7 @@ impl<'cx, 'tcx> InferCtxt<'cx, 'tcx> {
     /// canonical variable with these inference variables.
     fn instantiate_canonical_vars(
         &self,
-        span: Span,
+        span: SpanId,
         variables: &List<CanonicalVarInfo>,
         universe_map: impl Fn(ty::UniverseIndex) -> ty::UniverseIndex,
     ) -> CanonicalVarValues<'tcx> {
@@ -99,7 +99,7 @@ impl<'cx, 'tcx> InferCtxt<'cx, 'tcx> {
     /// universally quantified variable, you get a placeholder.
     fn instantiate_canonical_var(
         &self,
-        span: Span,
+        span: SpanId,
         cv_info: CanonicalVarInfo,
         universe_map: impl Fn(ty::UniverseIndex) -> ty::UniverseIndex,
     ) -> GenericArg<'tcx> {

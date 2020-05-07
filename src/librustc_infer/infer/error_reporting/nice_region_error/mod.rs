@@ -3,7 +3,7 @@ use crate::infer::lexical_region_resolve::RegionResolutionError::*;
 use crate::infer::InferCtxt;
 use rustc_errors::{DiagnosticBuilder, ErrorReported};
 use rustc_middle::ty::{self, TyCtxt};
-use rustc_span::source_map::Span;
+use rustc_span::source_map::SpanId;
 
 mod different_lifetimes;
 mod find_anon_type;
@@ -23,7 +23,7 @@ impl<'cx, 'tcx> InferCtxt<'cx, 'tcx> {
 pub struct NiceRegionError<'cx, 'tcx> {
     infcx: &'cx InferCtxt<'cx, 'tcx>,
     error: Option<RegionResolutionError<'tcx>>,
-    regions: Option<(Span, ty::Region<'tcx>, ty::Region<'tcx>)>,
+    regions: Option<(SpanId, ty::Region<'tcx>, ty::Region<'tcx>)>,
 }
 
 impl<'cx, 'tcx> NiceRegionError<'cx, 'tcx> {
@@ -33,7 +33,7 @@ impl<'cx, 'tcx> NiceRegionError<'cx, 'tcx> {
 
     pub fn new_from_span(
         infcx: &'cx InferCtxt<'cx, 'tcx>,
-        span: Span,
+        span: SpanId,
         sub: ty::Region<'tcx>,
         sup: ty::Region<'tcx>,
     ) -> Self {
@@ -62,7 +62,7 @@ impl<'cx, 'tcx> NiceRegionError<'cx, 'tcx> {
             .or_else(|| self.try_report_impl_not_conforming_to_trait())
     }
 
-    pub fn regions(&self) -> Option<(Span, ty::Region<'tcx>, ty::Region<'tcx>)> {
+    pub fn regions(&self) -> Option<(SpanId, ty::Region<'tcx>, ty::Region<'tcx>)> {
         match (&self.error, self.regions) {
             (Some(ConcreteFailure(origin, sub, sup)), None) => Some((origin.span(), sub, sup)),
             (Some(SubSupConflict(_, _, origin, sub, _, sup)), None) => {

@@ -512,7 +512,7 @@ impl Visitor<'tcx> for Checker<'tcx> {
                     None => return,
                 };
                 let def_id = DefId { krate: cnum, index: CRATE_DEF_INDEX };
-                self.tcx.check_stability(def_id, Some(item.hir_id), item.span);
+                self.tcx.check_stability(def_id, Some(item.hir_id), item.span.into());
             }
 
             // For implementations of traits, check the stability of each item
@@ -530,7 +530,7 @@ impl Visitor<'tcx> for Checker<'tcx> {
                             .map(|item| item.def_id);
                         if let Some(def_id) = trait_item_def_id {
                             // Pass `None` to skip deprecation warnings.
-                            self.tcx.check_stability(def_id, None, impl_item.span);
+                            self.tcx.check_stability(def_id, None, impl_item.span.into());
                         }
                     }
                 }
@@ -572,7 +572,7 @@ impl Visitor<'tcx> for Checker<'tcx> {
 
     fn visit_path(&mut self, path: &'tcx hir::Path<'tcx>, id: hir::HirId) {
         if let Some(def_id) = path.res.opt_def_id() {
-            self.tcx.check_stability(def_id, Some(id), path.span)
+            self.tcx.check_stability(def_id, Some(id), path.span.into())
         }
         intravisit::walk_path(self, path)
     }

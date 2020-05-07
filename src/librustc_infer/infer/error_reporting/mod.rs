@@ -68,7 +68,7 @@ use rustc_middle::ty::{
     subst::{Subst, SubstsRef},
     Region, Ty, TyCtxt, TypeFoldable,
 };
-use rustc_span::{DesugaringKind, Pos, Span};
+use rustc_span::{DesugaringKind, Pos, SpanId};
 use rustc_target::spec::abi;
 use std::{cmp, fmt};
 
@@ -172,7 +172,7 @@ pub(super) fn note_and_explain_free_region(
 fn msg_span_from_free_region(
     tcx: TyCtxt<'tcx>,
     region: ty::Region<'tcx>,
-) -> (String, Option<Span>) {
+) -> (String, Option<SpanId>) {
     match *region {
         ty::ReEarlyBound(_) | ty::ReFree(_) => {
             msg_span_from_early_bound_and_free_regions(tcx, region)
@@ -187,7 +187,7 @@ fn msg_span_from_free_region(
 fn msg_span_from_early_bound_and_free_regions(
     tcx: TyCtxt<'tcx>,
     region: ty::Region<'tcx>,
-) -> (String, Option<Span>) {
+) -> (String, Option<SpanId>) {
     let sm = tcx.sess.source_map();
 
     let scope = region.free_region_binding_scope(tcx);
@@ -201,30 +201,31 @@ fn msg_span_from_early_bound_and_free_regions(
     };
     let (prefix, span) = match *region {
         ty::ReEarlyBound(ref br) => {
-            let mut sp = sm.guess_head_span(tcx.hir().span(node));
+            let mut sp = sm.guess_head_span(tcx.hir().span(node)).into();
             if let Some(param) =
                 tcx.hir().get_generics(scope).and_then(|generics| generics.get_named(br.name))
             {
-                sp = param.span;
+                sp = param.span.into();
             }
             (format!("the lifetime `{}` as defined on", br.name), sp)
         }
         ty::ReFree(ty::FreeRegion { bound_region: ty::BoundRegion::BrNamed(_, name), .. }) => {
-            let mut sp = sm.guess_head_span(tcx.hir().span(node));
+            let mut sp = sm.guess_head_span(tcx.hir().span(node)).into();
             if let Some(param) =
                 tcx.hir().get_generics(scope).and_then(|generics| generics.get_named(name))
             {
-                sp = param.span;
+                sp = param.span.into();
             }
             (format!("the lifetime `{}` as defined on", name), sp)
         }
         ty::ReFree(ref fr) => match fr.bound_region {
-            ty::BrAnon(idx) => {
-                (format!("the anonymous lifetime #{} defined on", idx + 1), tcx.hir().span(node))
-            }
+            ty::BrAnon(idx) => (
+                format!("the anonymous lifetime #{} defined on", idx + 1),
+                tcx.hir().span(node).into(),
+            ),
             _ => (
                 format!("the lifetime `{}` as defined on", region),
-                sm.guess_head_span(tcx.hir().span(node)),
+                sm.guess_head_span(tcx.hir().span(node)).into(),
             ),
         },
         _ => bug!(),
@@ -237,7 +238,7 @@ fn emit_msg_span(
     err: &mut DiagnosticBuilder<'_>,
     prefix: &str,
     description: String,
-    span: Option<Span>,
+    span: Option<SpanId>,
     suffix: &str,
 ) {
     let message = format!("{}{}{}", prefix, description, suffix);
@@ -277,15 +278,15 @@ fn impl_item_scope_tag(item: &hir::ImplItem<'_>) -> &'static str {
     }
 }
 
-fn explain_span(tcx: TyCtxt<'tcx>, heading: &str, span: Span) -> (String, Option<Span>) {
-    let lo = tcx.sess.source_map().lookup_char_pos(span.lo());
+fn explain_span(tcx: TyCtxt<'tcx>, heading: &str, span: SpanId) -> (String, Option<SpanId>) {
+    let lo = tcx.sess.source_map().lookup_char_pos(tcx.reify_span(span).lo());
     (format!("the {} at {}:{}", heading, lo.line, lo.col.to_usize() + 1), Some(span))
 }
 
 pub fn unexpected_hidden_region_diagnostic(
     tcx: TyCtxt<'tcx>,
     region_scope_tree: Option<&region::ScopeTree>,
-    span: Span,
+    span: SpanId,
     hidden_ty: Ty<'tcx>,
     hidden_region: ty::Region<'tcx>,
 ) -> DiagnosticBuilder<'tcx> {
@@ -683,6 +684,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
                 }
                 if let Some(ty::error::ExpectedFound { found, .. }) = exp_found {
                     if ty.is_box() && ty.boxed_ty() == found {
+                        let span = self.tcx.reify_span(span);
                         if let Ok(snippet) = self.tcx.sess.source_map().span_to_snippet(span) {
                             err.span_suggestion(
                                 span,
@@ -723,7 +725,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
                             Some(ty) if expected == ty => {
                                 let source_map = self.tcx.sess.source_map();
                                 err.span_suggestion(
-                                    source_map.end_point(cause.span),
+                                    source_map.end_point(self.tcx.reify_span(cause.span)),
                                     "try removing this `?`",
                                     "".to_string(),
                                     Applicability::MachineApplicable,
@@ -1383,7 +1385,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
         &self,
         diag: &mut DiagnosticBuilder<'tcx>,
         cause: &ObligationCause<'tcx>,
-        secondary_span: Option<(Span, String)>,
+        secondary_span: Option<(SpanId, String)>,
         mut values: Option<ValuePairs<'tcx>>,
         terr: &TypeError<'tcx>,
     ) {
@@ -1396,10 +1398,10 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
             values = None;
         }
         struct OpaqueTypesVisitor<'tcx> {
-            types: FxHashMap<TyCategory, FxHashSet<Span>>,
-            expected: FxHashMap<TyCategory, FxHashSet<Span>>,
-            found: FxHashMap<TyCategory, FxHashSet<Span>>,
-            ignore_span: Span,
+            types: FxHashMap<TyCategory, FxHashSet<SpanId>>,
+            expected: FxHashMap<TyCategory, FxHashSet<SpanId>>,
+            found: FxHashMap<TyCategory, FxHashSet<SpanId>>,
+            ignore_span: SpanId,
             tcx: TyCtxt<'tcx>,
         }
 
@@ -1408,7 +1410,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
                 tcx: TyCtxt<'tcx>,
                 expected: Ty<'tcx>,
                 found: Ty<'tcx>,
-                ignore_span: Span,
+                ignore_span: SpanId,
             ) -> Self {
                 let mut types_visitor = OpaqueTypesVisitor {
                     types: Default::default(),
@@ -1436,7 +1438,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
                 &self,
                 err: &mut DiagnosticBuilder<'_>,
                 target: &str,
-                types: &FxHashMap<TyCategory, FxHashSet<Span>>,
+                types: &FxHashMap<TyCategory, FxHashSet<SpanId>>,
             ) {
                 for (key, values) in types.iter() {
                     let count = values.len();
@@ -1446,7 +1448,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
                             *sp,
                             format!(
                                 "{}{}{} {}{}",
-                                if sp.is_desugaring(DesugaringKind::Async) {
+                                if self.tcx.reify_span(*sp).is_desugaring(DesugaringKind::Async) {
                                     "the `Output` of this `async fn`'s "
                                 } else if count == 1 {
                                     "the "
@@ -1481,8 +1483,8 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
                     //    |
                     //    = note: expected unit type `()`
                     //                 found closure `[closure@$DIR/issue-20862.rs:2:5: 2:14 x:_]`
-                    if !self.ignore_span.overlaps(span) {
-                        self.types.entry(kind).or_default().insert(span);
+                    if !self.tcx.reify_span(self.ignore_span).overlaps(span) {
+                        self.types.entry(kind).or_default().insert(span.into());
                     }
                 }
                 t.super_visit_with(self)
@@ -1611,7 +1613,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
     /// suggests it.
     fn suggest_as_ref_where_appropriate(
         &self,
-        span: Span,
+        span: SpanId,
         exp_found: &ty::error::ExpectedFound<Ty<'tcx>>,
         diag: &mut DiagnosticBuilder<'tcx>,
     ) {
@@ -1652,9 +1654,10 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
                                 _ => show_suggestion = false,
                             }
                         }
-                        if let (Ok(snippet), true) =
-                            (self.tcx.sess.source_map().span_to_snippet(span), show_suggestion)
-                        {
+                        if let (Ok(snippet), true) = (
+                            self.tcx.sess.source_map().span_to_snippet(self.tcx.reify_span(span)),
+                            show_suggestion,
+                        ) {
                             diag.span_suggestion(
                                 span,
                                 msg,
@@ -1755,7 +1758,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
     pub fn report_generic_bound_failure(
         &self,
         region_scope_tree: &region::ScopeTree,
-        span: Span,
+        span: SpanId,
         origin: Option<SubregionOrigin<'tcx>>,
         bound_kind: GenericKind<'tcx>,
         sub: Region<'tcx>,
@@ -1767,7 +1770,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
     pub fn construct_generic_bound_failure(
         &self,
         region_scope_tree: &region::ScopeTree,
-        span: Span,
+        span: SpanId,
         origin: Option<SubregionOrigin<'tcx>>,
         bound_kind: GenericKind<'tcx>,
         sub: Region<'tcx>,
@@ -1806,7 +1809,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
                             } else {
                                 sp
                             };
-                            (sp, has_bounds, is_impl_trait)
+                            (sp.into(), has_bounds, is_impl_trait)
                         })
                     } else {
                         None
@@ -1839,7 +1842,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
 
         fn binding_suggestion<'tcx, S: fmt::Display>(
             err: &mut DiagnosticBuilder<'tcx>,
-            type_param_span: Option<(Span, bool, bool)>,
+            type_param_span: Option<(SpanId, bool, bool)>,
             bound_kind: GenericKind<'tcx>,
             sub: S,
         ) {

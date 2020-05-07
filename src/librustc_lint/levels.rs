@@ -211,7 +211,7 @@ impl<'s> LintLevelsBuilder<'s> {
                 let name = meta_item.path.segments.last().expect("empty lint name").ident.name;
                 match store.check_lint_name(&name.as_str(), tool_name) {
                     CheckLintNameResult::Ok(ids) => {
-                        let src = LintSource::Node(name, li.span(), reason);
+                        let src = LintSource::Node(name, li.span().into(), reason);
                         for id in ids {
                             specs.insert(*id, (level, src));
                         }
@@ -223,7 +223,7 @@ impl<'s> LintLevelsBuilder<'s> {
                                 let complete_name = &format!("{}::{}", tool_name.unwrap(), name);
                                 let src = LintSource::Node(
                                     Symbol::intern(complete_name),
-                                    li.span(),
+                                    li.span().into(),
                                     reason,
                                 );
                                 for id in ids {
@@ -260,7 +260,7 @@ impl<'s> LintLevelsBuilder<'s> {
 
                                 let src = LintSource::Node(
                                     Symbol::intern(&new_lint_name),
-                                    li.span(),
+                                    li.span().into(),
                                     reason,
                                 );
                                 for id in ids {

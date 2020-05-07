@@ -16,7 +16,7 @@ use crate::ty::{self, AdtKind, Ty, TyCtxt};
 use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
 use rustc_span::symbol::Symbol;
-use rustc_span::{Span, SpanId, DUMMY_SP, DUMMY_SPID};
+use rustc_span::{SpanId, DUMMY_SPID};
 use smallvec::SmallVec;
 
 use std::borrow::Cow;
@@ -82,7 +82,7 @@ pub enum Reveal {
 /// The reason why we incurred this obligation; used for error reporting.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ObligationCause<'tcx> {
-    pub span: Span,
+    pub span: SpanId,
 
     /// The ID of the fn body that triggered this obligation. This is
     /// used for region obligations to determine the precise
@@ -98,27 +98,27 @@ pub struct ObligationCause<'tcx> {
 impl<'tcx> ObligationCause<'tcx> {
     #[inline]
     pub fn new(
-        span: Span,
+        span: SpanId,
         body_id: hir::HirId,
         code: ObligationCauseCode<'tcx>,
     ) -> ObligationCause<'tcx> {
         ObligationCause { span, body_id, code }
     }
 
-    pub fn misc(span: Span, body_id: hir::HirId) -> ObligationCause<'tcx> {
+    pub fn misc(span: SpanId, body_id: hir::HirId) -> ObligationCause<'tcx> {
         ObligationCause { span, body_id, code: MiscObligation }
     }
 
     pub fn dummy() -> ObligationCause<'tcx> {
-        ObligationCause { span: DUMMY_SP, body_id: hir::CRATE_HIR_ID, code: MiscObligation }
+        ObligationCause { span: DUMMY_SPID, body_id: hir::CRATE_HIR_ID, code: MiscObligation }
     }
 
-    pub fn span(&self, tcx: TyCtxt<'tcx>) -> Span {
+    pub fn span(&self, tcx: TyCtxt<'tcx>) -> SpanId {
         match self.code {
             ObligationCauseCode::CompareImplMethodObligation { .. }
             | ObligationCauseCode::MainFunctionType
             | ObligationCauseCode::StartFunctionType => {
-                tcx.sess.source_map().guess_head_span(self.span)
+                tcx.sess.source_map().guess_head_span(tcx.reify_span(self.span)).into()
             }
             ObligationCauseCode::MatchExpressionArm(box MatchExpressionArmCause {
                 arm_span,
@@ -148,7 +148,7 @@ pub enum ObligationCauseCode<'tcx> {
     ItemObligation(DefId),
 
     /// Like `ItemObligation`, but with extra detail on the source of the obligation.
-    BindingObligation(DefId, Span),
+    BindingObligation(DefId, SpanId),
 
     /// A type like `&'a T` is WF only if `T: 'a`.
     ReferenceOutlivesReferent(Ty<'tcx>),
@@ -229,10 +229,10 @@ pub enum ObligationCauseCode<'tcx> {
     /// Type error arising from type checking a pattern against an expected type.
     Pattern {
         /// The span of the scrutinee or type expression which caused the `root_ty` type.
-        span: Option<Span>,
+        span: Option<SpanId>,
         /// The root expected type induced by a scrutinee or type expression.
         root_ty: Ty<'tcx>,
-        /// Whether the `Span` came from an expression or a type expression.
+        /// Whether the `SpanId` came from an expression or a type expression.
         origin_expr: bool,
     },
 
@@ -293,18 +293,18 @@ static_assert_size!(ObligationCauseCode<'_>, 32);
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MatchExpressionArmCause<'tcx> {
-    pub arm_span: Span,
+    pub arm_span: SpanId,
     pub source: hir::MatchSource,
-    pub prior_arms: Vec<Span>,
+    pub prior_arms: Vec<SpanId>,
     pub last_ty: Ty<'tcx>,
     pub scrut_hir_id: hir::HirId,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct IfExpressionCause {
-    pub then: Span,
-    pub outer: Option<Span>,
-    pub semicolon: Option<Span>,
+    pub then: SpanId,
+    pub outer: Option<SpanId>,
+    pub semicolon: Option<SpanId>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

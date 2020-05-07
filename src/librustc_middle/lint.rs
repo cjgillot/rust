@@ -9,7 +9,7 @@ use rustc_session::lint::{builtin, Level, Lint, LintId};
 use rustc_session::{DiagnosticMessageId, Session};
 use rustc_span::hygiene::MacroKind;
 use rustc_span::source_map::{DesugaringKind, ExpnKind, MultiSpanId};
-use rustc_span::{Span, SpanId, Symbol};
+use rustc_span::{SpanId, Symbol};
 
 /// How a lint level was set.
 #[derive(Clone, Copy, PartialEq, Eq, HashStable)]
@@ -19,7 +19,7 @@ pub enum LintSource {
     Default,
 
     /// Lint level was set by an attribute.
-    Node(Symbol, Span, Option<Symbol> /* RFC 2383 reason */),
+    Node(Symbol, SpanId, Option<Symbol> /* RFC 2383 reason */),
 
     /// Lint level was set by a command-line flag.
     CommandLine(Symbol),

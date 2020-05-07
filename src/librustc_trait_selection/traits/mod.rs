@@ -32,7 +32,7 @@ use rustc_middle::middle::region;
 use rustc_middle::ty::fold::TypeFoldable;
 use rustc_middle::ty::subst::{InternalSubsts, SubstsRef};
 use rustc_middle::ty::{self, GenericParamDefKind, ToPredicate, Ty, TyCtxt, WithConstness};
-use rustc_span::Span;
+use rustc_span::SpanId;
 
 use std::fmt::Debug;
 
@@ -128,7 +128,7 @@ pub fn type_known_to_meet_bound_modulo_regions<'a, 'tcx>(
     param_env: ty::ParamEnv<'tcx>,
     ty: Ty<'tcx>,
     def_id: DefId,
-    span: Span,
+    span: SpanId,
 ) -> bool {
     debug!(
         "type_known_to_meet_bound_modulo_regions(ty={:?}, bound={:?})",

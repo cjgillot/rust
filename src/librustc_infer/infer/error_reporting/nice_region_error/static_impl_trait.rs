@@ -44,7 +44,7 @@ impl<'a, 'tcx> NiceRegionError<'a, 'tcx> {
                         }) => name.to_string(),
                         _ => "'_".to_owned(),
                     };
-                    let fn_return_span = return_ty.unwrap().1;
+                    let fn_return_span = self.tcx().reify_span(return_ty.unwrap().1);
                     if let Ok(snippet) =
                         self.tcx().sess.source_map().span_to_snippet(fn_return_span)
                     {

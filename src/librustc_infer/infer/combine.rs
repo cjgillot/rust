@@ -41,7 +41,7 @@ use rustc_middle::ty::relate::{self, Relate, RelateResult, TypeRelation};
 use rustc_middle::ty::subst::SubstsRef;
 use rustc_middle::ty::{self, InferConst, Ty, TyCtxt};
 use rustc_middle::ty::{IntType, UintType};
-use rustc_span::{Span, DUMMY_SP};
+use rustc_span::{SpanId, DUMMY_SPID};
 
 #[derive(Clone)]
 pub struct CombineFields<'infcx, 'tcx> {
@@ -185,7 +185,7 @@ impl<'infcx, 'tcx> InferCtxt<'infcx, 'tcx> {
                 ConstVarValue {
                     origin: ConstVariableOrigin {
                         kind: ConstVariableOriginKind::ConstInference,
-                        span: DUMMY_SP,
+                        span: DUMMY_SPID,
                     },
                     val: ConstVariableValue::Known { value },
                 },
@@ -381,7 +381,7 @@ struct Generalizer<'cx, 'tcx> {
     infcx: &'cx InferCtxt<'cx, 'tcx>,
 
     /// The span, used when creating new type variables and things.
-    span: Span,
+    span: SpanId,
 
     /// The vid of the type variable that is in the process of being
     /// instantiated; if we find this within the type we are folding,

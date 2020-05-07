@@ -205,7 +205,7 @@ impl<'a, 'tcx> Cx<'a, 'tcx> {
     }
 
     crate fn type_is_copy_modulo_regions(&self, ty: Ty<'tcx>, span: SpanId) -> bool {
-        self.infcx.type_is_copy_modulo_regions(self.param_env, ty, self.infcx.tcx.reify_span(span))
+        self.infcx.type_is_copy_modulo_regions(self.param_env, ty, span)
     }
 }
 

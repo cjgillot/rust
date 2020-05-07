@@ -33,7 +33,7 @@ use rustc_middle::ty::{self, GenericParamDefKind, InferConst, Ty, TyCtxt};
 use rustc_middle::ty::{ConstVid, FloatVid, IntVid, TyVid};
 use rustc_session::config::BorrowckMode;
 use rustc_span::symbol::Symbol;
-use rustc_span::{Span, SpanId};
+use rustc_span::SpanId;
 
 use std::cell::{Cell, Ref, RefCell};
 use std::collections::BTreeMap;
@@ -304,9 +304,9 @@ pub struct InferCtxt<'a, 'tcx> {
 
     /// the set of predicates on which errors have been reported, to
     /// avoid reporting the same error twice.
-    pub reported_trait_errors: RefCell<FxHashMap<Span, Vec<ty::Predicate<'tcx>>>>,
+    pub reported_trait_errors: RefCell<FxHashMap<SpanId, Vec<ty::Predicate<'tcx>>>>,
 
-    pub reported_closure_mismatch: RefCell<FxHashSet<(Span, Option<Span>)>>,
+    pub reported_closure_mismatch: RefCell<FxHashSet<(SpanId, Option<SpanId>)>>,
 
     /// When an error occurs, we want to avoid reporting "derived"
     /// errors that are due to this original failure. Normally, we
@@ -380,82 +380,82 @@ pub enum SubregionOrigin<'tcx> {
 
     /// Stack-allocated closures cannot outlive innermost loop
     /// or function so as to ensure we only require finite stack
-    InfStackClosure(Span),
+    InfStackClosure(SpanId),
 
     /// Invocation of closure must be within its lifetime
-    InvokeClosure(Span),
+    InvokeClosure(SpanId),
 
     /// Dereference of reference must be within its lifetime
-    DerefPointer(Span),
+    DerefPointer(SpanId),
 
     /// Closure bound must not outlive captured variables
-    ClosureCapture(Span, hir::HirId),
+    ClosureCapture(SpanId, hir::HirId),
 
     /// Index into slice must be within its lifetime
-    IndexSlice(Span),
+    IndexSlice(SpanId),
 
     /// When casting `&'a T` to an `&'b Trait` object,
     /// relating `'a` to `'b`
-    RelateObjectBound(Span),
+    RelateObjectBound(SpanId),
 
     /// Some type parameter was instantiated with the given type,
     /// and that type must outlive some region.
-    RelateParamBound(Span, Ty<'tcx>),
+    RelateParamBound(SpanId, Ty<'tcx>),
 
     /// The given region parameter was instantiated with a region
     /// that must outlive some other region.
-    RelateRegionParamBound(Span),
+    RelateRegionParamBound(SpanId),
 
     /// A bound placed on type parameters that states that must outlive
     /// the moment of their instantiation.
-    RelateDefaultParamBound(Span, Ty<'tcx>),
+    RelateDefaultParamBound(SpanId, Ty<'tcx>),
 
     /// Creating a pointer `b` to contents of another reference
-    Reborrow(Span),
+    Reborrow(SpanId),
 
     /// Creating a pointer `b` to contents of an upvar
-    ReborrowUpvar(Span, ty::UpvarId),
+    ReborrowUpvar(SpanId, ty::UpvarId),
 
     /// Data with type `Ty<'tcx>` was borrowed
-    DataBorrowed(Ty<'tcx>, Span),
+    DataBorrowed(Ty<'tcx>, SpanId),
 
     /// (&'a &'b T) where a >= b
-    ReferenceOutlivesReferent(Ty<'tcx>, Span),
+    ReferenceOutlivesReferent(Ty<'tcx>, SpanId),
 
     /// Type or region parameters must be in scope.
-    ParameterInScope(ParameterOrigin, Span),
+    ParameterInScope(ParameterOrigin, SpanId),
 
     /// The type T of an expression E must outlive the lifetime for E.
-    ExprTypeIsNotInScope(Ty<'tcx>, Span),
+    ExprTypeIsNotInScope(Ty<'tcx>, SpanId),
 
     /// A `ref b` whose region does not enclose the decl site
-    BindingTypeIsNotValidAtDecl(Span),
+    BindingTypeIsNotValidAtDecl(SpanId),
 
     /// Regions appearing in a method receiver must outlive method call
-    CallRcvr(Span),
+    CallRcvr(SpanId),
 
     /// Regions appearing in a function argument must outlive func call
-    CallArg(Span),
+    CallArg(SpanId),
 
     /// Region in return type of invoked fn must enclose call
-    CallReturn(Span),
+    CallReturn(SpanId),
 
     /// Operands must be in scope
-    Operand(Span),
+    Operand(SpanId),
 
     /// Region resulting from a `&` expr must enclose the `&` expr
-    AddrOf(Span),
+    AddrOf(SpanId),
 
     /// An auto-borrow that does not enclose the expr where it occurs
-    AutoBorrow(Span),
+    AutoBorrow(SpanId),
 
     /// Region constraint arriving from destructor safety
-    SafeDestructor(Span),
+    SafeDestructor(SpanId),
 
     /// Comparing the signature and requirements of an impl method against
     /// the containing trait.
     CompareImplMethodObligation {
-        span: Span,
+        span: SpanId,
         item_name: Symbol,
         impl_item_def_id: DefId,
         trait_item_def_id: DefId,
@@ -464,7 +464,7 @@ pub enum SubregionOrigin<'tcx> {
 
 // `SubregionOrigin` is used a lot. Make sure it doesn't unintentionally get bigger.
 #[cfg(target_arch = "x86_64")]
-static_assert_size!(SubregionOrigin<'_>, 32);
+static_assert_size!(SubregionOrigin<'_>, 40);
 
 /// Places that type/region parameters can appear.
 #[derive(Clone, Copy, Debug)]
@@ -495,28 +495,28 @@ pub enum LateBoundRegionConversionTime {
 pub enum RegionVariableOrigin {
     /// Region variables created for ill-categorized reasons,
     /// mostly indicates places in need of refactoring
-    MiscVariable(Span),
+    MiscVariable(SpanId),
 
     /// Regions created by a `&P` or `[...]` pattern
-    PatternRegion(Span),
+    PatternRegion(SpanId),
 
     /// Regions created by `&` operator
-    AddrOfRegion(Span),
+    AddrOfRegion(SpanId),
 
     /// Regions created as part of an autoref of a method receiver
-    Autoref(Span),
+    Autoref(SpanId),
 
     /// Regions created as part of an automatic coercion
-    Coercion(Span),
+    Coercion(SpanId),
 
     /// Region variables created as the values for early-bound regions
-    EarlyBoundRegion(Span, Symbol),
+    EarlyBoundRegion(SpanId, Symbol),
 
     /// Region variables created for bound regions
     /// in a function or method that is called
-    LateBoundRegion(Span, ty::BoundRegion, LateBoundRegionConversionTime),
+    LateBoundRegion(SpanId, ty::BoundRegion, LateBoundRegionConversionTime),
 
-    UpvarRegion(ty::UpvarId, Span),
+    UpvarRegion(ty::UpvarId, SpanId),
 
     BoundRegionInCoherence(Symbol),
 
@@ -642,7 +642,7 @@ impl<'tcx> InferCtxtBuilder<'tcx> {
     /// (in other words, `S(C) = V`).
     pub fn enter_with_canonical<T, R>(
         &mut self,
-        span: Span,
+        span: SpanId,
         canonical: &Canonical<'tcx, T>,
         f: impl for<'a> FnOnce(InferCtxt<'a, 'tcx>, T, CanonicalVarValues<'tcx>) -> R,
     ) -> R
@@ -992,7 +992,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
     pub fn member_constraint(
         &self,
         opaque_type_def_id: DefId,
-        definition_span: Span,
+        definition_span: SpanId,
         hidden_ty: Ty<'tcx>,
         region: ty::Region<'tcx>,
         in_regions: &Lrc<Vec<ty::Region<'tcx>>>,
@@ -1175,7 +1175,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
         self.next_region_var_in_universe(RegionVariableOrigin::NLL(origin), universe)
     }
 
-    pub fn var_for_def(&self, span: Span, param: &ty::GenericParamDef) -> GenericArg<'tcx> {
+    pub fn var_for_def(&self, span: SpanId, param: &ty::GenericParamDef) -> GenericArg<'tcx> {
         match param.kind {
             GenericParamDefKind::Lifetime => {
                 // Create a region inference variable for the given
@@ -1222,7 +1222,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
 
     /// Given a set of generics defined on a type or impl, returns a substitution mapping each
     /// type/region parameter to a fresh inference variable.
-    pub fn fresh_substs_for_item(&self, span: Span, def_id: DefId) -> SubstsRef<'tcx> {
+    pub fn fresh_substs_for_item(&self, span: SpanId, def_id: DefId) -> SubstsRef<'tcx> {
         InternalSubsts::for_item(self.tcx, def_id, |param, _| self.var_for_def(span, param))
     }
 
@@ -1415,7 +1415,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
     /// type variables in `T`, but it never constructs the final,
     /// resolved type, so it's more efficient than
     /// `resolve_vars_if_possible()`.
-    pub fn unresolved_type_vars<T>(&self, value: &T) -> Option<(Ty<'tcx>, Option<Span>)>
+    pub fn unresolved_type_vars<T>(&self, value: &T) -> Option<(Ty<'tcx>, Option<SpanId>)>
     where
         T: TypeFoldable<'tcx>,
     {
@@ -1461,7 +1461,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
 
     pub fn type_error_struct_with_diag<M>(
         &self,
-        sp: Span,
+        sp: SpanId,
         mk_diag: M,
         actual_ty: Ty<'tcx>,
     ) -> DiagnosticBuilder<'tcx>
@@ -1492,7 +1492,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
 
     pub fn replace_bound_vars_with_fresh_vars<T>(
         &self,
-        span: Span,
+        span: SpanId,
         lbrct: LateBoundRegionConversionTime,
         value: &ty::Binder<T>,
     ) -> (T, BTreeMap<ty::BoundRegion, ty::Region<'tcx>>)
@@ -1764,7 +1764,7 @@ impl<'a, 'tcx> TypeFolder<'tcx> for ShallowResolver<'a, 'tcx> {
 }
 
 impl<'tcx> TypeTrace<'tcx> {
-    pub fn span(&self) -> Span {
+    pub fn span(&self) -> SpanId {
         self.cause.span
     }
 
@@ -1786,7 +1786,7 @@ impl<'tcx> TypeTrace<'tcx> {
 }
 
 impl<'tcx> SubregionOrigin<'tcx> {
-    pub fn span(&self) -> Span {
+    pub fn span(&self) -> SpanId {
         match *self {
             Subtype(ref a) => a.span(),
             InfStackClosure(a) => a,
@@ -1842,7 +1842,7 @@ impl<'tcx> SubregionOrigin<'tcx> {
 }
 
 impl RegionVariableOrigin {
-    pub fn span(&self) -> Span {
+    pub fn span(&self) -> SpanId {
         match *self {
             MiscVariable(a) => a,
             PatternRegion(a) => a,
@@ -1851,7 +1851,7 @@ impl RegionVariableOrigin {
             Coercion(a) => a,
             EarlyBoundRegion(a, ..) => a,
             LateBoundRegion(a, ..) => a,
-            BoundRegionInCoherence(_) => rustc_span::DUMMY_SP,
+            BoundRegionInCoherence(_) => rustc_span::DUMMY_SPID,
             UpvarRegion(_, a) => a,
             NLL(..) => bug!("NLL variable used with `span`"),
         }

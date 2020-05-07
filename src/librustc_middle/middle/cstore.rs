@@ -17,7 +17,7 @@ use rustc_session::search_paths::PathKind;
 pub use rustc_session::utils::NativeLibraryKind;
 use rustc_session::CrateDisambiguator;
 use rustc_span::symbol::Symbol;
-use rustc_span::Span;
+use rustc_span::SpanId;
 use rustc_target::spec::Target;
 
 use std::any::Any;
@@ -108,7 +108,7 @@ pub struct ExternCrate {
     pub src: ExternCrateSource,
 
     /// span of the extern crate that caused this to be loaded
-    pub span: Span,
+    pub span: SpanId,
 
     /// Number of links to reach the extern;
     /// used to select the extern with the shortest path

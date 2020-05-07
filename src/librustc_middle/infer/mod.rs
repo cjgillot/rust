@@ -5,7 +5,7 @@ use crate::ty::Region;
 use crate::ty::Ty;
 use rustc_data_structures::sync::Lrc;
 use rustc_hir::def_id::DefId;
-use rustc_span::Span;
+use rustc_span::SpanId;
 
 /// Requires that `region` must be equal to one of the regions in `choice_regions`.
 /// We often denote this using the syntax:
@@ -19,7 +19,7 @@ pub struct MemberConstraint<'tcx> {
     pub opaque_type_def_id: DefId,
 
     /// The span where the hidden type was instantiated.
-    pub definition_span: Span,
+    pub definition_span: SpanId,
 
     /// The hidden type in which `member_region` appears: used for error reporting.
     pub hidden_ty: Ty<'tcx>,

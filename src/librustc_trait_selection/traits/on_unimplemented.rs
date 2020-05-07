@@ -7,7 +7,7 @@ use rustc_errors::{struct_span_err, ErrorReported};
 use rustc_hir::def_id::DefId;
 use rustc_middle::ty::{self, GenericParamDefKind, TyCtxt};
 use rustc_span::symbol::{kw, sym, Symbol};
-use rustc_span::Span;
+use rustc_span::SpanId;
 
 #[derive(Clone, Debug)]
 pub struct OnUnimplementedFormatString(Symbol);
@@ -32,7 +32,7 @@ pub struct OnUnimplementedNote {
 
 fn parse_error(
     tcx: TyCtxt<'_>,
-    span: Span,
+    span: SpanId,
     message: &str,
     label: &str,
     note: Option<&str>,
@@ -51,7 +51,7 @@ impl<'tcx> OnUnimplementedDirective {
         tcx: TyCtxt<'tcx>,
         trait_def_id: DefId,
         items: &[NestedMetaItem],
-        span: Span,
+        span: SpanId,
         is_root: bool,
     ) -> Result<Self, ErrorReported> {
         let mut errored = false;
@@ -124,7 +124,7 @@ impl<'tcx> OnUnimplementedDirective {
             {
                 if let Some(items) = item.meta_item_list() {
                     if let Ok(subcommand) =
-                        Self::parse(tcx, trait_def_id, &items, item.span(), false)
+                        Self::parse(tcx, trait_def_id, &items, item.span().into(), false)
                     {
                         subcommands.push(subcommand);
                     } else {
@@ -137,7 +137,7 @@ impl<'tcx> OnUnimplementedDirective {
             // nothing found
             parse_error(
                 tcx,
-                item.span(),
+                item.span().into(),
                 "this attribute must have a valid value",
                 "expected value here",
                 Some(r#"eg `#[rustc_on_unimplemented(message="foo")]`"#),
@@ -172,7 +172,7 @@ impl<'tcx> OnUnimplementedDirective {
         };
 
         let result = if let Some(items) = attr.meta_item_list() {
-            Self::parse(tcx, trait_def_id, &items, attr.span, true).map(Some)
+            Self::parse(tcx, trait_def_id, &items, attr.span.into(), true).map(Some)
         } else if let Some(value) = attr.value_str() {
             Ok(Some(OnUnimplementedDirective {
                 condition: None,
@@ -182,7 +182,7 @@ impl<'tcx> OnUnimplementedDirective {
                     tcx,
                     trait_def_id,
                     value,
-                    attr.span,
+                    attr.span.into(),
                 )?),
                 note: None,
                 enclosing_scope: None,
@@ -256,7 +256,7 @@ impl<'tcx> OnUnimplementedFormatString {
         tcx: TyCtxt<'tcx>,
         trait_def_id: DefId,
         from: Symbol,
-        err_sp: Span,
+        err_sp: SpanId,
     ) -> Result<Self, ErrorReported> {
         let result = OnUnimplementedFormatString(from);
         result.verify(tcx, trait_def_id, err_sp)?;
@@ -267,7 +267,7 @@ impl<'tcx> OnUnimplementedFormatString {
         &self,
         tcx: TyCtxt<'tcx>,
         trait_def_id: DefId,
-        span: Span,
+        span: SpanId,
     ) -> Result<(), ErrorReported> {
         let name = tcx.item_name(trait_def_id);
         let generics = tcx.generics_of(trait_def_id);

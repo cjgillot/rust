@@ -18,7 +18,7 @@ use rustc_hir as hir;
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::DefId;
 use rustc_macros::HashStable;
-use rustc_span::{Span, SpanId};
+use rustc_span::SpanId;
 use rustc_target::abi::{Integer, Size, TargetDataLayout};
 use smallvec::SmallVec;
 use std::{cmp, fmt};
@@ -147,7 +147,7 @@ impl IntTypeExt for attr::IntType {
 pub enum Representability {
     Representable,
     ContainsRecursive,
-    SelfRecursive(Vec<Span>),
+    SelfRecursive(Vec<SpanId>),
 }
 
 impl<'tcx> TyCtxt<'tcx> {
@@ -794,7 +794,7 @@ impl<'tcx> ty::TyS<'tcx> {
 
     /// Check whether a type is representable. This means it cannot contain unboxed
     /// structural recursion. This check is needed for structs and enums.
-    pub fn is_representable(&'tcx self, tcx: TyCtxt<'tcx>, sp: Span) -> Representability {
+    pub fn is_representable(&'tcx self, tcx: TyCtxt<'tcx>, sp: SpanId) -> Representability {
         // Iterate until something non-representable is found
         fn fold_repr<It: Iterator<Item = Representability>>(iter: It) -> Representability {
             iter.fold(Representability::Representable, |r1, r2| match (r1, r2) {
@@ -807,7 +807,7 @@ impl<'tcx> ty::TyS<'tcx> {
 
         fn are_inner_types_recursive<'tcx>(
             tcx: TyCtxt<'tcx>,
-            sp: Span,
+            sp: SpanId,
             seen: &mut Vec<Ty<'tcx>>,
             representable_cache: &mut FxHashMap<Ty<'tcx>, Representability>,
             ty: Ty<'tcx>,
@@ -828,7 +828,7 @@ impl<'tcx> ty::TyS<'tcx> {
                     // Find non representable fields with their spans
                     fold_repr(def.all_fields().map(|field| {
                         let ty = field.ty(tcx, substs);
-                        let span = tcx.hir().span_if_local(field.did).unwrap_or(sp);
+                        let span = tcx.hir().span_if_local(field.did).map_or(sp, |s| s.into());
                         match is_type_structurally_recursive(
                             tcx,
                             span,
@@ -863,7 +863,7 @@ impl<'tcx> ty::TyS<'tcx> {
         // contain any types on stack `seen`?
         fn is_type_structurally_recursive<'tcx>(
             tcx: TyCtxt<'tcx>,
-            sp: Span,
+            sp: SpanId,
             seen: &mut Vec<Ty<'tcx>>,
             representable_cache: &mut FxHashMap<Ty<'tcx>, Representability>,
             ty: Ty<'tcx>,
@@ -886,7 +886,7 @@ impl<'tcx> ty::TyS<'tcx> {
 
         fn is_type_structurally_recursive_inner<'tcx>(
             tcx: TyCtxt<'tcx>,
-            sp: Span,
+            sp: SpanId,
             seen: &mut Vec<Ty<'tcx>>,
             representable_cache: &mut FxHashMap<Ty<'tcx>, Representability>,
             ty: Ty<'tcx>,

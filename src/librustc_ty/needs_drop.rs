@@ -68,7 +68,7 @@ where
 
         while let Some((ty, level)) = self.unchecked_tys.pop() {
             if level > self.recursion_limit {
-                // Not having a `Span` isn't great. But there's hopefully some other
+                // Not having a `SpanId` isn't great. But there's hopefully some other
                 // recursion limit error as well.
                 tcx.sess.span_err(
                     DUMMY_SPID,

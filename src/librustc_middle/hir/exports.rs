@@ -4,7 +4,7 @@ use rustc_hir::def::Res;
 use rustc_hir::def_id::DefIdMap;
 use rustc_macros::HashStable;
 use rustc_span::symbol::Ident;
-use rustc_span::Span;
+use rustc_span::SpanId;
 
 use std::fmt::Debug;
 
@@ -19,7 +19,7 @@ pub struct Export<Id> {
     /// The resolution of the target.
     pub res: Res<Id>,
     /// The span of the target.
-    pub span: Span,
+    pub span: SpanId,
     /// The visibility of the export.
     /// We include non-`pub` exports for hygienic macros that get used from extern crates.
     pub vis: ty::Visibility,

@@ -8,7 +8,7 @@ use crate::ty::{self, Lift, List, ParamConst, Ty, TyCtxt};
 use rustc_hir::def_id::DefId;
 use rustc_macros::HashStable;
 use rustc_serialize::{self, Decodable, Decoder, Encodable, Encoder};
-use rustc_span::{Span, DUMMY_SP};
+use rustc_span::{SpanId, DUMMY_SPID};
 use smallvec::SmallVec;
 
 use core::intrinsics;
@@ -401,7 +401,7 @@ pub trait Subst<'tcx>: Sized {
         &self,
         tcx: TyCtxt<'tcx>,
         substs: &[GenericArg<'tcx>],
-        span: Option<Span>,
+        span: Option<SpanId>,
     ) -> Self;
 }
 
@@ -410,7 +410,7 @@ impl<'tcx, T: TypeFoldable<'tcx>> Subst<'tcx> for T {
         &self,
         tcx: TyCtxt<'tcx>,
         substs: &[GenericArg<'tcx>],
-        span: Option<Span>,
+        span: Option<SpanId>,
     ) -> T {
         let mut folder =
             SubstFolder { tcx, substs, span, root_ty: None, ty_stack_depth: 0, binders_passed: 0 };
@@ -426,7 +426,7 @@ struct SubstFolder<'a, 'tcx> {
     substs: &'a [GenericArg<'tcx>],
 
     /// The location for which the substitution is performed, if available.
-    span: Option<Span>,
+    span: Option<SpanId>,
 
     /// The root type that is being substituted, if available.
     root_ty: Option<Ty<'tcx>>,
@@ -462,7 +462,7 @@ impl<'a, 'tcx> TypeFolder<'tcx> for SubstFolder<'a, 'tcx> {
                 match rk {
                     Some(GenericArgKind::Lifetime(lt)) => self.shift_region_through_binders(lt),
                     _ => {
-                        let span = self.span.unwrap_or(DUMMY_SP);
+                        let span = self.span.unwrap_or(DUMMY_SPID);
                         let msg = format!(
                             "Region parameter out of range \
                              when substituting in region {} (root type={:?}) \
@@ -523,7 +523,7 @@ impl<'a, 'tcx> SubstFolder<'a, 'tcx> {
         let ty = match opt_ty {
             Some(GenericArgKind::Type(ty)) => ty,
             Some(kind) => {
-                let span = self.span.unwrap_or(DUMMY_SP);
+                let span = self.span.unwrap_or(DUMMY_SPID);
                 span_bug!(
                     span,
                     "expected type for `{:?}` ({:?}/{}) but found {:?} \
@@ -537,7 +537,7 @@ impl<'a, 'tcx> SubstFolder<'a, 'tcx> {
                 );
             }
             None => {
-                let span = self.span.unwrap_or(DUMMY_SP);
+                let span = self.span.unwrap_or(DUMMY_SPID);
                 span_bug!(
                     span,
                     "type parameter `{:?}` ({:?}/{}) out of range \
@@ -564,7 +564,7 @@ impl<'a, 'tcx> SubstFolder<'a, 'tcx> {
         let ct = match opt_ct {
             Some(GenericArgKind::Const(ct)) => ct,
             Some(kind) => {
-                let span = self.span.unwrap_or(DUMMY_SP);
+                let span = self.span.unwrap_or(DUMMY_SPID);
                 span_bug!(
                     span,
                     "expected const for `{:?}` ({:?}/{}) but found {:?} \
@@ -577,7 +577,7 @@ impl<'a, 'tcx> SubstFolder<'a, 'tcx> {
                 );
             }
             None => {
-                let span = self.span.unwrap_or(DUMMY_SP);
+                let span = self.span.unwrap_or(DUMMY_SPID);
                 span_bug!(
                     span,
                     "const parameter `{:?}` ({:?}/{}) out of range \

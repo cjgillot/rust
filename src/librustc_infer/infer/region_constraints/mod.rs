@@ -19,7 +19,7 @@ use rustc_middle::ty::ReStatic;
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_middle::ty::{ReLateBound, ReVar};
 use rustc_middle::ty::{Region, RegionVid};
-use rustc_span::Span;
+use rustc_span::SpanId;
 
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -603,7 +603,7 @@ impl<'tcx> RegionConstraintCollector<'_, 'tcx> {
     pub fn member_constraint(
         &mut self,
         opaque_type_def_id: DefId,
-        definition_span: Span,
+        definition_span: SpanId,
         hidden_ty: Ty<'tcx>,
         member_region: ty::Region<'tcx>,
         choice_regions: &Lrc<Vec<ty::Region<'tcx>>>,

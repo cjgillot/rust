@@ -51,8 +51,8 @@ impl<'a, 'tcx> NiceRegionError<'a, 'tcx> {
                     if let Node::Expr(Expr { kind: Closure(_, _, _, closure_span, None), .. }) =
                         hir.get(hir_id)
                     {
-                        let sup_sp = sup_origin.span();
-                        let origin_sp = origin.span();
+                        let sup_sp = self.tcx().reify_span(sup_origin.span());
+                        let origin_sp = self.tcx().reify_span(origin.span());
                         let mut err = self.tcx().sess.struct_span_err(
                             sup_sp,
                             "borrowed data cannot be stored outside of its closure",

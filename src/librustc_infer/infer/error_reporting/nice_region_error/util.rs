@@ -5,7 +5,7 @@ use crate::infer::error_reporting::nice_region_error::NiceRegionError;
 use rustc_hir as hir;
 use rustc_hir::def_id::DefId;
 use rustc_middle::ty::{self, DefIdTree, Region, Ty};
-use rustc_span::Span;
+use rustc_span::SpanId;
 
 // The struct contains the information about the anonymous region
 // we are searching for.
@@ -18,7 +18,7 @@ pub(super) struct AnonymousParamInfo<'tcx> {
     // the ty::BoundRegion corresponding to the anonymous region
     pub bound_region: ty::BoundRegion,
     // param_ty_span contains span of parameter type
-    pub param_ty_span: Span,
+    pub param_ty_span: SpanId,
     // corresponds to id the argument is the first parameter
     // in the declaration
     pub is_first: bool,
@@ -72,7 +72,7 @@ impl<'a, 'tcx> NiceRegionError<'a, 'tcx> {
             });
             if found_anon_region {
                 let ty_hir_id = fn_decl.inputs[index].hir_id;
-                let param_ty_span = hir.span(ty_hir_id);
+                let param_ty_span = hir.span(ty_hir_id).into();
                 let is_first = index == 0;
                 Some(AnonymousParamInfo {
                     param,
@@ -95,14 +95,14 @@ impl<'a, 'tcx> NiceRegionError<'a, 'tcx> {
         scope_def_id: DefId,
         br: ty::BoundRegion,
         decl: &hir::FnDecl<'_>,
-    ) -> Option<Span> {
+    ) -> Option<SpanId> {
         let ret_ty = self.tcx().type_of(scope_def_id);
         if let ty::FnDef(_, _) = ret_ty.kind {
             let sig = ret_ty.fn_sig(self.tcx());
             let late_bound_regions =
                 self.tcx().collect_referenced_late_bound_regions(&sig.output());
             if late_bound_regions.iter().any(|r| *r == br) {
-                return Some(decl.output.span());
+                return Some(decl.output.span().into());
             }
         }
         None

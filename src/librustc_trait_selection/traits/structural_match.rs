@@ -5,7 +5,7 @@ use crate::traits::{self, ConstPatternStructural, TraitEngine};
 use rustc_data_structures::fx::FxHashSet;
 use rustc_hir as hir;
 use rustc_middle::ty::{self, AdtDef, Ty, TyCtxt, TypeFoldable, TypeVisitor};
-use rustc_span::Span;
+use rustc_span::SpanId;
 
 #[derive(Debug)]
 pub enum NonStructuralMatchTy<'tcx> {
@@ -41,7 +41,7 @@ pub enum NonStructuralMatchTy<'tcx> {
 /// Rust RFC 1445, rust-lang/rust#61188, and rust-lang/rust#62307.
 pub fn search_for_structural_match_violation<'tcx>(
     id: hir::HirId,
-    span: Span,
+    span: SpanId,
     tcx: TyCtxt<'tcx>,
     ty: Ty<'tcx>,
 ) -> Option<NonStructuralMatchTy<'tcx>> {
@@ -62,7 +62,7 @@ pub fn search_for_structural_match_violation<'tcx>(
 /// implements the traits.
 pub fn type_marked_structural(
     id: hir::HirId,
-    span: Span,
+    span: SpanId,
     infcx: &InferCtxt<'_, 'tcx>,
     adt_ty: Ty<'tcx>,
 ) -> bool {
@@ -106,7 +106,7 @@ pub fn type_marked_structural(
 /// the structural-match traits (`StructuralPartialEq` and `StructuralEq`).
 struct Search<'a, 'tcx> {
     id: hir::HirId,
-    span: Span,
+    span: SpanId,
 
     infcx: InferCtxt<'a, 'tcx>,
 

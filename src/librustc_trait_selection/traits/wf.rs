@@ -6,7 +6,7 @@ use rustc_hir::def_id::DefId;
 use rustc_hir::lang_items;
 use rustc_middle::ty::subst::{GenericArgKind, SubstsRef};
 use rustc_middle::ty::{self, ToPredicate, Ty, TyCtxt, TypeFoldable, WithConstness};
-use rustc_span::Span;
+use rustc_span::SpanId;
 use std::rc::Rc;
 
 /// Returns the set of obligations needed to make `ty` well-formed.
@@ -20,7 +20,7 @@ pub fn obligations<'a, 'tcx>(
     param_env: ty::ParamEnv<'tcx>,
     body_id: hir::HirId,
     ty: Ty<'tcx>,
-    span: Span,
+    span: SpanId,
 ) -> Option<Vec<traits::PredicateObligation<'tcx>>> {
     // Handle the "livelock" case (see comment above) by bailing out if necessary.
     let ty = match ty.kind {
@@ -54,7 +54,7 @@ pub fn trait_obligations<'a, 'tcx>(
     param_env: ty::ParamEnv<'tcx>,
     body_id: hir::HirId,
     trait_ref: &ty::TraitRef<'tcx>,
-    span: Span,
+    span: SpanId,
     item: Option<&'tcx hir::Item<'tcx>>,
 ) -> Vec<traits::PredicateObligation<'tcx>> {
     let mut wf = WfPredicates { infcx, param_env, body_id, span, out: vec![], item };
@@ -67,7 +67,7 @@ pub fn predicate_obligations<'a, 'tcx>(
     param_env: ty::ParamEnv<'tcx>,
     body_id: hir::HirId,
     predicate: &ty::Predicate<'tcx>,
-    span: Span,
+    span: SpanId,
 ) -> Vec<traits::PredicateObligation<'tcx>> {
     let mut wf = WfPredicates { infcx, param_env, body_id, span, out: vec![], item: None };
 
@@ -111,7 +111,7 @@ struct WfPredicates<'a, 'tcx> {
     infcx: &'a InferCtxt<'a, 'tcx>,
     param_env: ty::ParamEnv<'tcx>,
     body_id: hir::HirId,
-    span: Span,
+    span: SpanId,
     out: Vec<traits::PredicateObligation<'tcx>>,
     item: Option<&'tcx hir::Item<'tcx>>,
 }
@@ -163,8 +163,8 @@ fn extend_cause_with_original_assoc_item_obligation<'tcx>(
     };
     let fix_span =
         |impl_item_ref: &hir::ImplItemRef<'_>| match tcx.hir().impl_item(impl_item_ref.id).kind {
-            hir::ImplItemKind::Const(ty, _) | hir::ImplItemKind::TyAlias(ty) => ty.span,
-            _ => impl_item_ref.span,
+            hir::ImplItemKind::Const(ty, _) | hir::ImplItemKind::TyAlias(ty) => ty.span.into(),
+            _ => impl_item_ref.span.into(),
         };
     match pred {
         ty::Predicate::Projection(proj) => {
@@ -549,8 +549,7 @@ impl<'a, 'tcx> WfPredicates<'a, 'tcx> {
             .into_iter()
             .zip(predicates.spans.into_iter())
             .map(|(pred, span)| {
-                let cause =
-                    self.cause(traits::BindingObligation(def_id, self.infcx.tcx.reify_span(span)));
+                let cause = self.cause(traits::BindingObligation(def_id, span));
                 traits::Obligation::new(cause, self.param_env, pred)
             })
             .filter(|pred| !pred.has_escaping_bound_vars())

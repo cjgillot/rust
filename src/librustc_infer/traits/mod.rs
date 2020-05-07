@@ -11,7 +11,7 @@ pub mod util;
 use rustc_hir as hir;
 use rustc_middle::ty::error::{ExpectedFound, TypeError};
 use rustc_middle::ty::{self, Ty};
-use rustc_span::Span;
+use rustc_span::SpanId;
 
 pub use self::FulfillmentErrorCode::*;
 pub use self::ObligationCauseCode::*;
@@ -59,7 +59,7 @@ pub type TraitObligation<'tcx> = Obligation<'tcx, ty::PolyTraitPredicate<'tcx>>;
 
 // `PredicateObligation` is used a lot. Make sure it doesn't unintentionally get bigger.
 #[cfg(target_arch = "x86_64")]
-static_assert_size!(PredicateObligation<'_>, 112);
+static_assert_size!(PredicateObligation<'_>, 120);
 
 pub type Obligations<'tcx, O> = Vec<Obligation<'tcx, O>>;
 pub type PredicateObligations<'tcx> = Vec<PredicateObligation<'tcx>>;
@@ -103,7 +103,7 @@ impl<'tcx, O> Obligation<'tcx, O> {
     }
 
     pub fn misc(
-        span: Span,
+        span: SpanId,
         body_id: hir::HirId,
         param_env: ty::ParamEnv<'tcx>,
         trait_ref: O,

@@ -3,7 +3,7 @@
 use rustc_hir::lang_items;
 use rustc_infer::infer::TyCtxtInferExt;
 use rustc_middle::ty::{self, Ty, TyCtxt};
-use rustc_span::DUMMY_SP;
+use rustc_span::DUMMY_SPID;
 use rustc_trait_selection::traits;
 
 fn is_copy_raw<'tcx>(tcx: TyCtxt<'tcx>, query: ty::ParamEnvAnd<'tcx, Ty<'tcx>>) -> bool {
@@ -31,7 +31,7 @@ fn is_item_raw<'tcx>(
             param_env,
             ty,
             trait_def_id,
-            DUMMY_SP,
+            DUMMY_SPID,
         )
     })
 }

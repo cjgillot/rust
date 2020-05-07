@@ -14,7 +14,7 @@ use rustc_hir::Node;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
 use rustc_macros::HashStable;
-use rustc_span::{Span, DUMMY_SP};
+use rustc_span::{Span, SpanId, DUMMY_SPID};
 
 use std::fmt;
 
@@ -168,10 +168,10 @@ impl Scope {
     /// Returns the span of this `Scope`. Note that in general the
     /// returned span may not correspond to the span of any `NodeId` in
     /// the AST.
-    pub fn span(&self, tcx: TyCtxt<'_>, scope_tree: &ScopeTree) -> Span {
+    pub fn span(&self, tcx: TyCtxt<'_>, scope_tree: &ScopeTree) -> SpanId {
         let hir_id = match self.hir_id(scope_tree) {
             Some(hir_id) => hir_id,
-            None => return DUMMY_SP,
+            None => return DUMMY_SPID,
         };
         let span = tcx.hir().span(hir_id);
         if let ScopeData::Remainder(first_statement_index) = self.data {
@@ -189,11 +189,11 @@ impl Scope {
                 // To avoid issues with macro-generated spans, the span
                 // of the statement must be nested in that of the block.
                 if span.lo() <= stmt_span.lo() && stmt_span.lo() <= span.hi() {
-                    return Span::new(stmt_span.lo(), span.hi(), span.ctxt());
+                    return Span::new(stmt_span.lo(), span.hi(), span.ctxt()).into();
                 }
             }
         }
-        span
+        span.into()
     }
 }
 
@@ -248,7 +248,7 @@ pub struct ScopeTree {
     closure_tree: FxHashMap<hir::ItemLocalId, hir::ItemLocalId>,
 
     /// If there are any `yield` nested within a scope, this map
-    /// stores the `Span` of the last one and its index in the
+    /// stores the `SpanId` of the last one and its index in the
     /// postorder of the Visitor traversal on the HIR.
     ///
     /// HIR Visitor postorder indexes might seem like a peculiar
@@ -326,8 +326,8 @@ pub struct ScopeTree {
 
 #[derive(Debug, Copy, Clone, RustcEncodable, RustcDecodable, HashStable)]
 pub struct YieldData {
-    /// The `Span` of the yield.
-    pub span: Span,
+    /// The `SpanId` of the yield.
+    pub span: SpanId,
     /// The number of expressions and patterns appearing before the `yield` in the body plus one.
     pub expr_and_pat_count: usize,
     pub source: hir::YieldSource,
@@ -565,7 +565,7 @@ impl<'tcx> ScopeTree {
                 // is the parent of a method, and that is enforced below.
                 if Some(param_owner_id) != self.root_parent {
                     tcx.sess.delay_span_bug(
-                        DUMMY_SP,
+                        DUMMY_SPID,
                         &format!(
                             "free_scope: {:?} not recognized by the \
                               region scope tree for {:?} / {:?}",

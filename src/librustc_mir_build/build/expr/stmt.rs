@@ -118,7 +118,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                         kind: StatementKind::LlvmInlineAsm(box LlvmInlineAsm {
                             asm: asm.clone(),
                             outputs,
-                            inputs,
+                            inputs: inputs.into(),
                         }),
                     },
                 );

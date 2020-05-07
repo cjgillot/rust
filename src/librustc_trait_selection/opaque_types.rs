@@ -13,7 +13,7 @@ use rustc_middle::ty::fold::{BottomUpFolder, TypeFoldable, TypeFolder, TypeVisit
 use rustc_middle::ty::subst::{GenericArg, GenericArgKind, InternalSubsts, SubstsRef};
 use rustc_middle::ty::{self, GenericParamDefKind, Ty, TyCtxt};
 use rustc_session::config::nightly_options;
-use rustc_span::Span;
+use rustc_span::SpanId;
 
 pub type OpaqueTypeMap<'tcx> = DefIdMap<OpaqueTypeDecl<'tcx>>;
 
@@ -50,7 +50,7 @@ pub struct OpaqueTypeDecl<'tcx> {
     /// In cases where the fn returns `(impl Trait, impl Trait)` or
     /// other such combinations, the result is currently
     /// over-approximated, but better than nothing.
-    pub definition_span: Span,
+    pub definition_span: SpanId,
 
     /// The type variable that represents the value of the opaque type
     /// that we require. In other words, after we compile this function,
@@ -112,7 +112,7 @@ pub trait InferCtxtExt<'tcx> {
         body_id: hir::HirId,
         param_env: ty::ParamEnv<'tcx>,
         value: &T,
-        value_span: Span,
+        value_span: SpanId,
     ) -> InferOk<'tcx, (T, OpaqueTypeMap<'tcx>)>;
 
     fn constrain_opaque_types<FRR: FreeRegionRelations<'tcx>>(
@@ -152,7 +152,7 @@ pub trait InferCtxtExt<'tcx> {
         def_id: DefId,
         substs: SubstsRef<'tcx>,
         instantiated_ty: Ty<'tcx>,
-        span: Span,
+        span: SpanId,
     ) -> Ty<'tcx>;
 }
 
@@ -188,7 +188,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
         body_id: hir::HirId,
         param_env: ty::ParamEnv<'tcx>,
         value: &T,
-        value_span: Span,
+        value_span: SpanId,
     ) -> InferOk<'tcx, (T, OpaqueTypeMap<'tcx>)> {
         debug!(
             "instantiate_opaque_types(value={:?}, parent_def_id={:?}, body_id={:?}, \
@@ -407,7 +407,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
 
         let opaque_type_generics = tcx.generics_of(def_id);
 
-        let span = tcx.real_def_span(def_id);
+        let span = tcx.def_span(def_id);
 
         // If there are required region bounds, we can use them.
         if opaque_defn.has_required_region_bounds {
@@ -632,7 +632,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
         def_id: DefId,
         substs: SubstsRef<'tcx>,
         instantiated_ty: Ty<'tcx>,
-        span: Span,
+        span: SpanId,
     ) -> Ty<'tcx> {
         debug!(
             "infer_opaque_definition_from_instantiation(def_id={:?}, instantiated_ty={:?})",
@@ -755,8 +755,8 @@ struct ReverseMapper<'tcx> {
     /// initially `Some`, set to `None` once error has been reported
     hidden_ty: Option<Ty<'tcx>>,
 
-    /// Span of function being checked.
-    span: Span,
+    /// SpanId of function being checked.
+    span: SpanId,
 }
 
 impl ReverseMapper<'tcx> {
@@ -766,7 +766,7 @@ impl ReverseMapper<'tcx> {
         opaque_type_def_id: DefId,
         map: FxHashMap<GenericArg<'tcx>, GenericArg<'tcx>>,
         hidden_ty: Ty<'tcx>,
-        span: Span,
+        span: SpanId,
     ) -> Self {
         Self {
             tcx,
@@ -836,7 +836,7 @@ impl TypeFolder<'tcx> for ReverseMapper<'tcx> {
                     unexpected_hidden_region_diagnostic(
                         self.tcx,
                         None,
-                        self.tcx.real_def_span(self.opaque_type_def_id),
+                        self.tcx.def_span(self.opaque_type_def_id),
                         hidden_ty,
                         r,
                     )
@@ -987,7 +987,7 @@ struct Instantiator<'a, 'tcx> {
     parent_def_id: DefId,
     body_id: hir::HirId,
     param_env: ty::ParamEnv<'tcx>,
-    value_span: Span,
+    value_span: SpanId,
     opaque_types: OpaqueTypeMap<'tcx>,
     obligations: Vec<PredicateObligation<'tcx>>,
 }
@@ -1121,7 +1121,7 @@ impl<'a, 'tcx> Instantiator<'a, 'tcx> {
             debug!("instantiate_opaque_types: returning concrete ty {:?}", opaque_defn.concrete_ty);
             return opaque_defn.concrete_ty;
         }
-        let span = tcx.real_def_span(def_id);
+        let span = tcx.def_span(def_id);
         debug!("fold_opaque_ty {:?} {:?}", self.value_span, span);
         let ty_var = infcx
             .next_ty_var(TypeVariableOrigin { kind: TypeVariableOriginKind::TypeInference, span });

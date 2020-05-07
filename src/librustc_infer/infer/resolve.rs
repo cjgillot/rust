@@ -1,5 +1,5 @@
 use super::type_variable::{TypeVariableOrigin, TypeVariableOriginKind};
-use super::{FixupError, FixupResult, InferCtxt, Span};
+use super::{FixupError, FixupResult, InferCtxt, SpanId};
 use rustc_middle::ty::fold::{TypeFolder, TypeVisitor};
 use rustc_middle::ty::{self, Const, InferConst, Ty, TyCtxt, TypeFoldable};
 
@@ -106,7 +106,7 @@ pub struct UnresolvedTypeFinder<'a, 'tcx> {
     infcx: &'a InferCtxt<'a, 'tcx>,
 
     /// Used to find the type parameter name and location for error reporting.
-    pub first_unresolved: Option<(Ty<'tcx>, Option<Span>)>,
+    pub first_unresolved: Option<(Ty<'tcx>, Option<SpanId>)>,
 }
 
 impl<'a, 'tcx> UnresolvedTypeFinder<'a, 'tcx> {

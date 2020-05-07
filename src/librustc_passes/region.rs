@@ -401,7 +401,7 @@ fn resolve_expr<'tcx>(visitor: &mut RegionResolutionVisitor<'tcx>, expr: &'tcx h
         let mut scope = Scope { id: expr.hir_id.local_id, data: ScopeData::Node };
         loop {
             let data = YieldData {
-                span: expr.span,
+                span: expr.span.into(),
                 expr_and_pat_count: visitor.expr_and_pat_count,
                 source: *source,
             };

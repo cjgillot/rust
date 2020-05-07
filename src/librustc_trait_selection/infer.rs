@@ -9,7 +9,7 @@ use rustc_middle::arena::ArenaAllocatable;
 use rustc_middle::infer::canonical::{Canonical, CanonicalizedQueryResponse, QueryResponse};
 use rustc_middle::traits::query::Fallible;
 use rustc_middle::ty::{self, Ty, TypeFoldable};
-use rustc_span::{Span, DUMMY_SP};
+use rustc_span::{SpanId, DUMMY_SPID};
 
 use std::fmt::Debug;
 
@@ -20,12 +20,12 @@ pub trait InferCtxtExt<'tcx> {
         &self,
         param_env: ty::ParamEnv<'tcx>,
         ty: Ty<'tcx>,
-        span: Span,
+        span: SpanId,
     ) -> bool;
 
     fn partially_normalize_associated_types_in<T>(
         &self,
-        span: Span,
+        span: SpanId,
         body_id: hir::HirId,
         param_env: ty::ParamEnv<'tcx>,
         value: &T,
@@ -39,7 +39,7 @@ impl<'cx, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'cx, 'tcx> {
         &self,
         param_env: ty::ParamEnv<'tcx>,
         ty: Ty<'tcx>,
-        span: Span,
+        span: SpanId,
     ) -> bool {
         let ty = self.resolve_vars_if_possible(&ty);
 
@@ -60,7 +60,7 @@ impl<'cx, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'cx, 'tcx> {
     /// new obligations that must further be processed.
     fn partially_normalize_associated_types_in<T>(
         &self,
-        span: Span,
+        span: SpanId,
         body_id: hir::HirId,
         param_env: ty::ParamEnv<'tcx>,
         value: &T,
@@ -121,7 +121,7 @@ impl<'tcx> InferCtxtBuilderExt<'tcx> for InferCtxtBuilder<'tcx> {
         Canonical<'tcx, QueryResponse<'tcx, R>>: ArenaAllocatable,
     {
         self.enter_with_canonical(
-            DUMMY_SP,
+            DUMMY_SPID,
             canonical_key,
             |ref infcx, key, canonical_inference_vars| {
                 let mut fulfill_cx = TraitEngine::new(infcx.tcx);
@@ -142,7 +142,7 @@ pub trait OutlivesEnvironmentExt<'tcx> {
         infcx: &InferCtxt<'a, 'tcx>,
         fn_sig_tys: &[Ty<'tcx>],
         body_id: hir::HirId,
-        span: Span,
+        span: SpanId,
     );
 }
 
@@ -168,7 +168,7 @@ impl<'tcx> OutlivesEnvironmentExt<'tcx> for OutlivesEnvironment<'tcx> {
         infcx: &InferCtxt<'a, 'tcx>,
         fn_sig_tys: &[Ty<'tcx>],
         body_id: hir::HirId,
-        span: Span,
+        span: SpanId,
     ) {
         debug!("add_implied_bounds()");
 

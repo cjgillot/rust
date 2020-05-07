@@ -14,7 +14,7 @@ use crate::ty::{self, Ty, TyCtxt};
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
 use rustc_data_structures::sync::Lrc;
 use rustc_errors::struct_span_err;
-use rustc_span::source_map::Span;
+use rustc_span::source_map::SpanId;
 use std::iter::FromIterator;
 use std::mem;
 
@@ -127,7 +127,7 @@ pub struct DropckOutlivesResult<'tcx> {
 }
 
 impl<'tcx> DropckOutlivesResult<'tcx> {
-    pub fn report_overflows(&self, tcx: TyCtxt<'tcx>, span: Span, ty: Ty<'tcx>) {
+    pub fn report_overflows(&self, tcx: TyCtxt<'tcx>, span: SpanId, ty: Ty<'tcx>) {
         if let Some(overflow_ty) = self.overflows.iter().next() {
             let mut err = struct_span_err!(
                 tcx.sess,
@@ -144,7 +144,7 @@ impl<'tcx> DropckOutlivesResult<'tcx> {
     pub fn into_kinds_reporting_overflows(
         self,
         tcx: TyCtxt<'tcx>,
-        span: Span,
+        span: SpanId,
         ty: Ty<'tcx>,
     ) -> Vec<GenericArg<'tcx>> {
         self.report_overflows(tcx, span, ty);
