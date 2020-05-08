@@ -242,7 +242,7 @@ fn suggest_restriction(
                     //            ^^^^^^^^^^ get this to suggest `T` instead
 
                     // There might be more than one `impl Trait`.
-                    ty_spans.push(input.span);
+                    ty_spans.push(tcx.hir().span(input.hir_id));
                 }
             }
         }
@@ -913,7 +913,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
         {
             let body = hir.body(*body_id);
             if let hir::ExprKind::Block(blk, _) = &body.value.kind {
-                if sig.decl.output.span().overlaps(span)
+                if sig.decl.output.span(|id| hir.span(id)).overlaps(span)
                     && blk.expr.is_none()
                     && is_empty_tuple(trait_ref.self_ty())
                 {
@@ -939,7 +939,11 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
             _ => return None,
         };
 
-        if let hir::FnRetTy::Return(ret_ty) = sig.decl.output { Some(ret_ty.span) } else { None }
+        if let hir::FnRetTy::Return(ret_ty) = sig.decl.output {
+            Some(self.tcx.hir().span(ret_ty.hir_id))
+        } else {
+            None
+        }
     }
 
     /// If all conditions are met to identify a returned `dyn Trait`, suggest using `impl Trait` if
@@ -1032,33 +1036,36 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
                 (Some(ty), same, only_never_return && matches!(ty.kind, ty::Never))
             },
         );
-        let all_returns_conform_to_trait =
-            if let Some(ty_ret_ty) = tables.node_type_opt(ret_ty.hir_id) {
-                match ty_ret_ty.kind {
-                    ty::Dynamic(predicates, _) => {
-                        let cause = ObligationCause::misc(ret_ty.span, ret_ty.hir_id);
-                        let param_env = ty::ParamEnv::empty();
-                        only_never_return
-                            || ret_types.all(|returned_ty| {
-                                predicates.iter().all(|predicate| {
-                                    let pred = predicate.with_self_ty(self.tcx, returned_ty);
-                                    let obl = Obligation::new(cause.clone(), param_env, pred);
-                                    self.predicate_may_hold(&obl)
-                                })
+        let all_returns_conform_to_trait = if let Some(ty_ret_ty) =
+            tables.node_type_opt(ret_ty.hir_id)
+        {
+            match ty_ret_ty.kind {
+                ty::Dynamic(predicates, _) => {
+                    let cause =
+                        ObligationCause::misc(self.tcx.hir().span(ret_ty.hir_id), ret_ty.hir_id);
+                    let param_env = ty::ParamEnv::empty();
+                    only_never_return
+                        || ret_types.all(|returned_ty| {
+                            predicates.iter().all(|predicate| {
+                                let pred = predicate.with_self_ty(self.tcx, returned_ty);
+                                let obl = Obligation::new(cause.clone(), param_env, pred);
+                                self.predicate_may_hold(&obl)
                             })
-                    }
-                    _ => false,
+                        })
                 }
-            } else {
-                true
-            };
+                _ => false,
+            }
+        } else {
+            true
+        };
 
         let sm = self.tcx.sess.source_map();
+        let ret_ty_span = self.tcx.hir().span(ret_ty.hir_id);
         let snippet = if let (true, hir::TyKind::TraitObject(..), Ok(snippet), true) = (
             // Verify that we're dealing with a return `dyn Trait`
-            ret_ty.span.overlaps(span),
+            ret_ty_span.overlaps(span),
             &ret_ty.kind,
-            sm.span_to_snippet(ret_ty.span),
+            sm.span_to_snippet(ret_ty_span),
             // If any of the return types does not conform to the trait, then we can't
             // suggest `impl Trait` nor trait objects: it is a type mismatch error.
             all_returns_conform_to_trait,
@@ -1083,14 +1090,14 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
             // Suggest `-> T`, `-> impl Trait`, and if `Trait` is object safe, `-> Box<dyn Trait>`.
             suggest_trait_object_return_type_alternatives(
                 err,
-                ret_ty.span,
+                ret_ty_span,
                 trait_obj,
                 is_object_safe,
             );
         } else if let (Some(last_ty), true) = (last_ty, all_returns_have_same_type) {
             // Suggest `-> impl Trait`.
             err.span_suggestion(
-                ret_ty.span,
+                ret_ty_span,
                 &format!(
                     "use `impl {1}` as the return type, as all return paths are of type `{}`, \
                      which implements `{1}`",
@@ -1114,7 +1121,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
                     .collect::<Option<Vec<_>>>()
                 {
                     // Add the suggestion for the return type.
-                    suggestions.push((ret_ty.span, format!("Box<dyn {}>", trait_obj)));
+                    suggestions.push((ret_ty_span, format!("Box<dyn {}>", trait_obj)));
                     err.multipart_suggestion(
                         "return a boxed trait object instead",
                         suggestions,

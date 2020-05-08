@@ -537,7 +537,7 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, 'tcx> {
                                     },
                                 )
                             })
-                            .map(|arg| arg.span)
+                            .map(|arg| hir.span(arg.hir_id))
                             .unwrap_or(ident.span),
                     ),
                     _ => None,
@@ -570,7 +570,7 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, 'tcx> {
                 }) => {
                     err.span_label(ident.span, "");
                     err.span_label(
-                        sig.decl.output.span(),
+                        sig.decl.output.span(|id| hir.span(id)),
                         "change this to return `FnMut` instead of `Fn`",
                     );
                     err.span_label(self.body.span, "in this closure");
@@ -704,7 +704,8 @@ fn annotate_struct_field(
                     // Get the snippets in two parts - the named lifetime (if there is one) and
                     // type being referenced, that way we can reconstruct the snippet without loss
                     // of detail.
-                    let type_snippet = tcx.sess.source_map().span_to_snippet(ty.span).ok()?;
+                    let type_snippet =
+                        tcx.sess.source_map().span_to_snippet(tcx.hir().span(ty.hir_id)).ok()?;
                     let lifetime_snippet = if !lifetime.is_elided() {
                         format!("{} ", tcx.sess.source_map().span_to_snippet(lifetime.span).ok()?)
                     } else {
@@ -712,7 +713,7 @@ fn annotate_struct_field(
                     };
 
                     return Some((
-                        field.ty.span,
+                        tcx.hir().span(field.ty.hir_id),
                         format!("&{}mut {}", lifetime_snippet, &*type_snippet,),
                     ));
                 }

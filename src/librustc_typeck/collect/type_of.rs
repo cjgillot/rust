@@ -38,7 +38,7 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: DefId) -> Ty<'_> {
                             tcx,
                             def_id.expect_local(),
                             body_id,
-                            ty.span,
+                            tcx.hir().span(ty.hir_id),
                             item.ident,
                         ))
                     } else {
@@ -60,7 +60,13 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: DefId) -> Ty<'_> {
             }
             ImplItemKind::Const(ref ty, body_id) => {
                 if is_suggestable_infer_ty(ty) {
-                    infer_placeholder_type(tcx, def_id.expect_local(), body_id, ty.span, item.ident)
+                    infer_placeholder_type(
+                        tcx,
+                        def_id.expect_local(),
+                        body_id,
+                        tcx.hir().span(ty.hir_id),
+                        item.ident,
+                    )
                 } else {
                     icx.to_ty(ty)
                 }
@@ -83,7 +89,7 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: DefId) -> Ty<'_> {
                             tcx,
                             def_id.expect_local(),
                             body_id,
-                            ty.span,
+                            tcx.hir().span(ty.hir_id),
                             item.ident,
                         )
                     } else {
@@ -316,7 +322,7 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: DefId) -> Ty<'_> {
                         feature_err(
                             &tcx.sess.parse_sess,
                             sym::const_compare_raw_pointers,
-                            hir_ty.span,
+                            tcx.hir().span(hir_ty.hir_id),
                             &format!(
                                 "using {} as const generic parameters is unstable",
                                 unsupported_type
@@ -332,20 +338,21 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: DefId) -> Ty<'_> {
                     // We use the same error code in both branches, because this is really the same
                     // issue: we just special-case the message for type parameters to make it
                     // clearer.
+                    let hir_ty_span = tcx.hir().span(hir_ty.hir_id);
                     if let ty::Param(_) = ty.peel_refs().kind {
                         // Const parameters may not have type parameters as their types,
                         // because we cannot be sure that the type parameter derives `PartialEq`
                         // and `Eq` (just implementing them is not enough for `structural_match`).
                         struct_span_err!(
                             tcx.sess,
-                            hir_ty.span,
+                            hir_ty_span,
                             E0741,
                             "`{}` is not guaranteed to `#[derive(PartialEq, Eq)]`, so may not be \
                              used as the type of a const parameter",
                             ty,
                         )
                         .span_label(
-                            hir_ty.span,
+                            hir_ty_span,
                             format!("`{}` may not derive both `PartialEq` and `Eq`", ty),
                         )
                         .note(
@@ -356,14 +363,14 @@ pub(super) fn type_of(tcx: TyCtxt<'_>, def_id: DefId) -> Ty<'_> {
                     } else {
                         struct_span_err!(
                             tcx.sess,
-                            hir_ty.span,
+                            hir_ty_span,
                             E0741,
                             "`{}` must be annotated with `#[derive(PartialEq, Eq)]` to be used as \
                              the type of a const parameter",
                             ty,
                         )
                         .span_label(
-                            hir_ty.span,
+                            hir_ty_span,
                             format!("`{}` doesn't derive both `PartialEq` and `Eq`", ty),
                         )
                         .emit();

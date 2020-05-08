@@ -100,7 +100,8 @@ impl<'a, 'tcx> NiceRegionError<'a, 'tcx> {
 
                     // only apply this suggestion onto functions with
                     // explicit non-desugar'able return.
-                    if fn_return.span.desugaring_kind().is_none() {
+                    let fn_return_span = self.tcx().hir().span(fn_return.hir_id);
+                    if fn_return_span.desugaring_kind().is_none() {
                         // FIXME: account for the need of parens in `&(dyn Trait + '_)`
 
                         let consider = "consider changing the";
@@ -154,7 +155,7 @@ impl<'a, 'tcx> NiceRegionError<'a, 'tcx> {
                                     );
                                 } else {
                                     err.span_suggestion_verbose(
-                                        fn_return.span.shrink_to_hi(),
+                                        fn_return_span.shrink_to_hi(),
                                         &format!(
                                             "{declare} `impl Trait` {captures}, {explicit}",
                                             declare = declare,
@@ -169,7 +170,7 @@ impl<'a, 'tcx> NiceRegionError<'a, 'tcx> {
                             TyKind::TraitObject(_, lt) => match lt.name {
                                 LifetimeName::ImplicitObjectLifetimeDefault => {
                                     err.span_suggestion_verbose(
-                                        fn_return.span.shrink_to_hi(),
+                                        fn_return_span.shrink_to_hi(),
                                         &format!(
                                             "{declare} trait object {captures}, {explicit}",
                                             declare = declare,

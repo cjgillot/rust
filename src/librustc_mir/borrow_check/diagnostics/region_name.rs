@@ -433,7 +433,8 @@ impl<'tcx> MirBorrowckCtxt<'_, 'tcx> {
 
                         // Just grab the first character, the `&`.
                         let source_map = self.infcx.tcx.sess.source_map();
-                        let ampersand_span = source_map.start_point(hir_ty.span);
+                        let ampersand_span =
+                            source_map.start_point(self.infcx.tcx.hir().span(hir_ty.hir_id));
 
                         return Some(RegionName {
                             name: region_name,
@@ -642,14 +643,14 @@ impl<'tcx> MirBorrowckCtxt<'_, 'tcx> {
             }) => (
                 match return_ty.output {
                     hir::FnRetTy::DefaultReturn(_) => tcx.sess.source_map().end_point(*span),
-                    hir::FnRetTy::Return(_) => return_ty.output.span(),
+                    hir::FnRetTy::Return(_) => return_ty.output.span(|id| tcx.hir().span(id)),
                 },
                 if gen_move.is_some() { " of generator" } else { " of closure" },
             ),
             hir::Node::ImplItem(hir::ImplItem {
                 kind: hir::ImplItemKind::Fn(method_sig, _),
                 ..
-            }) => (method_sig.decl.output.span(), ""),
+            }) => (method_sig.decl.output.span(|id| tcx.hir().span(id)), ""),
             _ => (self.body.span, ""),
         };
 

@@ -1958,7 +1958,6 @@ impl TypeBinding<'_> {
 pub struct Ty<'hir> {
     pub hir_id: HirId,
     pub kind: TyKind<'hir>,
-    pub span: Span,
 }
 
 /// Not represented directly in the AST; referred to by name through a `ty_path`.
@@ -2215,10 +2214,10 @@ pub enum FnRetTy<'hir> {
 }
 
 impl FnRetTy<'_> {
-    pub fn span(&self) -> Span {
+    pub fn span(&self, get_span: impl FnOnce(HirId) -> Span) -> Span {
         match *self {
             Self::DefaultReturn(span) => span,
-            Self::Return(ref ty) => ty.span,
+            Self::Return(ref ty) => get_span(ty.hir_id),
         }
     }
 }

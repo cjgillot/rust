@@ -32,7 +32,7 @@ fn mir_build(tcx: TyCtxt<'_>, def_id: LocalDefId) -> Body<'_> {
     // Figure out what primary body this item has.
     let (body_id, return_ty_span) = match tcx.hir().get(id) {
         Node::Expr(hir::Expr { kind: hir::ExprKind::Closure(_, decl, body_id, _, _), .. }) => {
-            (*body_id, decl.output.span())
+            (*body_id, decl.output.span(|id| tcx.hir().span(id)))
         }
         Node::Item(hir::Item {
             kind: hir::ItemKind::Fn(hir::FnSig { decl, .. }, _, body_id),
@@ -45,7 +45,7 @@ fn mir_build(tcx: TyCtxt<'_>, def_id: LocalDefId) -> Body<'_> {
         | Node::TraitItem(hir::TraitItem {
             kind: hir::TraitItemKind::Fn(hir::FnSig { decl, .. }, hir::TraitFn::Provided(body_id)),
             ..
-        }) => (*body_id, decl.output.span()),
+        }) => (*body_id, decl.output.span(|id| tcx.hir().span(id))),
         Node::Item(hir::Item {
             kind: hir::ItemKind::Static(ty, _, body_id) | hir::ItemKind::Const(ty, body_id),
             ..
@@ -54,7 +54,7 @@ fn mir_build(tcx: TyCtxt<'_>, def_id: LocalDefId) -> Body<'_> {
         | Node::TraitItem(hir::TraitItem {
             kind: hir::TraitItemKind::Const(ty, Some(body_id)),
             ..
-        }) => (*body_id, ty.span),
+        }) => (*body_id, tcx.hir().span(ty.hir_id)),
         Node::AnonConst(hir::AnonConst { body, hir_id, .. }) => (*body, tcx.hir().span(*hir_id)),
 
         _ => span_bug!(tcx.hir().span(id), "can't build MIR for {:?}", def_id),
@@ -107,7 +107,7 @@ fn mir_build(tcx: TyCtxt<'_>, def_id: LocalDefId) -> Body<'_> {
                 let opt_ty_info;
                 let self_arg;
                 if let Some(ref fn_decl) = tcx.hir().fn_decl_by_hir_id(owner_id) {
-                    opt_ty_info = fn_decl.inputs.get(index).map(|ty| ty.span);
+                    opt_ty_info = fn_decl.inputs.get(index).map(|ty| tcx.hir().span(ty.hir_id));
                     self_arg = if index == 0 && fn_decl.implicit_self.has_implicit_self() {
                         match fn_decl.implicit_self {
                             hir::ImplicitSelfKind::Imm => Some(ImplicitSelfKind::Imm),

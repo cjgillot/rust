@@ -89,9 +89,11 @@ impl<'a, 'tcx> TriviallyCopyPassByRef {
         };
 
         for (input, &ty) in decl.inputs.iter().zip(fn_sig.inputs()) {
+            let input_span = cx.tcx.hir().span(input.hir_id);
+
             // All spans generated from a proc-macro invocation are the same...
             match span {
-                Some(s) if s == input.span => return,
+                Some(s) if s == input_span => return,
                 _ => (),
             }
 
@@ -106,12 +108,12 @@ impl<'a, 'tcx> TriviallyCopyPassByRef {
                     let value_type = if is_self_ty(decl_ty) {
                         "self".into()
                     } else {
-                        snippet(cx, decl_ty.span, "_").into()
+                        snippet(cx, cx.tcx.hir().span(decl_ty.hir_id), "_").into()
                     };
                     span_lint_and_sugg(
                         cx,
                         TRIVIALLY_COPY_PASS_BY_REF,
-                        input.span,
+                        input_span,
                         &format!("this argument ({} byte) is passed by reference, but would be more efficient if passed by value (limit: {} byte)", size, self.limit),
                         "consider passing by value instead",
                         value_type,

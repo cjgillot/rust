@@ -321,7 +321,7 @@ impl<'cx, 'tcx> Visitor<'tcx> for WritebackCx<'cx, 'tcx> {
     fn visit_ty(&mut self, hir_ty: &'tcx hir::Ty<'tcx>) {
         intravisit::walk_ty(self, hir_ty);
         let ty = self.fcx.node_ty(hir_ty.hir_id);
-        let ty = self.resolve(&ty, &hir_ty.span);
+        let ty = self.resolve(&ty, &self.tcx().hir().span(hir_ty.hir_id));
         self.write_ty_to_tables(hir_ty.hir_id, ty);
     }
 }

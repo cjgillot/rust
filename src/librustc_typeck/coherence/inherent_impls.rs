@@ -299,13 +299,14 @@ impl ItemLikeVisitor<'v> for InherentCollect<'tcx> {
             }
             ty::Error(_) => {}
             _ => {
+                let ty_span = self.tcx.hir().span(ty.hir_id);
                 struct_span_err!(
                     self.tcx.sess,
-                    ty.span,
+                    ty_span,
                     E0118,
                     "no base type found for inherent implementation"
                 )
-                .span_label(ty.span, "impl requires a base type")
+                .span_label(ty_span, "impl requires a base type")
                 .note(
                     "either implement a trait on it or create a newtype \
                        to wrap it instead",

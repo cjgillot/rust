@@ -459,7 +459,7 @@ impl<'a, 'hir> Visitor<'hir> for NodeCollector<'a, 'hir> {
     }
 
     fn visit_ty(&mut self, ty: &'hir Ty<'hir>) {
-        self.insert(ty.span, ty.hir_id, Node::Ty(ty));
+        self.insert(DUMMY_SP, ty.hir_id, Node::Ty(ty));
 
         self.with_parent(ty.hir_id, |this| {
             intravisit::walk_ty(this, ty);

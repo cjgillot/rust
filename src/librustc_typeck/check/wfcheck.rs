@@ -147,15 +147,15 @@ pub fn check_item_well_formed(tcx: TyCtxt<'_>, def_id: LocalDefId) {
             check_item_fn(tcx, item);
         }
         hir::ItemKind::Static(ref ty, ..) => {
-            check_item_type(tcx, item.hir_id, ty.span, false);
+            check_item_type(tcx, item.hir_id, tcx.hir().span(ty.hir_id), false);
         }
         hir::ItemKind::Const(ref ty, ..) => {
-            check_item_type(tcx, item.hir_id, ty.span, false);
+            check_item_type(tcx, item.hir_id, tcx.hir().span(ty.hir_id), false);
         }
         hir::ItemKind::ForeignMod(ref module) => {
             for it in module.items.iter() {
                 if let hir::ForeignItemKind::Static(ref ty, ..) = it.kind {
-                    check_item_type(tcx, it.hir_id, ty.span, true);
+                    check_item_type(tcx, it.hir_id, tcx.hir().span(ty.hir_id), true);
                 }
             }
         }
@@ -222,17 +222,17 @@ fn check_object_unsafe_self_trait_by_name(tcx: TyCtxt<'_>, item: &hir::TraitItem
         hir::TraitItemKind::Const(ty, _) | hir::TraitItemKind::Type(_, Some(ty))
             if could_be_self(trait_def_id, ty) =>
         {
-            trait_should_be_self.push(ty.span)
+            trait_should_be_self.push(tcx.hir().span(ty.hir_id))
         }
         hir::TraitItemKind::Fn(sig, _) => {
             for ty in sig.decl.inputs {
                 if could_be_self(trait_def_id, ty) {
-                    trait_should_be_self.push(ty.span);
+                    trait_should_be_self.push(tcx.hir().span(ty.hir_id));
                 }
             }
             match sig.decl.output {
                 hir::FnRetTy::Return(ty) if could_be_self(trait_def_id, ty) => {
-                    trait_should_be_self.push(ty.span);
+                    trait_should_be_self.push(tcx.hir().span(ty.hir_id));
                 }
                 _ => {}
             }
@@ -656,7 +656,7 @@ fn check_impl<'tcx>(
                 let self_ty = fcx.normalize_associated_types_in(item_span, &self_ty);
                 fcx.register_wf_obligation(
                     self_ty.into(),
-                    ast_self_ty.span,
+                    fcx.tcx.hir().span(ast_self_ty.hir_id),
                     ObligationCauseCode::MiscObligation,
                 );
             }
@@ -846,21 +846,29 @@ fn check_fn_or_method<'fcx, 'tcx>(
     let sig = fcx.normalize_associated_types_in(span, &sig);
     let sig = fcx.tcx.liberate_late_bound_regions(def_id, &sig);
 
-    for (&input_ty, span) in sig.inputs().iter().zip(hir_sig.decl.inputs.iter().map(|t| t.span)) {
+    for (&input_ty, span) in
+        sig.inputs().iter().zip(hir_sig.decl.inputs.iter().map(|t| tcx.hir().span(t.hir_id)))
+    {
         fcx.register_wf_obligation(input_ty.into(), span, ObligationCauseCode::MiscObligation);
     }
     implied_bounds.extend(sig.inputs());
 
     fcx.register_wf_obligation(
         sig.output().into(),
-        hir_sig.decl.output.span(),
+        hir_sig.decl.output.span(|id| tcx.hir().span(id)),
         ObligationCauseCode::ReturnType,
     );
 
     // FIXME(#25759) return types should not be implied bounds
     implied_bounds.push(sig.output());
 
-    check_where_clauses(tcx, fcx, span, def_id, Some((sig.output(), hir_sig.decl.output.span())));
+    check_where_clauses(
+        tcx,
+        fcx,
+        span,
+        def_id,
+        Some((sig.output(), hir_sig.decl.output.span(|id| tcx.hir().span(id)))),
+    );
 }
 
 /// Checks "defining uses" of opaque `impl Trait` types to ensure that they meet the restrictions
@@ -1018,7 +1026,7 @@ fn check_method_receiver<'fcx, 'tcx>(
         return;
     }
 
-    let span = fn_sig.decl.inputs[0].span;
+    let span = fcx.tcx.hir().span(fn_sig.decl.inputs[0].hir_id);
 
     let sig = fcx.tcx.fn_sig(method.def_id);
     let sig = fcx.normalize_associated_types_in(span, &sig);

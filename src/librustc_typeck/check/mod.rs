@@ -1188,7 +1188,11 @@ impl<'a, 'tcx> Visitor<'tcx> for GatherLocalsVisitor<'a, 'tcx> {
                 let o_ty = self.fcx.to_ty(&ty);
 
                 let revealed_ty = if self.fcx.tcx.features().impl_trait_in_bindings {
-                    self.fcx.instantiate_opaque_types_from_value(self.parent_id, &o_ty, ty.span)
+                    self.fcx.instantiate_opaque_types_from_value(
+                        self.parent_id,
+                        &o_ty,
+                        self.fcx.tcx.hir().span(ty.hir_id),
+                    )
                 } else {
                     o_ty
                 };
@@ -1296,8 +1300,9 @@ fn check_fn<'a, 'tcx>(
     let hir = tcx.hir();
 
     let declared_ret_ty = fn_sig.output();
+    let decl_output_span = decl.output.span(|id| hir.span(id));
     let revealed_ret_ty =
-        fcx.instantiate_opaque_types_from_value(fn_id, &declared_ret_ty, decl.output.span());
+        fcx.instantiate_opaque_types_from_value(fn_id, &declared_ret_ty, decl_output_span);
     debug!("check_fn: declared_ret_ty: {}, revealed_ret_ty: {}", declared_ret_ty, revealed_ret_ty);
     fcx.ret_coercion = Some(RefCell::new(CoerceMany::new(revealed_ret_ty)));
     fn_sig = tcx.mk_fn_sig(
@@ -1344,7 +1349,12 @@ fn check_fn<'a, 'tcx>(
     let inputs_fn = fn_sig.inputs().iter().copied();
     for (idx, (param_ty, param)) in inputs_fn.chain(maybe_va_list).zip(body.params).enumerate() {
         // Check the pattern.
-        fcx.check_pat_top(&param.pat, param_ty, try { inputs_hir?.get(idx)?.span }, false);
+        fcx.check_pat_top(
+            &param.pat,
+            param_ty,
+            try { hir.span(inputs_hir?.get(idx)?.hir_id) },
+            false,
+        );
 
         // Check that argument is Sized.
         // The check for a non-trivial pattern is a hack to avoid duplicate warnings
@@ -1373,10 +1383,10 @@ fn check_fn<'a, 'tcx>(
         // the tail expression's type so that the suggestion will be correct, but ignore all other
         // possible cases.
         fcx.check_expr(&body.value);
-        fcx.require_type_is_sized(declared_ret_ty, decl.output.span(), traits::SizedReturnType);
-        tcx.sess.delay_span_bug(decl.output.span(), "`!Sized` return type");
+        fcx.require_type_is_sized(declared_ret_ty, decl_output_span, traits::SizedReturnType);
+        tcx.sess.delay_span_bug(decl_output_span, "`!Sized` return type");
     } else {
-        fcx.require_type_is_sized(declared_ret_ty, decl.output.span(), traits::SizedReturnType);
+        fcx.require_type_is_sized(declared_ret_ty, decl_output_span, traits::SizedReturnType);
         fcx.check_return_expr(&body.value);
     }
 
@@ -1439,7 +1449,7 @@ fn check_fn<'a, 'tcx>(
             if main_id == fn_id {
                 let substs = tcx.mk_substs_trait(declared_ret_ty, &[]);
                 let trait_ref = ty::TraitRef::new(term_id, substs);
-                let return_ty_span = decl.output.span();
+                let return_ty_span = decl_output_span;
                 let cause = traits::ObligationCause::new(
                     return_ty_span,
                     fn_id,
@@ -1460,7 +1470,7 @@ fn check_fn<'a, 'tcx>(
         if panic_impl_did == hir.local_def_id(fn_id).to_def_id() {
             if let Some(panic_info_did) = tcx.lang_items().panic_info() {
                 if declared_ret_ty.kind != ty::Never {
-                    sess.span_err(decl.output.span(), "return type should be `!`");
+                    sess.span_err(decl_output_span, "return type should be `!`");
                 }
 
                 let inputs = fn_sig.inputs();
@@ -1479,7 +1489,10 @@ fn check_fn<'a, 'tcx>(
                     };
 
                     if !arg_is_panic_info {
-                        sess.span_err(decl.inputs[0].span, "argument should be `&PanicInfo`");
+                        sess.span_err(
+                            hir.span(decl.inputs[0].hir_id),
+                            "argument should be `&PanicInfo`",
+                        );
                     }
 
                     if let Node::Item(item) = hir.get(fn_id) {
@@ -1504,7 +1517,7 @@ fn check_fn<'a, 'tcx>(
         if alloc_error_handler_did == hir.local_def_id(fn_id).to_def_id() {
             if let Some(alloc_layout_did) = tcx.lang_items().alloc_layout() {
                 if declared_ret_ty.kind != ty::Never {
-                    sess.span_err(decl.output.span(), "return type should be `!`");
+                    sess.span_err(decl_output_span, "return type should be `!`");
                 }
 
                 let inputs = fn_sig.inputs();
@@ -1516,7 +1529,10 @@ fn check_fn<'a, 'tcx>(
                     };
 
                     if !arg_is_alloc_layout {
-                        sess.span_err(decl.inputs[0].span, "argument should be `Layout`");
+                        sess.span_err(
+                            hir.span(decl.inputs[0].hir_id),
+                            "argument should be `Layout`",
+                        );
                     }
 
                     if let Node::Item(item) = hir.get(fn_id) {
@@ -1842,7 +1858,7 @@ fn binding_opaque_type_cycle_error(
                     "this binding might not have a concrete type",
                 );
                 err.span_suggestion_verbose(
-                    ty.span.shrink_to_hi(),
+                    tcx.hir().span(ty.hir_id).shrink_to_hi(),
                     "set the binding to a value for a concrete type to be resolved",
                     " = /* value */".to_string(),
                     Applicability::HasPlaceholders,
@@ -3538,7 +3554,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
     pub fn to_ty(&self, ast_t: &hir::Ty<'_>) -> Ty<'tcx> {
         let t = AstConv::ast_ty_to_ty(self, ast_t);
-        self.register_wf_obligation(t.into(), ast_t.span, traits::MiscObligation);
+        self.register_wf_obligation(
+            t.into(),
+            self.tcx().hir().span(ast_t.hir_id),
+            traits::MiscObligation,
+        );
         t
     }
 
@@ -4309,7 +4329,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                         let ty = AstConv::ast_ty_to_ty(self, hir_ty);
                                         let ty = self.resolve_vars_if_possible(&ty);
                                         if ty == predicate.skip_binder().self_ty() {
-                                            error.obligation.cause.make_mut().span = hir_ty.span;
+                                            error.obligation.cause.make_mut().span =
+                                                self.tcx().hir().span(hir_ty.hir_id);
                                         }
                                     }
                                 }
@@ -4419,7 +4440,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     ) -> Option<(&'tcx ty::VariantDef, Ty<'tcx>)> {
         let path_span = match *qpath {
             QPath::Resolved(_, ref path) => path.span,
-            QPath::TypeRelative(ref qself, _) => qself.span,
+            QPath::TypeRelative(ref qself, _) => self.tcx().hir().span(qself.hir_id),
         };
         let (def, ty) = self.finish_resolving_struct_path(qpath, path_span, hir_id);
         let variant = match def {
@@ -4601,7 +4622,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         // Does the expected pattern type originate from an expression and what is the span?
         let (origin_expr, ty_span) = match (local.ty, local.init) {
-            (Some(ty), _) => (false, Some(ty.span)), // Bias towards the explicit user type.
+            (Some(ty), _) => (false, Some(self.tcx.hir().span(ty.hir_id))), // Bias towards the explicit user type.
             (_, Some(init)) => (true, Some(init.span)), // No explicit type; so use the scrutinee.
             _ => (false, None), // We have `let $pat;`, so the expected type is unconstrained.
         };
@@ -4802,7 +4823,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     let mut sp = span;
                     let mut fn_span = None;
                     if let Some((decl, ident)) = self.get_parent_fn_decl(blk.hir_id) {
-                        let ret_sp = decl.output.span();
+                        let ret_sp = decl.output.span(|id| self.tcx.hir().span(id));
                         if let Some(block_sp) = self.parent_item_span(blk.hir_id) {
                             // HACK: on some cases (`ui/liveness/liveness-issue-2163.rs`) the
                             // output would otherwise be incorrect and even misleading. Make sure
@@ -5297,7 +5318,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 // Only point to return type if the expected type is the return type, as if they
                 // are not, the expectation must have been caused by something else.
                 debug!("suggest_missing_return_type: return type {:?} node {:?}", ty, ty.kind);
-                let sp = ty.span;
+                let sp = self.tcx.hir().span(ty.hir_id);
                 let ty = AstConv::ast_ty_to_ty(self, ty);
                 debug!("suggest_missing_return_type: return type {:?}", ty);
                 debug!("suggest_missing_return_type: expected type {:?}", ty);

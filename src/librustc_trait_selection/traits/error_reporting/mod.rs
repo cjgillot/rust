@@ -813,7 +813,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
                     .iter()
                     .map(|arg| match arg.clone().kind {
                         hir::TyKind::Tup(ref tys) => ArgKind::Tuple(
-                            Some(arg.span),
+                            Some(self.tcx.hir().span(arg.hir_id)),
                             vec![("_".to_owned(), "_".to_owned()); tys.len()],
                         ),
                         _ => ArgKind::empty(),
@@ -1743,19 +1743,19 @@ impl<'a, 'tcx> InferCtxtPrivExt<'tcx> for InferCtxt<'a, 'tcx> {
                     // is not.
                     let mut visitor = FindTypeParam {
                         param: param.name.ident().name,
-                        invalid_spans: vec![],
+                        invalid_refs: vec![],
                         nested: false,
                     };
                     visitor.visit_item(item);
-                    if !visitor.invalid_spans.is_empty() {
+                    if !visitor.invalid_refs.is_empty() {
                         let mut multispan: MultiSpan = param_span.into();
                         multispan.push_span_label(
                             param_span,
                             format!("this could be changed to `{}: ?Sized`...", param.name.ident()),
                         );
-                        for sp in visitor.invalid_spans {
+                        for ty in visitor.invalid_refs {
                             multispan.push_span_label(
-                                sp,
+                                self.tcx.hir().span(ty.hir_id),
                                 format!(
                                     "...if indirection was used here: `Box<{}>`",
                                     param.name.ident(),
@@ -1807,20 +1807,20 @@ impl<'a, 'tcx> InferCtxtPrivExt<'tcx> for InferCtxt<'a, 'tcx> {
 
 /// Look for type `param` in an ADT being used only through a reference to confirm that suggesting
 /// `param: ?Sized` would be a valid constraint.
-struct FindTypeParam {
+struct FindTypeParam<'hir> {
     param: rustc_span::Symbol,
-    invalid_spans: Vec<Span>,
+    invalid_refs: Vec<&'hir hir::Ty<'hir>>,
     nested: bool,
 }
 
-impl<'v> Visitor<'v> for FindTypeParam {
+impl<'v> Visitor<'v> for FindTypeParam<'v> {
     type Map = rustc_hir::intravisit::ErasedMap<'v>;
 
     fn nested_visit_map(&mut self) -> hir::intravisit::NestedVisitorMap<Self::Map> {
         hir::intravisit::NestedVisitorMap::None
     }
 
-    fn visit_ty(&mut self, ty: &hir::Ty<'_>) {
+    fn visit_ty(&mut self, ty: &'v hir::Ty<'v>) {
         // We collect the spans of all uses of the "bare" type param, like in `field: T` or
         // `field: (T, T)` where we could make `T: ?Sized` while skipping cases that are known to be
         // valid like `field: &'a T` or `field: *mut T` and cases that *might* have further `Sized`
@@ -1833,7 +1833,7 @@ impl<'v> Visitor<'v> for FindTypeParam {
                 if path.segments.len() == 1 && path.segments[0].ident.name == self.param =>
             {
                 if !self.nested {
-                    self.invalid_spans.push(ty.span);
+                    self.invalid_refs.push(ty);
                 }
             }
             hir::TyKind::Path(_) => {

@@ -110,7 +110,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for LargeEnumVariant {
                             if variant.fields.len() == 1 {
                                 let span = match def.variants[i].data {
                                     VariantData::Struct(ref fields, ..) | VariantData::Tuple(ref fields, ..) => {
-                                        fields[0].ty.span
+                                        cx.tcx.hir().span(fields[0].ty.hir_id)
                                     },
                                     VariantData::Unit(..) => unreachable!(),
                                 };

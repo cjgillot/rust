@@ -103,10 +103,15 @@ pub struct ItemCtxt<'tcx> {
 
 ///////////////////////////////////////////////////////////////////////////
 
-#[derive(Default)]
-crate struct PlaceholderHirTyCollector(crate Vec<Span>);
+crate struct PlaceholderHirTyCollector<'tcx>(crate Vec<Span>, TyCtxt<'tcx>);
 
-impl<'v> Visitor<'v> for PlaceholderHirTyCollector {
+impl<'tcx> PlaceholderHirTyCollector<'tcx> {
+    crate fn new(tcx: TyCtxt<'tcx>) -> Self {
+        PlaceholderHirTyCollector(vec![], tcx)
+    }
+}
+
+impl<'tcx, 'v> Visitor<'v> for PlaceholderHirTyCollector<'tcx> {
     type Map = intravisit::ErasedMap<'v>;
 
     fn nested_visit_map(&mut self) -> NestedVisitorMap<Self::Map> {
@@ -114,7 +119,7 @@ impl<'v> Visitor<'v> for PlaceholderHirTyCollector {
     }
     fn visit_ty(&mut self, t: &'v hir::Ty<'v>) {
         if let hir::TyKind::Infer = t.kind {
-            self.0.push(t.span);
+            self.0.push(self.1.hir().span(t.hir_id));
         }
         intravisit::walk_ty(self, t)
     }
@@ -185,7 +190,7 @@ fn reject_placeholder_type_signatures_in_item(tcx: TyCtxt<'tcx>, item: &'tcx hir
         _ => return,
     };
 
-    let mut visitor = PlaceholderHirTyCollector::default();
+    let mut visitor = PlaceholderHirTyCollector::new(tcx);
     visitor.visit_item(item);
 
     placeholder_type_error(tcx, generics.span, &generics.params[..], visitor.0, suggest);
@@ -726,7 +731,7 @@ fn convert_trait_item(tcx: TyCtxt<'_>, trait_item_id: hir::HirId) {
         hir::TraitItemKind::Const(..) | hir::TraitItemKind::Type(_, Some(_)) => {
             tcx.ensure().type_of(def_id);
             // Account for `const C: _;` and `type T = _;`.
-            let mut visitor = PlaceholderHirTyCollector::default();
+            let mut visitor = PlaceholderHirTyCollector::new(tcx);
             visitor.visit_trait_item(trait_item);
             placeholder_type_error(tcx, DUMMY_SP, &[], visitor.0, false);
         }
@@ -749,7 +754,7 @@ fn convert_impl_item(tcx: TyCtxt<'_>, impl_item_id: hir::HirId) {
         }
         hir::ImplItemKind::TyAlias(_) => {
             // Account for `type T = _;`
-            let mut visitor = PlaceholderHirTyCollector::default();
+            let mut visitor = PlaceholderHirTyCollector::new(tcx);
             visitor.visit_impl_item(impl_item);
             placeholder_type_error(tcx, DUMMY_SP, &[], visitor.0, false);
         }
@@ -1463,13 +1468,13 @@ fn fn_sig(tcx: TyCtxt<'_>, def_id: DefId) -> ty::PolyFnSig<'_> {
             match get_infer_ret_ty(&sig.decl.output) {
                 Some(ty) => {
                     let fn_sig = tcx.typeck_tables_of(def_id).liberated_fn_sigs()[hir_id];
-                    let mut visitor = PlaceholderHirTyCollector::default();
+                    let mut visitor = PlaceholderHirTyCollector::new(tcx);
                     visitor.visit_ty(ty);
                     let mut diag = bad_placeholder_type(tcx, visitor.0);
                     let ret_ty = fn_sig.output();
                     if ret_ty != tcx.ty_error() {
                         diag.span_suggestion(
-                            ty.span,
+                            tcx.hir().span(ty.hir_id),
                             "replace with the correct return type",
                             ret_ty.to_string(),
                             Applicability::MaybeIncorrect,
@@ -1872,7 +1877,7 @@ fn explicit_predicates_of(tcx: TyCtxt<'_>, def_id: DefId) -> ty::GenericPredicat
                         // users who never wrote `where Type:,` themselves, to
                         // compiler/tooling bugs from not handling WF predicates.
                     } else {
-                        let span = bound_pred.bounded_ty.span;
+                        let span = tcx.hir().span(bound_pred.bounded_ty.hir_id);
                         let re_root_empty = tcx.lifetimes.re_root_empty;
                         let predicate = ty::OutlivesPredicate(ty, re_root_empty);
                         predicates.push((
@@ -2090,14 +2095,15 @@ fn compute_sig_of_foreign_fn_decl<'tcx>(
     {
         let check = |ast_ty: &hir::Ty<'_>, ty: Ty<'_>| {
             if ty.is_simd() {
+                let ast_ty_span = tcx.hir().span(ast_ty.hir_id);
                 let snip = tcx
                     .sess
                     .source_map()
-                    .span_to_snippet(ast_ty.span)
+                    .span_to_snippet(ast_ty_span)
                     .map_or(String::new(), |s| format!(" `{}`", s));
                 tcx.sess
                     .struct_span_err(
-                        ast_ty.span,
+                        ast_ty_span,
                         &format!(
                             "use of SIMD type{} in FFI is highly experimental and \
                              may result in invalid code",

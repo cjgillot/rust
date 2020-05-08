@@ -362,7 +362,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                                     //                  ^^^^
                                                     span.to(ty
                                                         .as_ref()
-                                                        .map(|ty| ty.span)
+                                                        .map(|ty| self.tcx.hir().span(ty.hir_id))
                                                         .unwrap_or(span)),
                                                     &msg,
                                                     format!("{}: {}", snippet, concrete_type),
@@ -987,7 +987,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                         && self_first_arg
                                     {
                                         if let Some(ty) = fn_sig.decl.inputs.get(0) {
-                                            arbitrary_rcvr.push(ty.span);
+                                            arbitrary_rcvr.push(self.tcx.hir().span(ty.hir_id));
                                         }
                                         return false;
                                     }

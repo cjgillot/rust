@@ -411,7 +411,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                 FnRetTy::Default(_) => this.arena.alloc(this.ty_tup(span, &[])),
             };
             let args = smallvec![GenericArg::Type(this.ty_tup(span, inputs))];
-            let binding = this.output_ty_binding(output_ty.span, output_ty);
+            let binding = this.output_ty_binding(this.spans[output_ty.hir_id], output_ty);
             (
                 GenericArgsCtor { args, bindings: arena_vec![this; binding], parenthesized: true },
                 false,

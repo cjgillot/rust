@@ -1241,7 +1241,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypePrivacyVisitor<'a, 'tcx> {
     }
 
     fn visit_ty(&mut self, hir_ty: &'tcx hir::Ty<'tcx>) {
-        self.span = hir_ty.span;
+        self.span = self.tcx.hir().span(hir_ty.hir_id);
         if self.in_body {
             // Types in bodies.
             if self.visit(self.tables.node_type(hir_ty.hir_id)) {

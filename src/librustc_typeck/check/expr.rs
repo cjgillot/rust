@@ -676,7 +676,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     self,
                     &cause,
                     &mut |db| {
-                        let span = fn_decl.output.span();
+                        let span = fn_decl.output.span(|id| self.tcx.hir().span(id));
                         if let Ok(snippet) = self.tcx.sess.source_map().span_to_snippet(span) {
                             db.span_label(
                                 span,
@@ -944,7 +944,14 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         } else {
             // Defer other checks until we're done type checking.
             let mut deferred_cast_checks = self.deferred_cast_checks.borrow_mut();
-            match cast::CastCheck::new(self, e, t_expr, t_cast, t.span, expr.span) {
+            match cast::CastCheck::new(
+                self,
+                e,
+                t_expr,
+                t_cast,
+                self.tcx.hir().span(t.hir_id),
+                expr.span,
+            ) {
                 Ok(cast_check) => {
                     deferred_cast_checks.push(cast_check);
                     t_cast
@@ -1080,7 +1087,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         let path_span = match *qpath {
             QPath::Resolved(_, ref path) => path.span,
-            QPath::TypeRelative(ref qself, _) => qself.span,
+            QPath::TypeRelative(ref qself, _) => self.tcx.hir().span(qself.hir_id),
         };
 
         // Prohibit struct expressions when non-exhaustive flag is set.

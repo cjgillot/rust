@@ -985,12 +985,22 @@ impl<'a, 'tcx> ImproperCTypesVisitor<'a, 'tcx> {
         let sig = self.cx.tcx.erase_late_bound_regions(&sig);
 
         for (input_ty, input_hir) in sig.inputs().iter().zip(decl.inputs) {
-            self.check_type_for_ffi_and_report_errors(input_hir.span, input_ty, false, false);
+            self.check_type_for_ffi_and_report_errors(
+                self.cx.tcx.hir().span(input_hir.hir_id),
+                input_ty,
+                false,
+                false,
+            );
         }
 
         if let hir::FnRetTy::Return(ref ret_hir) = decl.output {
             let ret_ty = sig.output();
-            self.check_type_for_ffi_and_report_errors(ret_hir.span, ret_ty, false, true);
+            self.check_type_for_ffi_and_report_errors(
+                self.cx.tcx.hir().span(ret_hir.hir_id),
+                ret_ty,
+                false,
+                true,
+            );
         }
     }
 
@@ -1013,7 +1023,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ImproperCTypes {
                     vis.check_foreign_fn(it.hir_id, decl);
                 }
                 hir::ForeignItemKind::Static(ref ty, _) => {
-                    vis.check_foreign_static(it.hir_id, ty.span);
+                    vis.check_foreign_static(it.hir_id, cx.tcx.hir().span(ty.hir_id));
                 }
                 hir::ForeignItemKind::Type => (),
             }

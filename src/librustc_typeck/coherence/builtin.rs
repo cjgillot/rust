@@ -56,7 +56,7 @@ fn visit_implementation_of_drop(tcx: TyCtxt<'_>, impl_did: LocalDefId) {
 
     let impl_hir_id = tcx.hir().as_local_hir_id(impl_did);
     let sp = match tcx.hir().expect_item(impl_hir_id).kind {
-        ItemKind::Impl { self_ty, .. } => self_ty.span,
+        ItemKind::Impl { self_ty, .. } => tcx.hir().span(self_ty.hir_id),
         _ => bug!("expected Drop impl item"),
     };
 
@@ -107,8 +107,11 @@ fn visit_implementation_of_copy(tcx: TyCtxt<'_>, impl_did: LocalDefId) {
         }
         Err(CopyImplementationError::NotAnAdt) => {
             let item = tcx.hir().expect_item(impl_hir_id);
-            let span =
-                if let ItemKind::Impl { self_ty, .. } = item.kind { self_ty.span } else { span };
+            let span = if let ItemKind::Impl { self_ty, .. } = item.kind {
+                tcx.hir().span(self_ty.hir_id)
+            } else {
+                span
+            };
 
             struct_span_err!(
                 tcx.sess,

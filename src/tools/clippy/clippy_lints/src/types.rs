@@ -270,13 +270,13 @@ fn match_type_parameter(cx: &LateContext<'_, '_>, qpath: &QPath<'_>, path: &[&st
         if let Some(did) = qpath_res(cx, qpath, ty.hir_id).opt_def_id();
         if match_def_path(cx, did, path);
         then {
-            return Some(ty.span);
+            return Some(cx.tcx.hir().span(ty.hir_id));
         }
     }
     None
 }
 
-fn match_borrows_parameter(_cx: &LateContext<'_, '_>, qpath: &QPath<'_>) -> Option<Span> {
+fn match_borrows_parameter(cx: &LateContext<'_, '_>, qpath: &QPath<'_>) -> Option<Span> {
     let last = last_path_segment(qpath);
     if_chain! {
         if let Some(ref params) = last.args;
@@ -287,7 +287,7 @@ fn match_borrows_parameter(_cx: &LateContext<'_, '_>, qpath: &QPath<'_>) -> Opti
         });
         if let TyKind::Rptr(..) = ty.kind;
         then {
-            return Some(ty.span);
+            return Some(cx.tcx.hir().span(ty.hir_id));
         }
     }
     None
@@ -315,7 +315,8 @@ impl Types {
     /// local bindings should only be checked for the `BORROWED_BOX` lint.
     #[allow(clippy::too_many_lines)]
     fn check_ty(&mut self, cx: &LateContext<'_, '_>, hir_ty: &hir::Ty<'_>, is_local: bool) {
-        if hir_ty.span.from_expansion() {
+        let hir_ty_span = cx.tcx.hir().span(hir_ty.hir_id);
+        if hir_ty_span.from_expansion() {
             return;
         }
         match hir_ty.kind {
@@ -328,7 +329,7 @@ impl Types {
                             span_lint_and_sugg(
                                 cx,
                                 REDUNDANT_ALLOCATION,
-                                hir_ty.span,
+                                hir_ty_span,
                                 "usage of `Box<&T>`",
                                 "try",
                                 snippet(cx, span, "..").to_string(),
@@ -340,7 +341,7 @@ impl Types {
                             span_lint_and_help(
                                 cx,
                                 BOX_VEC,
-                                hir_ty.span,
+                                hir_ty_span,
                                 "you seem to be trying to use `Box<Vec<T>>`. Consider using just `Vec<T>`",
                                 None,
                                 "`Vec<T>` is already on the heap, `Box<Vec<T>>` makes an extra allocation.",
@@ -352,7 +353,7 @@ impl Types {
                             span_lint_and_sugg(
                                 cx,
                                 REDUNDANT_ALLOCATION,
-                                hir_ty.span,
+                                hir_ty_span,
                                 "usage of `Rc<Rc<T>>`",
                                 "try",
                                 snippet(cx, span, "..").to_string(),
@@ -364,7 +365,7 @@ impl Types {
                             span_lint_and_sugg(
                                 cx,
                                 REDUNDANT_ALLOCATION,
-                                hir_ty.span,
+                                hir_ty_span,
                                 "usage of `Rc<Box<T>>`",
                                 "try",
                                 snippet(cx, span, "..").to_string(),
@@ -376,7 +377,7 @@ impl Types {
                             span_lint_and_sugg(
                                 cx,
                                 REDUNDANT_ALLOCATION,
-                                hir_ty.span,
+                                hir_ty_span,
                                 "usage of `Rc<&T>`",
                                 "try",
                                 snippet(cx, span, "..").to_string(),
@@ -404,14 +405,14 @@ impl Types {
                                 _ => None,
                             });
                             let ty_ty = hir_ty_to_ty(cx.tcx, boxed_ty);
-                            if ty_ty.is_sized(cx.tcx.at(ty.span), cx.param_env);
+                            if ty_ty.is_sized(cx.tcx.at(cx.tcx.hir().span(ty.hir_id)), cx.param_env);
                             if let Ok(ty_ty_size) = cx.layout_of(ty_ty).map(|l| l.size.bytes());
                             if ty_ty_size <= self.vec_box_size_threshold;
                             then {
                                 span_lint_and_sugg(
                                     cx,
                                     VEC_BOX,
-                                    hir_ty.span,
+                                    hir_ty_span,
                                     "`Vec<T>` is already on the heap, the boxing is unnecessary.",
                                     "try",
                                     format!("Vec<{}>", ty_ty),
@@ -425,7 +426,7 @@ impl Types {
                             span_lint(
                                 cx,
                                 OPTION_OPTION,
-                                hir_ty.span,
+                                hir_ty_span,
                                 "consider using `Option<T>` instead of `Option<Option<T>>` or a custom \
                                  enum if you need to distinguish all 3 cases",
                             );
@@ -435,7 +436,7 @@ impl Types {
                         span_lint_and_help(
                             cx,
                             LINKEDLIST,
-                            hir_ty.span,
+                            hir_ty_span,
                             "I see you're using a LinkedList! Perhaps you meant some other data structure?",
                             None,
                             "a `VecDeque` might work",
@@ -542,13 +543,13 @@ impl Types {
                         span_lint_and_sugg(
                             cx,
                             BORROWED_BOX,
-                            hir_ty.span,
+                            cx.tcx.hir().span(hir_ty.hir_id),
                             "you seem to be trying to use `&Box<T>`. Consider using just `&T`",
                             "try",
                             format!(
                                 "&{}{}",
                                 ltopt,
-                                &snippet_with_applicability(cx, inner.span, "..", &mut applicability)
+                                &snippet_with_applicability(cx, cx.tcx.hir().span(inner.hir_id), "..", &mut applicability)
                             ),
                             Applicability::Unspecified,
                         );
@@ -1697,7 +1698,7 @@ impl<'a, 'tcx> TypeComplexity {
     }
 
     fn check_type(&self, cx: &LateContext<'_, '_>, ty: &hir::Ty<'_>) {
-        if ty.span.from_expansion() {
+        if cx.tcx.hir().span(ty.hir_id).from_expansion() {
             return;
         }
         let score = {
@@ -1710,7 +1711,7 @@ impl<'a, 'tcx> TypeComplexity {
             span_lint(
                 cx,
                 TYPE_COMPLEXITY,
-                ty.span,
+                cx.tcx.hir().span(ty.hir_id),
                 "very complex type used. Consider factoring parts into `type` definitions",
             );
         }
@@ -2449,16 +2450,16 @@ impl<'tcx> ImplicitHasherType<'tcx> {
 
             if is_type_diagnostic_item(cx, ty, sym!(hashmap_type)) && params_len == 2 {
                 Some(ImplicitHasherType::HashMap(
-                    hir_ty.span,
+                    cx.tcx.hir().span(hir_ty.hir_id),
                     ty,
-                    snippet(cx, params[0].span, "K"),
-                    snippet(cx, params[1].span, "V"),
+                    snippet(cx, cx.tcx.hir().span(params[0].hir_id), "K"),
+                    snippet(cx, cx.tcx.hir().span(params[1].hir_id), "V"),
                 ))
             } else if is_type_diagnostic_item(cx, ty, sym!(hashset_type)) && params_len == 1 {
                 Some(ImplicitHasherType::HashSet(
-                    hir_ty.span,
+                    cx.tcx.hir().span(hir_ty.hir_id),
                     ty,
-                    snippet(cx, params[0].span, "T"),
+                    snippet(cx, cx.tcx.hir().span(params[0].hir_id), "T"),
                 ))
             } else {
                 None

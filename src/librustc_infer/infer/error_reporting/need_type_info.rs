@@ -8,7 +8,7 @@ use rustc_hir::{Body, Expr, ExprKind, FnRetTy, HirId, Local, Pat};
 use rustc_middle::hir::map::Map;
 use rustc_middle::ty::print::Print;
 use rustc_middle::ty::subst::{GenericArg, GenericArgKind};
-use rustc_middle::ty::{self, DefIdTree, Ty};
+use rustc_middle::ty::{self, DefIdTree, Ty, TyCtxt};
 use rustc_span::source_map::DesugaringKind;
 use rustc_span::symbol::kw;
 use rustc_span::Span;
@@ -144,6 +144,7 @@ impl<'a, 'tcx> Visitor<'tcx> for FindHirNodeVisitor<'a, 'tcx> {
 
 /// Suggest giving an appropriate return type to a closure expression.
 fn closure_return_type_suggestion(
+    tcx: TyCtxt<'_>,
     span: Span,
     err: &mut DiagnosticBuilder<'_>,
     output: &FnRetTy<'_>,
@@ -159,9 +160,11 @@ fn closure_return_type_suggestion(
         _ => ("", ""),
     };
     let suggestion = match body.value.kind {
-        ExprKind::Block(..) => vec![(output.span(), format!("{}{}{}", arrow, ret, post))],
+        ExprKind::Block(..) => {
+            vec![(output.span(|id| tcx.hir().span(id)), format!("{}{}{}", arrow, ret, post))]
+        }
         _ => vec![
-            (output.span(), format!("{}{}{}{{ ", arrow, ret, post)),
+            (output.span(|id| tcx.hir().span(id)), format!("{}{}{}{{ ", arrow, ret, post)),
             (body.value.span.shrink_to_hi(), " }".to_string()),
         ],
     };
@@ -377,6 +380,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
 
                 if let Some((decl, body_id)) = closure_decl_and_body_id {
                     closure_return_type_suggestion(
+                        self.tcx,
                         span,
                         &mut err,
                         &decl.output,

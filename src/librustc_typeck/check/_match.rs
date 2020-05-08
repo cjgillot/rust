@@ -246,7 +246,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 // check that the `if` expr without `else` is the fn body's expr
                 if expr.span == span {
                     return self.get_fn_decl(hir_id).and_then(|(fn_decl, _)| {
-                        let span = fn_decl.output.span();
+                        let span = fn_decl.output.span(|id| self.tcx.hir().span(id));
                         let snippet = self.tcx.sess.source_map().span_to_snippet(span).ok()?;
                         Some((span, format!("expected `{}` because of this return type", snippet)))
                     });

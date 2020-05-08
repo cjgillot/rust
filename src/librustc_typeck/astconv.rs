@@ -818,7 +818,7 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
                 }
                 (GenericParamDefKind::Type { .. }, GenericArg::Type(ty)) => {
                     if let (hir::TyKind::Infer, false) = (&ty.kind, self.allow_ty_infer()) {
-                        inferred_params.push(ty.span);
+                        inferred_params.push(tcx.hir().span(ty.hir_id));
                         tcx.ty_error().into()
                     } else {
                         self.ast_ty_to_ty(&ty).into()
@@ -1176,10 +1176,14 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
                                 hir::GenericArg::Type(ty) => match ty.kind {
                                     hir::TyKind::Tup(t) => t
                                         .iter()
-                                        .map(|e| sess.source_map().span_to_snippet(e.span))
+                                        .map(|e| sess
+                                            .source_map()
+                                            .span_to_snippet(self.tcx().hir().span(e.hir_id)))
                                         .collect::<Result<Vec<_>, _>>()
                                         .map(|a| a.join(", ")),
-                                    _ => sess.source_map().span_to_snippet(ty.span),
+                                    _ => sess
+                                        .source_map()
+                                        .span_to_snippet(self.tcx().hir().span(ty.hir_id)),
                                 }
                                 .map(|s| format!("({})", s))
                                 .ok(),
@@ -1192,7 +1196,9 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
                             .iter()
                             .find_map(|b| match (b.ident.as_str() == "Output", &b.kind) {
                                 (true, hir::TypeBindingKind::Equality { ty }) => {
-                                    sess.source_map().span_to_snippet(ty.span).ok()
+                                    sess.source_map()
+                                        .span_to_snippet(self.tcx().hir().span(ty.hir_id))
+                                        .ok()
                                 }
                                 _ => None,
                             })
@@ -2481,7 +2487,7 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
                         }
                         err_for_ty = true;
                         has_err = true;
-                        (ty.span, "type")
+                        (self.tcx().hir().span(ty.hir_id), "type")
                     }
                     hir::GenericArg::Const(ct) => {
                         if err_for_ct {
@@ -2825,7 +2831,7 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
                 tcx.mk_tup(fields.iter().map(|t| self.ast_ty_to_ty(&t)))
             }
             hir::TyKind::BareFn(ref bf) => {
-                require_c_abi_if_c_variadic(tcx, &bf.decl, bf.abi, ast_ty.span);
+                require_c_abi_if_c_variadic(tcx, &bf.decl, bf.abi, tcx.hir().span(ast_ty.hir_id));
                 tcx.mk_fn_ptr(self.ty_of_fn(
                     bf.unsafety,
                     bf.abi,
@@ -2835,7 +2841,7 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
                 ))
             }
             hir::TyKind::TraitObject(ref bounds, ref lifetime) => {
-                self.conv_object_ty_poly_trait_ref(ast_ty.span, bounds, lifetime)
+                self.conv_object_ty_poly_trait_ref(tcx.hir().span(ast_ty.hir_id), bounds, lifetime)
             }
             hir::TyKind::Path(hir::QPath::Resolved(ref maybe_qself, ref path)) => {
                 debug!("ast_ty_to_ty: maybe_qself={:?} path={:?}", maybe_qself, path);
@@ -2862,24 +2868,32 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
                 } else {
                     Res::Err
                 };
-                self.associated_path_to_ty(ast_ty.hir_id, ast_ty.span, ty, res, segment, false)
-                    .map(|(ty, _, _)| ty)
-                    .unwrap_or_else(|_| tcx.ty_error())
+                self.associated_path_to_ty(
+                    ast_ty.hir_id,
+                    tcx.hir().span(ast_ty.hir_id),
+                    ty,
+                    res,
+                    segment,
+                    false,
+                )
+                .map(|(ty, _, _)| ty)
+                .unwrap_or_else(|_| tcx.ty_error())
             }
             hir::TyKind::Array(ref ty, ref length) => {
                 let length_def_id = tcx.hir().local_def_id(length.hir_id);
                 let length = ty::Const::from_anon_const(tcx, length_def_id);
                 let array_ty = tcx.mk_ty(ty::Array(self.ast_ty_to_ty(&ty), length));
-                self.normalize_ty(ast_ty.span, array_ty)
+                self.normalize_ty(tcx.hir().span(ast_ty.hir_id), array_ty)
             }
             hir::TyKind::Typeof(ref _e) => {
+                let ast_ty_span = tcx.hir().span(ast_ty.hir_id);
                 struct_span_err!(
                     tcx.sess,
-                    ast_ty.span,
+                    ast_ty_span,
                     E0516,
                     "`typeof` is a reserved keyword but unimplemented"
                 )
-                .span_label(ast_ty.span, "reserved keyword")
+                .span_label(ast_ty_span, "reserved keyword")
                 .emit();
 
                 tcx.ty_error()
@@ -2889,14 +2903,14 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
                 // values in a ExprKind::Closure, or as
                 // the type of local variables. Both of these cases are
                 // handled specially and will not descend into this routine.
-                self.ty_infer(None, ast_ty.span)
+                self.ty_infer(None, tcx.hir().span(ast_ty.hir_id))
             }
             hir::TyKind::Err => tcx.ty_error(),
         };
 
         debug!("ast_ty_to_ty: result_ty={:?}", result_ty);
 
-        self.record_ty(ast_ty.hir_id, result_ty, ast_ty.span);
+        self.record_ty(ast_ty.hir_id, result_ty, tcx.hir().span(ast_ty.hir_id));
         result_ty
     }
 
@@ -2952,7 +2966,7 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
     pub fn ty_of_arg(&self, ty: &hir::Ty<'_>, expected_ty: Option<Ty<'tcx>>) -> Ty<'tcx> {
         match ty.kind {
             hir::TyKind::Infer if expected_ty.is_some() => {
-                self.record_ty(ty.hir_id, expected_ty.unwrap(), ty.span);
+                self.record_ty(ty.hir_id, expected_ty.unwrap(), self.tcx().hir().span(ty.hir_id));
                 expected_ty.unwrap()
             }
             _ => self.ast_ty_to_ty(ty),
@@ -2972,7 +2986,7 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
         let tcx = self.tcx();
 
         // We proactively collect all the inferred type params to emit a single error per fn def.
-        let mut visitor = PlaceholderHirTyCollector::default();
+        let mut visitor = PlaceholderHirTyCollector::new(tcx);
         for ty in decl.inputs {
             visitor.visit_ty(ty);
         }
@@ -3024,7 +3038,7 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
             };
             let mut err = struct_span_err!(
                 tcx.sess,
-                decl.output.span(),
+                decl.output.span(|id| tcx.hir().span(id)),
                 E0581,
                 "return type references {} which is not constrained by the fn input types",
                 lifetime_name

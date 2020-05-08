@@ -179,7 +179,7 @@ fn check_fn(cx: &LateContext<'_, '_>, decl: &FnDecl<'_>, fn_id: HirId, opt_body_
                             _ => None,
                         }).collect();
                         if types.len() == 1 {
-                            ty_snippet = snippet_opt(cx, types[0].span);
+                            ty_snippet = snippet_opt(cx, cx.tcx.hir().span(types[0].hir_id));
                         }
                     }
                 };
@@ -187,13 +187,13 @@ fn check_fn(cx: &LateContext<'_, '_>, decl: &FnDecl<'_>, fn_id: HirId, opt_body_
                     span_lint_and_then(
                         cx,
                         PTR_ARG,
-                        arg.span,
+                        cx.tcx.hir().span(arg.hir_id),
                         "writing `&Vec<_>` instead of `&[_]` involves one more reference and cannot be used \
                          with non-Vec-based slices.",
                         |diag| {
                             if let Some(ref snippet) = ty_snippet {
                                 diag.span_suggestion(
-                                    arg.span,
+                                    cx.tcx.hir().span(arg.hir_id),
                                     "change this to",
                                     format!("&[{}]", snippet),
                                     Applicability::Unspecified,
@@ -217,10 +217,10 @@ fn check_fn(cx: &LateContext<'_, '_>, decl: &FnDecl<'_>, fn_id: HirId, opt_body_
                     span_lint_and_then(
                         cx,
                         PTR_ARG,
-                        arg.span,
+                        cx.tcx.hir().span(arg.hir_id),
                         "writing `&String` instead of `&str` involves a new object where a slice will do.",
                         |diag| {
-                            diag.span_suggestion(arg.span, "change this to", "&str".into(), Applicability::Unspecified);
+                            diag.span_suggestion(cx.tcx.hir().span(arg.hir_id), "change this to", "&str".into(), Applicability::Unspecified);
                             for (clonespan, suggestion) in spans {
                                 diag.span_suggestion_short(
                                     clonespan,
@@ -247,12 +247,12 @@ fn check_fn(cx: &LateContext<'_, '_>, decl: &FnDecl<'_>, fn_id: HirId, opt_body_
                         _ => None,
                     });
                     then {
-                        let replacement = snippet_opt(cx, inner.span);
+                        let replacement = snippet_opt(cx, cx.tcx.hir().span(inner.hir_id));
                         if let Some(r) = replacement {
                             span_lint_and_sugg(
                                 cx,
                                 PTR_ARG,
-                                arg.span,
+                                cx.tcx.hir().span(arg.hir_id),
                                 "using a reference to `Cow` is not recommended.",
                                 "change this to",
                                 "&".to_owned() + &r,
@@ -266,12 +266,12 @@ fn check_fn(cx: &LateContext<'_, '_>, decl: &FnDecl<'_>, fn_id: HirId, opt_body_
     }
 
     if let FnRetTy::Return(ref ty) = decl.output {
-        if let Some((out, Mutability::Mut, _)) = get_rptr_lm(ty) {
+        if let Some((out, Mutability::Mut, _)) = get_rptr_lm(cx, ty) {
             let mut immutables = vec![];
             for (_, ref mutbl, ref argspan) in decl
                 .inputs
                 .iter()
-                .filter_map(|ty| get_rptr_lm(ty))
+                .filter_map(|ty| get_rptr_lm(cx, ty))
                 .filter(|&(lt, _, _)| lt.name == out.name)
             {
                 if *mutbl == Mutability::Mut {
@@ -285,7 +285,7 @@ fn check_fn(cx: &LateContext<'_, '_>, decl: &FnDecl<'_>, fn_id: HirId, opt_body_
             span_lint_and_then(
                 cx,
                 MUT_FROM_REF,
-                ty.span,
+                cx.tcx.hir().span(ty.hir_id),
                 "mutable borrow from immutable input(s)",
                 |diag| {
                     let ms = MultiSpan::from_spans(immutables);
@@ -296,9 +296,9 @@ fn check_fn(cx: &LateContext<'_, '_>, decl: &FnDecl<'_>, fn_id: HirId, opt_body_
     }
 }
 
-fn get_rptr_lm<'tcx>(ty: &'tcx Ty<'tcx>) -> Option<(&'tcx Lifetime, Mutability, Span)> {
+fn get_rptr_lm<'tcx>(cx: &LateContext<'_, '_>, ty: &'tcx Ty<'tcx>) -> Option<(&'tcx Lifetime, Mutability, Span)> {
     if let TyKind::Rptr(ref lt, ref m) = ty.kind {
-        Some((lt, m.mutbl, ty.span))
+        Some((lt, m.mutbl, cx.tcx.hir().span(ty.hir_id)))
     } else {
         None
     }

@@ -1232,7 +1232,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
     }
 
     fn ty(&mut self, span: Span, kind: hir::TyKind<'hir>) -> hir::Ty<'hir> {
-        hir::Ty { hir_id: self.next_id(span), kind, span }
+        hir::Ty { hir_id: self.next_id(span), kind }
     }
 
     fn ty_tup(&mut self, span: Span, tys: &'hir [hir::Ty<'hir>]) -> hir::Ty<'hir> {
@@ -1426,7 +1426,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
             }
         };
 
-        hir::Ty { kind, span: t.span, hir_id: self.lower_node_id(t.id, t.span) }
+        hir::Ty { kind, hir_id: self.lower_node_id(t.id, t.span) }
     }
 
     fn lower_opaque_impl_trait(
@@ -2609,7 +2609,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
             _ => hir::TyKind::Path(qpath),
         };
 
-        hir::Ty { hir_id, kind, span }
+        hir::Ty { hir_id, kind }
     }
 
     /// Invoked to create the lifetime argument for a type `&T`

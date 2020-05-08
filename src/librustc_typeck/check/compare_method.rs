@@ -433,7 +433,9 @@ fn extract_spans_for_error_reporting<'a, 'tcx>(
                             _ => false,
                         }
                     })
-                    .map(|(ref impl_arg, ref trait_arg)| (impl_arg.span, Some(trait_arg.span)))
+                    .map(|(ref impl_arg, ref trait_arg)| {
+                        (tcx.hir().span(impl_arg.hir_id), Some(tcx.hir().span(trait_arg.hir_id)))
+                    })
                     .unwrap_or_else(|| (cause.span(tcx), tcx.hir().span_if_local(trait_m.def_id)))
             } else {
                 (cause.span(tcx), tcx.hir().span_if_local(trait_m.def_id))
@@ -461,7 +463,10 @@ fn extract_spans_for_error_reporting<'a, 'tcx>(
                         .sub(trait_arg_ty, impl_arg_ty)
                     {
                         Ok(_) => None,
-                        Err(_) => Some((impl_arg.span, Some(trait_arg.span))),
+                        Err(_) => Some((
+                            tcx.hir().span(impl_arg.hir_id),
+                            Some(tcx.hir().span(trait_arg.hir_id)),
+                        )),
                     })
                     .unwrap_or_else(|| {
                         if infcx
@@ -469,7 +474,10 @@ fn extract_spans_for_error_reporting<'a, 'tcx>(
                             .sup(trait_sig.output(), impl_sig.output())
                             .is_err()
                         {
-                            (impl_m_output.span(), Some(trait_m_output.span()))
+                            (
+                                impl_m_output.span(|id| tcx.hir().span(id)),
+                                Some(trait_m_output.span(|id| tcx.hir().span(id))),
+                            )
                         } else {
                             (cause.span(tcx), tcx.hir().span_if_local(trait_m.def_id))
                         }
@@ -726,13 +734,14 @@ fn compare_number_of_method_arguments<'tcx>(
                 TraitItemKind::Fn(ref trait_m_sig, _) => {
                     let pos = if trait_number_args > 0 { trait_number_args - 1 } else { 0 };
                     if let Some(arg) = trait_m_sig.decl.inputs.get(pos) {
+                        let arg_span = tcx.hir().span(arg.hir_id);
                         Some(if pos == 0 {
-                            arg.span
+                            arg_span
                         } else {
                             Span::new(
-                                trait_m_sig.decl.inputs[0].span.lo(),
-                                arg.span.hi(),
-                                arg.span.ctxt(),
+                                tcx.hir().span(trait_m_sig.decl.inputs[0].hir_id).lo(),
+                                arg_span.hi(),
+                                arg_span.ctxt(),
                             )
                         })
                     } else {
@@ -749,13 +758,14 @@ fn compare_number_of_method_arguments<'tcx>(
             ImplItemKind::Fn(ref impl_m_sig, _) => {
                 let pos = if impl_number_args > 0 { impl_number_args - 1 } else { 0 };
                 if let Some(arg) = impl_m_sig.decl.inputs.get(pos) {
+                    let arg_span = tcx.hir().span(arg.hir_id);
                     if pos == 0 {
-                        arg.span
+                        arg_span
                     } else {
                         Span::new(
-                            impl_m_sig.decl.inputs[0].span.lo(),
-                            arg.span.hi(),
-                            arg.span.ctxt(),
+                            tcx.hir().span(impl_m_sig.decl.inputs[0].hir_id).lo(),
+                            arg_span.hi(),
+                            arg_span.ctxt(),
                         )
                     }
                 } else {
@@ -890,7 +900,7 @@ fn compare_synthetic_generics<'tcx>(
                             hir::ImplItemKind::Fn(ref sig, _) => sig.decl.inputs,
                             _ => unreachable!(),
                         };
-                        struct Visitor(Option<Span>, hir::def_id::DefId);
+                        struct Visitor(Option<hir::HirId>, hir::def_id::DefId);
                         impl<'v> intravisit::Visitor<'v> for Visitor {
                             fn visit_ty(&mut self, ty: &'v hir::Ty<'v>) {
                                 intravisit::walk_ty(self, ty);
@@ -899,7 +909,7 @@ fn compare_synthetic_generics<'tcx>(
                                 {
                                     if let Res::Def(DefKind::TyParam, def_id) = path.res {
                                         if def_id == self.1 {
-                                            self.0 = Some(ty.span);
+                                            self.0 = Some(ty.hir_id);
                                         }
                                     }
                                 }
@@ -916,7 +926,7 @@ fn compare_synthetic_generics<'tcx>(
                         for ty in input_tys {
                             intravisit::Visitor::visit_ty(&mut visitor, ty);
                         }
-                        let span = visitor.0?;
+                        let span = tcx.hir().span(visitor.0?);
 
                         let bounds =
                             impl_m.generics.params.iter().find_map(|param| match param.kind {
@@ -1012,7 +1022,7 @@ crate fn compare_const_impl<'tcx>(
 
             // Locate the Span containing just the type of the offending impl
             match tcx.hir().expect_impl_item(impl_c_hir_id).kind {
-                ImplItemKind::Const(ref ty, _) => cause.make_mut().span = ty.span,
+                ImplItemKind::Const(ref ty, _) => cause.make_mut().span = tcx.hir().span(ty.hir_id),
                 _ => bug!("{:?} is not a impl const", impl_c),
             }
 
@@ -1030,7 +1040,7 @@ crate fn compare_const_impl<'tcx>(
             let trait_c_span = trait_c_hir_id.map(|trait_c_hir_id| {
                 // Add a label to the Span containing just the type of the const
                 match tcx.hir().expect_trait_item(trait_c_hir_id).kind {
-                    TraitItemKind::Const(ref ty, _) => ty.span,
+                    TraitItemKind::Const(ref ty, _) => tcx.hir().span(ty.hir_id),
                     _ => bug!("{:?} is not a trait const", trait_c),
                 }
             });

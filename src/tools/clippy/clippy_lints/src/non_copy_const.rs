@@ -156,7 +156,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for NonCopyConst {
                 cx,
                 ty,
                 Source::Assoc {
-                    ty: hir_ty.span,
+                    ty: cx.tcx.hir().span(hir_ty.hir_id),
                     item: cx.tcx.hir().span(trait_item.hir_id),
                 },
             );
@@ -174,7 +174,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for NonCopyConst {
                     cx,
                     ty,
                     Source::Assoc {
-                        ty: hir_ty.span,
+                        ty: cx.tcx.hir().span(hir_ty.hir_id),
                         item: cx.tcx.hir().span(impl_item.hir_id),
                     },
                 );
