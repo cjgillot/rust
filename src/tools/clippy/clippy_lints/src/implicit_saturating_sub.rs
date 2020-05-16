@@ -133,7 +133,7 @@ fn subtracts_one<'a>(cx: &LateContext<'_, '_>, expr: &Expr<'a>) -> Option<&'a Ex
                 }
             }
         },
-        ExprKind::Assign(ref target, ref value, _) => {
+        ExprKind::Assign(ref target, ref value) => {
             if_chain! {
                 if let ExprKind::Binary(ref op1, ref left1, ref right1) = value.kind;
                 if BinOpKind::Sub == op1.node;

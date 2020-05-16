@@ -1594,7 +1594,7 @@ pub enum ExprKind<'hir> {
     Block(&'hir Block<'hir>, Option<Label>),
 
     /// An assignment (e.g., `a = foo()`).
-    Assign(&'hir Expr<'hir>, &'hir Expr<'hir>, Span),
+    Assign(&'hir Expr<'hir>, &'hir Expr<'hir>),
     /// An assignment with an operator.
     ///
     /// E.g., `a += 1`.

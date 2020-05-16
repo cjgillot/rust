@@ -140,8 +140,8 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 ExprKind::Block(ref blk, opt_label) => {
                     hir::ExprKind::Block(self.lower_block(blk, opt_label.is_some()), opt_label)
                 }
-                ExprKind::Assign(ref el, ref er, span) => {
-                    hir::ExprKind::Assign(self.lower_expr(el), self.lower_expr(er), span)
+                ExprKind::Assign(ref el, ref er, _span) => {
+                    hir::ExprKind::Assign(self.lower_expr(el), self.lower_expr(er))
                 }
                 ExprKind::AssignOp(op, ref el, ref er) => hir::ExprKind::AssignOp(
                     self.lower_binop(op),
@@ -708,7 +708,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
             if let Some(task_context_hid) = self.task_context {
                 let lhs = self.expr_ident(span, task_context_ident, task_context_hid);
                 let assign =
-                    self.expr(span, hir::ExprKind::Assign(lhs, yield_expr, span), AttrVec::new());
+                    self.expr(span, hir::ExprKind::Assign(lhs, yield_expr), AttrVec::new());
                 self.stmt_expr(span, assign)
             } else {
                 // Use of `await` outside of an async context. Return `yield_expr` so that we can
@@ -1388,7 +1388,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
             let next_expr = self.expr_ident(pat.span, next_ident, next_pat_hid);
             let assign = self.arena.alloc(self.expr(
                 pat.span,
-                hir::ExprKind::Assign(next_expr, val_expr, pat.span),
+                hir::ExprKind::Assign(next_expr, val_expr),
                 ThinVec::new(),
             ));
             let some_pat = self.pat_some(pat.span, val_pat);

@@ -69,7 +69,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for SlowVectorInit {
     fn check_expr(&mut self, cx: &LateContext<'a, 'tcx>, expr: &'tcx Expr<'_>) {
         // Matches initialization on reassignements. For example: `vec = Vec::with_capacity(100)`
         if_chain! {
-            if let ExprKind::Assign(ref left, ref right, _) = expr.kind;
+            if let ExprKind::Assign(ref left, ref right) = expr.kind;
 
             // Extract variable name
             if let ExprKind::Path(QPath::Resolved(_, ref path)) = left.kind;

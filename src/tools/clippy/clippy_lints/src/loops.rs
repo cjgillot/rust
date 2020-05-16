@@ -661,7 +661,7 @@ fn never_loop_expr(expr: &Expr<'_>, main_loop_id: HirId) -> NeverLoopResult {
         },
         ExprKind::Call(ref e, ref es) => never_loop_expr_all(&mut once(&**e).chain(es.iter()), main_loop_id),
         ExprKind::Binary(_, ref e1, ref e2)
-        | ExprKind::Assign(ref e1, ref e2, _)
+        | ExprKind::Assign(ref e1, ref e2)
         | ExprKind::AssignOp(_, ref e1, ref e2)
         | ExprKind::Index(ref e1, ref e2) => never_loop_expr_all(&mut [&**e1, &**e2].iter().cloned(), main_loop_id),
         ExprKind::Loop(ref b, _, _) => {
@@ -851,7 +851,7 @@ fn get_offset<'a, 'tcx>(cx: &LateContext<'a, 'tcx>, idx: &Expr<'_>, var: HirId) 
 
 fn get_assignments<'tcx>(body: &'tcx Expr<'tcx>) -> impl Iterator<Item = Option<(&'tcx Expr<'tcx>, &'tcx Expr<'tcx>)>> {
     fn get_assignment<'tcx>(e: &'tcx Expr<'tcx>) -> Option<(&'tcx Expr<'tcx>, &'tcx Expr<'tcx>)> {
-        if let ExprKind::Assign(lhs, rhs, _) = e.kind {
+        if let ExprKind::Assign(lhs, rhs) = e.kind {
             Some((lhs, rhs))
         } else {
             None
@@ -1755,7 +1755,7 @@ impl<'a, 'tcx> Visitor<'tcx> for VarVisitor<'a, 'tcx> {
 
         let old = self.prefer_mutable;
         match expr.kind {
-            ExprKind::AssignOp(_, ref lhs, ref rhs) | ExprKind::Assign(ref lhs, ref rhs, _) => {
+            ExprKind::AssignOp(_, ref lhs, ref rhs) | ExprKind::Assign(ref lhs, ref rhs) => {
                 self.prefer_mutable = true;
                 self.visit_expr(lhs);
                 self.prefer_mutable = false;
@@ -1981,7 +1981,7 @@ impl<'a, 'tcx> Visitor<'tcx> for IncrementVisitor<'a, 'tcx> {
                             }
                         }
                     },
-                    ExprKind::Assign(ref lhs, _, _) if lhs.hir_id == expr.hir_id => *state = VarState::DontWarn,
+                    ExprKind::Assign(ref lhs, _) if lhs.hir_id == expr.hir_id => *state = VarState::DontWarn,
                     ExprKind::AddrOf(BorrowKind::Ref, mutability, _) if mutability == Mutability::Mut => {
                         *state = VarState::DontWarn
                     },
@@ -2061,7 +2061,7 @@ impl<'a, 'tcx> Visitor<'tcx> for InitializeVisitor<'a, 'tcx> {
                     ExprKind::AssignOp(_, ref lhs, _) if lhs.hir_id == expr.hir_id => {
                         self.state = VarState::DontWarn;
                     },
-                    ExprKind::Assign(ref lhs, ref rhs, _) if lhs.hir_id == expr.hir_id => {
+                    ExprKind::Assign(ref lhs, ref rhs) if lhs.hir_id == expr.hir_id => {
                         self.state = if is_integer_const(&self.cx, rhs, 0) && self.depth == 0 {
                             VarState::Warn
                         } else {
@@ -2205,7 +2205,7 @@ impl<'tcx> Visitor<'tcx> for LoopNestVisitor {
             return;
         }
         match expr.kind {
-            ExprKind::Assign(ref path, _, _) | ExprKind::AssignOp(_, ref path, _) => {
+            ExprKind::Assign(ref path, _) | ExprKind::AssignOp(_, ref path, _) => {
                 if match_var(path, self.iterator) {
                     self.nesting = RuledOut;
                 }

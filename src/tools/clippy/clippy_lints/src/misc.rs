@@ -659,7 +659,7 @@ fn check_to_owned(cx: &LateContext<'_, '_>, expr: &Expr<'_>, other: &Expr<'_>) {
 fn is_used(cx: &LateContext<'_, '_>, expr: &Expr<'_>) -> bool {
     if let Some(parent) = get_parent_expr(cx, expr) {
         match parent.kind {
-            ExprKind::Assign(_, ref rhs, _) | ExprKind::AssignOp(_, _, ref rhs) => {
+            ExprKind::Assign(_, ref rhs) | ExprKind::AssignOp(_, _, ref rhs) => {
                 SpanlessEq::new(cx).eq_expr(rhs, expr)
             },
             _ => is_used(cx, parent),

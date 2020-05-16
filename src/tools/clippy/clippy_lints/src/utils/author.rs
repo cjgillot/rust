@@ -384,7 +384,7 @@ impl<'tcx> Visitor<'tcx> for PrintVisitor {
                 self.current = block_pat;
                 self.visit_block(block);
             },
-            ExprKind::Assign(ref target, ref value, _) => {
+            ExprKind::Assign(ref target, ref value) => {
                 let target_pat = self.next("target");
                 let value_pat = self.next("value");
                 println!(

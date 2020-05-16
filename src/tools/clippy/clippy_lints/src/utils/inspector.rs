@@ -226,7 +226,7 @@ fn print_expr(cx: &LateContext<'_, '_>, expr: &hir::Expr<'_>, indent: usize) {
         hir::ExprKind::Block(_, _) => {
             println!("{}Block", ind);
         },
-        hir::ExprKind::Assign(ref lhs, ref rhs, _) => {
+        hir::ExprKind::Assign(ref lhs, ref rhs) => {
             println!("{}Assign", ind);
             println!("{}lhs:", ind);
             print_expr(cx, lhs, indent + 1);

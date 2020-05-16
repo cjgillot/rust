@@ -79,7 +79,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for AssignOps {
                     }
                 }
             },
-            hir::ExprKind::Assign(assignee, e, _) => {
+            hir::ExprKind::Assign(assignee, e) => {
                 if let hir::ExprKind::Binary(op, l, r) = &e.kind {
                     let lint = |assignee: &hir::Expr<'_>, rhs: &hir::Expr<'_>| {
                         let ty = cx.tables.expr_ty(assignee);

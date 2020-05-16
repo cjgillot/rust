@@ -1152,7 +1152,7 @@ impl<'a, 'tcx> Liveness<'a, 'tcx> {
                 })
             }
 
-            hir::ExprKind::Assign(ref l, ref r, _) => {
+            hir::ExprKind::Assign(ref l, ref r) => {
                 // see comment on places in
                 // propagate_through_place_components()
                 let succ = self.write_place(&l, succ, ACC_WRITE);
