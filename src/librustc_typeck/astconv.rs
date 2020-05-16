@@ -1123,7 +1123,7 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
     ) -> GenericArgCountResult {
         self.instantiate_poly_trait_ref_inner(
             &poly_trait_ref.trait_ref,
-            poly_trait_ref.span,
+            self.tcx().hir().span(poly_trait_ref.hir_id),
             constness,
             self_ty,
             bounds,

@@ -187,7 +187,7 @@ fn sized_trait_bound_spans<'tcx>(
             ) =>
         {
             // Fetch spans for supertraits that are `Sized`: `trait T: Super`
-            Some(trait_ref.span)
+            Some(tcx.hir().span(trait_ref.hir_id))
         }
         _ => None,
     })

@@ -274,7 +274,10 @@ fn suggest_restriction(
                 // `fn foo<A>(t: impl Trait)`
                 //        ^^^ suggest `<A, T: Trait>` here
                 Some(param) => (
-                    param.bounds_span().unwrap_or(tcx.hir().span(param.hir_id)).shrink_to_hi(),
+                    param
+                        .bounds_span(|id| tcx.hir().span(id))
+                        .unwrap_or(tcx.hir().span(param.hir_id))
+                        .shrink_to_hi(),
                     format!(", {}", type_param),
                 ),
             },
@@ -301,7 +304,7 @@ fn suggest_restriction(
             ),
             Some((ident, bounds)) => match bounds {
                 [.., bound] => (
-                    bound.span().shrink_to_hi(),
+                    tcx.hir().span(bound.id()).shrink_to_hi(),
                     format!(" + {}", trait_ref.print_only_trait_path().to_string()),
                 ),
                 [] => (

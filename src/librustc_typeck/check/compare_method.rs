@@ -939,7 +939,10 @@ fn compare_synthetic_generics<'tcx>(
                                     }
                                 }
                             })?;
-                        let bounds = bounds.first()?.span().to(bounds.last()?.span());
+                        let bounds = tcx
+                            .hir()
+                            .span(bounds.first()?.id())
+                            .to(tcx.hir().span(bounds.last()?.id()));
                         let bounds = tcx.sess.source_map().span_to_snippet(bounds).ok()?;
 
                         err.multipart_suggestion(

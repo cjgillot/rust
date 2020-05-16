@@ -65,7 +65,7 @@ fn lint_bound<'a, 'tcx>(cx: &rustc_lint::LateContext<'a, 'tcx>, bound: &'tcx Gen
             span_lint(
                 cx,
                 DROP_BOUNDS,
-                t.span,
+                cx.tcx.hir().span(t.hir_id),
                 DROP_BOUNDS_SUMMARY
             );
         }

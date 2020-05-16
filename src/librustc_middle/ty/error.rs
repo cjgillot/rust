@@ -873,7 +873,11 @@ fn foo(&self) -> Self::T { String::new() }
                 // Relate the type param against `T` in `<A as T>::Foo`.
                 ptr.trait_ref.trait_def_id() == Some(trait_ref.def_id)
                     && self.constrain_associated_type_structured_suggestion(
-                        db, ptr.span, assoc, ty, msg,
+                        db,
+                        self.hir().span(ptr.hir_id),
+                        assoc,
+                        ty,
+                        msg,
                     )
             }
             _ => false,

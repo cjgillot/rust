@@ -2082,12 +2082,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
         let trait_ref = hir::TraitRef { path: future_path, hir_ref_id: self.next_id(span) };
 
         hir::GenericBound::Trait(
-            hir::PolyTraitRef {
-                trait_ref,
-                bound_generic_params: &[],
-                hir_id: self.next_id(span),
-                span,
-            },
+            hir::PolyTraitRef { trait_ref, bound_generic_params: &[], hir_id: self.next_id(span) },
             hir::TraitBoundModifier::None,
         )
     }
@@ -2297,12 +2292,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
             res
         });
 
-        hir::PolyTraitRef {
-            bound_generic_params,
-            trait_ref,
-            hir_id: self.next_id(p.span),
-            span: p.span,
-        }
+        hir::PolyTraitRef { bound_generic_params, trait_ref, hir_id: self.next_id(p.span) }
     }
 
     fn lower_mt(&mut self, mt: &MutTy, itctx: ImplTraitContext<'_, 'hir>) -> hir::MutTy<'hir> {
@@ -2602,7 +2592,6 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                             bound_generic_params: &[],
                             trait_ref: hir::TraitRef { path, hir_ref_id: hir_id },
                             hir_id: self.next_id(span),
-                            span,
                         };
 
                         // The original ID is taken by the `PolyTraitRef`,

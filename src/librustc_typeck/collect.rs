@@ -161,7 +161,7 @@ crate fn placeholder_type_error(
         let last_span = tcx.hir().span(last.hir_id);
         sugg.push((
             // Account for bounds, we want `fn foo<T: E, K>(_: K)` not `fn foo<T, K: E>(_: K)`.
-            last.bounds_span().unwrap_or(last_span).shrink_to_hi(),
+            last.bounds_span(|id| tcx.hir().span(id)).unwrap_or(last_span).shrink_to_hi(),
             format!(", {}", type_name),
         ));
     }

@@ -301,7 +301,7 @@ impl<'hir> Sig for hir::Ty<'hir> {
                 // FIXME recurse into bounds
                 let bounds: Vec<hir::GenericBound<'_>> = bounds
                     .iter()
-                    .map(|hir::PolyTraitRef { hir_id, bound_generic_params, trait_ref, span }| {
+                    .map(|hir::PolyTraitRef { hir_id, bound_generic_params, trait_ref }| {
                         hir::GenericBound::Trait(
                             hir::PolyTraitRef {
                                 hir_id: *hir_id,
@@ -310,7 +310,6 @@ impl<'hir> Sig for hir::Ty<'hir> {
                                     path: trait_ref.path,
                                     hir_ref_id: trait_ref.hir_ref_id,
                                 },
-                                span: *span,
                             },
                             hir::TraitBoundModifier::None,
                         )

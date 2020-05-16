@@ -948,7 +948,7 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
             if trait_ref_hack {
                 struct_span_err!(
                     self.tcx.sess,
-                    trait_ref.span,
+                    self.tcx.hir().span(trait_ref.hir_id),
                     E0316,
                     "nested quantification of lifetimes"
                 )

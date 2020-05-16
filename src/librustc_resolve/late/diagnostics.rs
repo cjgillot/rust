@@ -1072,7 +1072,10 @@ impl<'tcx> LifetimeContext<'_, 'tcx> {
             .contains(&Some(did))
             {
                 let (span, span_type) = match &trait_ref.bound_generic_params {
-                    [] => (trait_ref.span.shrink_to_lo(), ForLifetimeSpanType::BoundEmpty),
+                    [] => (
+                        self.tcx.hir().span(trait_ref.hir_id).shrink_to_lo(),
+                        ForLifetimeSpanType::BoundEmpty,
+                    ),
                     [.., bound] => (
                         self.tcx.hir().span(bound.hir_id).shrink_to_hi(),
                         ForLifetimeSpanType::BoundTail,

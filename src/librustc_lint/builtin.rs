@@ -1122,7 +1122,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for TypeAliasBounds {
         }
         // The parameters must not have bounds
         for param in type_alias_generics.params.iter() {
-            let spans: Vec<_> = param.bounds.iter().map(|b| b.span()).collect();
+            let spans: Vec<_> = param.bounds.iter().map(|b| cx.tcx.hir().span(b.id())).collect();
             let suggestion = spans
                 .iter()
                 .map(|sp| {
@@ -1561,7 +1561,7 @@ impl ExplicitOutlivesRequirements {
                         }),
                         _ => false,
                     };
-                    is_inferred.then_some((i, bound.span()))
+                    is_inferred.then_some((i, tcx.hir().span(bound.id())))
                 } else {
                     None
                 }
@@ -1571,6 +1571,7 @@ impl ExplicitOutlivesRequirements {
 
     fn consolidate_outlives_bound_spans(
         &self,
+        tcx: TyCtxt<'_>,
         lo: Span,
         bounds: &hir::GenericBounds<'_>,
         bound_spans: Vec<(usize, Span)>,
@@ -1592,7 +1593,7 @@ impl ExplicitOutlivesRequirements {
                 match last_merged_i {
                     // If the first bound is inferable, our span should also eat the leading `+`.
                     None if i == 0 => {
-                        merged.push(bound_span.to(bounds[1].span().shrink_to_lo()));
+                        merged.push(bound_span.to(tcx.hir().span(bounds[1].id()).shrink_to_lo()));
                         last_merged_i = Some(0);
                     }
                     // If consecutive bounds are inferable, merge their spans
@@ -1601,7 +1602,7 @@ impl ExplicitOutlivesRequirements {
                             // Also eat the trailing `+` if the first
                             // more-than-one bound is inferable
                             let to_span = if from_start && i < bounds.len() {
-                                bounds[i + 1].span().shrink_to_lo()
+                                tcx.hir().span(bounds[i + 1].id()).shrink_to_lo()
                             } else {
                                 bound_span
                             };
@@ -1616,7 +1617,8 @@ impl ExplicitOutlivesRequirements {
                         // won't be consecutive from the start (and we'll eat the leading
                         // `+` rather than the trailing one)
                         from_start = false;
-                        merged.push(bounds[i - 1].span().shrink_to_hi().to(bound_span));
+                        merged
+                            .push(tcx.hir().span(bounds[i - 1].id()).shrink_to_hi().to(bound_span));
                         last_merged_i = Some(i);
                     }
                 }
@@ -1669,6 +1671,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ExplicitOutlivesRequirements {
                 bound_count += bound_spans.len();
                 let param_span = cx.tcx.hir().span(param.hir_id);
                 lint_spans.extend(self.consolidate_outlives_bound_spans(
+                    cx.tcx,
                     param_span.shrink_to_hi(),
                     &param.bounds,
                     bound_spans,
@@ -1740,6 +1743,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ExplicitOutlivesRequirements {
                     where_lint_spans.push(span.to(next_predicate_span.shrink_to_lo()));
                 } else {
                     where_lint_spans.extend(self.consolidate_outlives_bound_spans(
+                        cx.tcx,
                         span.shrink_to_lo(),
                         bounds,
                         bound_spans,

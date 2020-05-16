@@ -1076,7 +1076,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                 let sp = if let Some(first_bound) = has_bounds {
                                     // `sp` only covers `T`, change it so that it covers
                                     // `T:` when appropriate
-                                    sp.until(first_bound.span())
+                                    sp.until(hir.span(first_bound.id()))
                                 } else {
                                     sp
                                 };
@@ -1114,7 +1114,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                 let (sp, sep, article) = if bounds.is_empty() {
                                     (ident.span.shrink_to_hi(), ":", "a")
                                 } else {
-                                    (bounds.last().unwrap().span().shrink_to_hi(), " +", "another")
+                                    (
+                                        hir.span(bounds.last().unwrap().id()).shrink_to_hi(),
+                                        " +",
+                                        "another",
+                                    )
                                 };
                                 err.span_suggestions(
                                     sp,

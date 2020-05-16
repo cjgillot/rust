@@ -136,7 +136,7 @@ pub fn suggest_constraining_type_param(
         // `where` clause instead of `trait Base<T: Copy = String>: Super<T>`.
         && !matches!(param.kind, hir::GenericParamKind::Type { default: Some(_), .. })
     {
-        if let Some(bounds_span) = param.bounds_span() {
+        if let Some(bounds_span) = param.bounds_span(|id| tcx.hir().span(id)) {
             // If user has provided some bounds, suggest restricting them:
             //
             //   fn foo<T: Foo>(t: T) { ... }

@@ -372,13 +372,6 @@ impl GenericBound<'_> {
             &GenericBound::Outlives(ref l) => l.hir_id,
         }
     }
-
-    pub fn span(&self) -> Span {
-        match self {
-            &GenericBound::Trait(ref t, ..) => t.span,
-            &GenericBound::Outlives(ref l) => l.span,
-        }
-    }
 }
 
 pub type GenericBounds<'hir> = &'hir [GenericBound<'hir>];
@@ -428,9 +421,10 @@ pub struct GenericParam<'hir> {
 }
 
 impl GenericParam<'hir> {
-    pub fn bounds_span(&self) -> Option<Span> {
+    pub fn bounds_span(&self, get_span: impl Fn(HirId) -> Span) -> Option<Span> {
         self.bounds.iter().fold(None, |span, bound| {
-            let span = span.map(|s| s.to(bound.span())).unwrap_or_else(|| bound.span());
+            let bound_span = get_span(bound.id());
+            let span = span.map(|s| s.to(bound_span)).unwrap_or(bound_span);
 
             Some(span)
         })
@@ -2322,7 +2316,6 @@ pub struct PolyTraitRef<'hir> {
     pub trait_ref: TraitRef<'hir>,
 
     pub hir_id: HirId,
-    pub span: Span,
 }
 
 pub type Visibility<'hir> = Spanned<VisibilityKind<'hir>>;

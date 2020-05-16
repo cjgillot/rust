@@ -471,7 +471,7 @@ impl<'a, 'hir> Visitor<'hir> for NodeCollector<'a, 'hir> {
     }
 
     fn visit_poly_trait_ref(&mut self, tr: &'hir PolyTraitRef<'hir>, modifier: TraitBoundModifier) {
-        self.insert(tr.span, tr.hir_id, Node::PolyTraitRef(tr));
+        self.insert(DUMMY_SP, tr.hir_id, Node::PolyTraitRef(tr));
 
         self.with_parent(tr.hir_id, |this| {
             intravisit::walk_poly_trait_ref(this, tr, modifier);
