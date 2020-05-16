@@ -482,7 +482,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for Matches {
                     "try this",
                     format!(
                         "let {}({}) = {};",
-                        snippet_with_applicability(cx, variant_name.span, "..", &mut applicability),
+                        snippet_with_applicability(cx, cx.tcx.hir().span(variant_name.hir_id), "..", &mut applicability),
                         snippet_with_applicability(cx, cx.tcx.hir().span(local.pat.hir_id), "..", &mut applicability),
                         snippet_with_applicability(cx, cx.tcx.hir().span(target.hir_id), "..", &mut applicability),
                     ),

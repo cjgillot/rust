@@ -63,12 +63,12 @@ fn span_use_self_lint(cx: &LateContext<'_, '_>, path: &Path<'_>, last_segment: O
     // Path segments only include actual path, no methods or fields.
     let last_path_span = last_segment.ident.span;
 
-    if differing_macro_contexts(path.span, last_path_span) {
+    if differing_macro_contexts(cx.tcx.hir().span(path.hir_id), last_path_span) {
         return;
     }
 
     // Only take path up to the end of last_path_span.
-    let span = path.span.with_hi(last_path_span.hi());
+    let span = cx.tcx.hir().span(path.hir_id).with_hi(last_path_span.hi());
 
     span_lint_and_sugg(
         cx,

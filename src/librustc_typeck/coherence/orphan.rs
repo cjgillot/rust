@@ -75,7 +75,7 @@ impl ItemLikeVisitor<'v> for OrphanChecker<'tcx> {
                             err.span_label(self.tcx.hir().span(self_ty.hir_id), &msg);
                         } else {
                             // Point at `C<B>` in `impl<A, B> for C<B> in D<A>`
-                            err.span_label(tr.path.span, &msg);
+                            err.span_label(self.tcx.hir().span(tr.path.hir_id), &msg);
                         }
                     }
                     err.note("define and implement a trait or new type instead");

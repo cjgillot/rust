@@ -111,7 +111,8 @@ pub fn check_item_well_formed(tcx: TyCtxt<'_>, def_id: LocalDefId) {
                 .map_or(false, |trait_ref| tcx.trait_is_auto(trait_ref.def_id));
             if let (hir::Defaultness::Default { .. }, true) = (defaultness, is_auto) {
                 let item_span = tcx.hir().span(item.hir_id);
-                let sp = of_trait.as_ref().map(|t| t.path.span).unwrap_or(item_span);
+                let sp =
+                    of_trait.as_ref().map(|t| tcx.hir().span(t.path.hir_id)).unwrap_or(item_span);
                 let mut err =
                     tcx.sess.struct_span_err(sp, "impls of auto traits cannot be default");
                 err.span_labels(defaultness_span, "default because of this");
@@ -636,15 +637,17 @@ fn check_impl<'tcx>(
                 // `#[rustc_reservation_impl]` impls are not real impls and
                 // therefore don't need to be WF (the trait's `Self: Trait` predicate
                 // won't hold).
-                let trait_ref = fcx.tcx.impl_trait_ref(item_def_id).unwrap();
-                let trait_ref =
-                    fcx.normalize_associated_types_in(ast_trait_ref.path.span, &trait_ref);
+                let trait_ref = tcx.impl_trait_ref(item_def_id).unwrap();
+                let trait_ref = fcx.normalize_associated_types_in(
+                    tcx.hir().span(ast_trait_ref.path.hir_id),
+                    &trait_ref,
+                );
                 let obligations = traits::wf::trait_obligations(
                     fcx,
                     fcx.param_env,
                     fcx.body_id,
                     &trait_ref,
-                    ast_trait_ref.path.span,
+                    tcx.hir().span(ast_trait_ref.path.hir_id),
                     Some(item),
                 );
                 for obligation in obligations {

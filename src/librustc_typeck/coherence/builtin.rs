@@ -89,7 +89,7 @@ fn visit_implementation_of_copy(tcx: TyCtxt<'_>, impl_did: LocalDefId) {
         Err(CopyImplementationError::InfrigingFields(fields)) => {
             let item = tcx.hir().expect_item(impl_hir_id);
             let span = if let ItemKind::Impl { of_trait: Some(ref tr), .. } = item.kind {
-                tr.path.span
+                tcx.hir().span(tr.path.hir_id)
             } else {
                 span
             };
@@ -480,7 +480,7 @@ pub fn coerce_unsized_info(tcx: TyCtxt<'tcx>, impl_did: DefId) -> CoerceUnsizedI
                 } else if diff_fields.len() > 1 {
                     let item = tcx.hir().expect_item(impl_hir_id);
                     let span = if let ItemKind::Impl { of_trait: Some(ref t), .. } = item.kind {
-                        t.path.span
+                        tcx.hir().span(t.path.hir_id)
                     } else {
                         tcx.hir().span(impl_hir_id)
                     };

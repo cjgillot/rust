@@ -321,7 +321,7 @@ impl<'l, 'tcx> SaveContext<'l, 'tcx> {
             hir::ItemKind::Impl { ref of_trait, ref self_ty, ref items, .. } => {
                 if let hir::TyKind::Path(hir::QPath::Resolved(_, ref path)) = self_ty.kind {
                     // Common case impl for a struct or something basic.
-                    if generated_code(path.span) {
+                    if generated_code(self.tcx.hir().span(path.hir_id)) {
                         return None;
                     }
                     let sub_span = path.segments.last().unwrap().ident.span;
@@ -511,7 +511,7 @@ impl<'l, 'tcx> SaveContext<'l, 'tcx> {
 
     pub fn get_trait_ref_data(&self, trait_ref: &hir::TraitRef<'_>) -> Option<Ref> {
         self.lookup_def_id(trait_ref.hir_ref_id).and_then(|def_id| {
-            let span = trait_ref.path.span;
+            let span = self.tcx.hir().span(trait_ref.path.hir_id);
             if generated_code(span) {
                 return None;
             }

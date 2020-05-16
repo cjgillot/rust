@@ -764,7 +764,7 @@ impl<'l, 'tcx> DumpVisitor<'l, 'tcx> {
 
     fn process_path(&mut self, id: hir::HirId, path: &hir::QPath<'tcx>) {
         let span = match path {
-            hir::QPath::Resolved(_, path) => path.span,
+            hir::QPath::Resolved(_, path) => self.tcx.hir().span(path.hir_id),
             hir::QPath::TypeRelative(_, segment) => segment.ident.span,
         };
         if self.span.filter_generated(span) {

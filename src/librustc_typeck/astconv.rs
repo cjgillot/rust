@@ -1040,7 +1040,7 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
         self.prohibit_generics(trait_ref.path.segments.split_last().unwrap().1);
 
         self.ast_path_to_mono_trait_ref(
-            trait_ref.path.span,
+            self.tcx().hir().span(trait_ref.path.hir_id),
             trait_ref.trait_def_id().unwrap_or_else(|| FatalError.raise()),
             self_ty,
             trait_ref.path.segments.last().unwrap(),
@@ -1064,7 +1064,7 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
         self.prohibit_generics(trait_ref.path.segments.split_last().unwrap().1);
 
         let (substs, assoc_bindings, arg_count) = self.create_substs_for_ast_trait_ref(
-            trait_ref.path.span,
+            self.tcx().hir().span(trait_ref.path.hir_id),
             trait_def_id,
             self_ty,
             trait_ref.path.segments.last().unwrap(),
@@ -2716,7 +2716,7 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
             path.res, opt_self_ty, path.segments
         );
 
-        let span = path.span;
+        let span = tcx.hir().span(path.hir_id);
         match path.res {
             Res::Def(DefKind::OpaqueTy, did) => {
                 // Check for desugared `impl Trait`.

@@ -612,7 +612,8 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 args: None,
                 infer_args: seg.infer_args,
             }));
-        self.arena.alloc(hir::Path { span: path.span, res: path.res, segments })
+        let span = self.spans[path.hir_id];
+        self.arena.alloc(hir::Path { hir_id: self.next_id(span), res: path.res, segments })
     }
 
     fn rebuild_vis(&mut self, vis: &hir::Visibility<'hir>) -> hir::Visibility<'hir> {

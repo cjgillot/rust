@@ -1427,7 +1427,9 @@ impl<'a, 'tcx> Liveness<'a, 'tcx> {
         acc: u32,
     ) -> LiveNode {
         match path.res {
-            Res::Local(hid) => self.access_var(hir_id, hid, succ, acc, path.span),
+            Res::Local(hid) => {
+                self.access_var(hir_id, hid, succ, acc, self.ir.tcx.hir().span(path.hir_id))
+            }
             _ => succ,
         }
     }

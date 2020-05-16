@@ -184,7 +184,7 @@ impl Lifetime {
 /// along with a bunch of supporting information.
 #[derive(RustcEncodable, RustcDecodable, Debug, HashStable_Generic)]
 pub struct Path<'hir> {
-    pub span: Span,
+    pub hir_id: HirId,
     /// The resolution for the path.
     pub res: Res,
     /// The segments in the path: the things separated by `::`.

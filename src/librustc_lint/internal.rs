@@ -89,7 +89,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for TyTyKind {
         let segments = path.segments.iter().rev().skip(1).rev();
 
         if let Some(last) = segments.last() {
-            let span = path.span.with_hi(last.ident.span.hi());
+            let span = cx.tcx.hir().span(path.hir_id).with_hi(last.ident.span.hi());
             if lint_ty_kind_usage(cx, last) {
                 cx.struct_span_lint(USAGE_OF_TY_TYKIND, span, |lint| {
                     lint.build("usage of `ty::TyKind::<kind>`")
@@ -111,28 +111,36 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for TyTyKind {
                 if let QPath::Resolved(_, path) = qpath {
                     if let Some(last) = path.segments.iter().last() {
                         if lint_ty_kind_usage(cx, last) {
-                            cx.struct_span_lint(USAGE_OF_TY_TYKIND, path.span, |lint| {
-                                lint.build("usage of `ty::TyKind`")
-                                    .help("try using `Ty` instead")
-                                    .emit();
-                            })
+                            cx.struct_span_lint(
+                                USAGE_OF_TY_TYKIND,
+                                cx.tcx.hir().span(path.hir_id),
+                                |lint| {
+                                    lint.build("usage of `ty::TyKind`")
+                                        .help("try using `Ty` instead")
+                                        .emit();
+                                },
+                            )
                         } else {
                             if cx.tcx.hir().span(ty.hir_id).from_expansion() {
                                 return;
                             }
                             if let Some(t) = is_ty_or_ty_ctxt(cx, ty) {
                                 if path.segments.len() > 1 {
-                                    cx.struct_span_lint(USAGE_OF_QUALIFIED_TY, path.span, |lint| {
-                                        lint.build(&format!("usage of qualified `ty::{}`", t))
-                                            .span_suggestion(
-                                                path.span,
-                                                "try using it unqualified",
-                                                t,
-                                                // The import probably needs to be changed
-                                                Applicability::MaybeIncorrect,
-                                            )
-                                            .emit();
-                                    })
+                                    cx.struct_span_lint(
+                                        USAGE_OF_QUALIFIED_TY,
+                                        cx.tcx.hir().span(path.hir_id),
+                                        |lint| {
+                                            lint.build(&format!("usage of qualified `ty::{}`", t))
+                                                .span_suggestion(
+                                                    cx.tcx.hir().span(path.hir_id),
+                                                    "try using it unqualified",
+                                                    t,
+                                                    // The import probably needs to be changed
+                                                    Applicability::MaybeIncorrect,
+                                                )
+                                                .emit();
+                                        },
+                                    )
                                 }
                             }
                         }

@@ -80,7 +80,7 @@ impl Visitor<'tcx> for CaptureCollector<'a, 'tcx> {
 
     fn visit_path(&mut self, path: &'tcx hir::Path<'tcx>, _: hir::HirId) {
         if let Res::Local(var_id) = path.res {
-            self.visit_local_use(var_id, path.span);
+            self.visit_local_use(var_id, self.tcx.hir().span(path.hir_id));
         }
 
         intravisit::walk_path(self, path);

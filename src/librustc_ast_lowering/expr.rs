@@ -1753,7 +1753,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         let expr_path = hir::ExprKind::Path(hir::QPath::Resolved(
             None,
             self.arena.alloc(hir::Path {
-                span,
+                hir_id: self.next_id(span),
                 res: Res::Local(binding),
                 segments: arena_vec![self; hir::PathSegment::from_ident(ident)],
             }),

@@ -1677,7 +1677,7 @@ impl<'a> State<'a> {
     }
 
     pub fn print_path(&mut self, path: &hir::Path<'_>, colons_before_params: bool) {
-        self.maybe_print_comment(path.span.lo());
+        self.maybe_print_comment(self.span(path.hir_id).lo());
 
         for (i, segment) in path.segments.iter().enumerate() {
             if i > 0 {

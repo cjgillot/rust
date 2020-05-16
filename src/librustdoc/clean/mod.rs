@@ -1485,8 +1485,7 @@ impl Clean<Type> for hir::Ty<'_> {
                 if let ty::Projection(proj) = ty.kind {
                     res = Res::Def(DefKind::Trait, proj.trait_ref(cx.tcx).def_id);
                 }
-                let trait_path =
-                    hir::Path { span: cx.tcx.hir().span(self.hir_id), res, segments: &[] };
+                let trait_path = hir::Path { hir_id: self.hir_id, res, segments: &[] };
                 Type::QPath {
                     name: segment.ident.name.clean(cx),
                     self_type: box qself.clean(cx),

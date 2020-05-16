@@ -139,7 +139,7 @@ impl Visitor<'tcx> for TypeParamSpanVisitor<'tcx> {
                         })
                         .unwrap_or(false) =>
                 {
-                    self.types.push(path.span);
+                    self.types.push(self.tcx.hir().span(path.hir_id));
                 }
                 _ => {}
             },

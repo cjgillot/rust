@@ -56,7 +56,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for TraitBounds {
                             let path = &poly_trait_ref.trait_ref.path;
                             hint_string.push_str(&format!(
                                 " {} +",
-                                snippet_with_applicability(cx, path.span, "..", &mut applicability)
+                                snippet_with_applicability(cx, cx.tcx.hir().span(path.hir_id), "..", &mut applicability)
                             ));
                         }
                     }
@@ -65,7 +65,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for TraitBounds {
                             let path = &poly_trait_ref.trait_ref.path;
                             hint_string.push_str(&format!(
                                 " {} +",
-                                snippet_with_applicability(cx, path.span, "..", &mut applicability)
+                                snippet_with_applicability(cx, cx.tcx.hir().span(path.hir_id), "..", &mut applicability)
                             ));
                         }
                     }

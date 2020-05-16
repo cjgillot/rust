@@ -375,11 +375,13 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         let callee_ty = callee_ty.to_string();
                         let label = match (unit_variant, inner_callee_path) {
                             (Some(path), _) => Some(format!("`{}` defined here", path)),
-                            (_, Some(hir::QPath::Resolved(_, path))) => {
-                                self.tcx.sess.source_map().span_to_snippet(path.span).ok().map(
-                                    |p| format!("`{}` defined here returns `{}`", p, callee_ty),
-                                )
-                            }
+                            (_, Some(hir::QPath::Resolved(_, path))) => self
+                                .tcx
+                                .sess
+                                .source_map()
+                                .span_to_snippet(self.tcx.hir().span(path.hir_id))
+                                .ok()
+                                .map(|p| format!("`{}` defined here returns `{}`", p, callee_ty)),
                             _ => Some(format!("`{}` defined here", callee_ty)),
                         };
                         if let Some(label) = label {

@@ -116,25 +116,26 @@ impl LateLintPass<'_, '_> for WildcardImports {
             if !used_imports.is_empty(); // Already handled by `unused_imports`
             then {
                 let mut applicability = Applicability::MachineApplicable;
-                let import_source_snippet = snippet_with_applicability(cx, use_path.span, "..", &mut applicability);
+                let use_path_span = cx.tcx.hir().span(use_path.hir_id);
+                let import_source_snippet = snippet_with_applicability(cx, use_path_span, "..", &mut applicability);
                 let (span, braced_glob) = if import_source_snippet.is_empty() {
                     // This is a `_::{_, *}` import
                     // In this case `use_path.span` is empty and ends directly in front of the `*`,
                     // so we need to extend it by one byte.
                     (
-                        use_path.span.with_hi(use_path.span.hi() + BytePos(1)),
+                        use_path_span.with_hi(use_path_span.hi() + BytePos(1)),
                         true,
                     )
                 } else {
-                    // In this case, the `use_path.span` ends right before the `::*`, so we need to
+                    // In this case, the `use_path_span` ends right before the `::*`, so we need to
                     // extend it up to the `*`. Since it is hard to find the `*` in weird
                     // formattings like `use _ ::  *;`, we extend it up to, but not including the
                     // `;`. In nested imports, like `use _::{inner::*, _}` there is no `;` and we
                     // can just use the end of the item span
                     let item_span = cx.tcx.hir().span(item.hir_id);
-                    let mut span = use_path.span.with_hi(item_span.hi());
+                    let mut span = use_path_span.with_hi(item_span.hi());
                     if snippet(cx, span, "").ends_with(';') {
-                        span = use_path.span.with_hi(item_span.hi() - BytePos(1));
+                        span = use_path_span.with_hi(item_span.hi() - BytePos(1));
                     }
                     (
                         span, false,

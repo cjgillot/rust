@@ -463,7 +463,7 @@ impl<'a, 'hir> Visitor<'hir> for NodeCollector<'a, 'hir> {
     }
 
     fn visit_trait_ref(&mut self, tr: &'hir TraitRef<'hir>) {
-        self.insert(tr.path.span, tr.hir_ref_id, Node::TraitRef(tr));
+        self.insert(DUMMY_SP, tr.hir_ref_id, Node::TraitRef(tr));
 
         self.with_parent(tr.hir_ref_id, |this| {
             intravisit::walk_trait_ref(this, tr);

@@ -29,7 +29,7 @@ impl ItemLikeVisitor<'v> for CheckVisitor<'tcx> {
             return;
         }
         if let hir::ItemKind::Use(ref path, _) = item.kind {
-            self.check_import(item.hir_id, path.span);
+            self.check_import(item.hir_id, self.tcx.hir().span(path.hir_id));
         }
     }
 

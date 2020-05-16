@@ -32,6 +32,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
 
         let proj_start = p.segments.len() - partial_res.unresolved_segments();
         let path = self.arena.alloc(hir::Path {
+            hir_id: self.next_id(p.span),
             res: self.lower_res(partial_res.base_res()),
             segments: self.arena.alloc_from_iter(p.segments[..proj_start].iter().enumerate().map(
                 |(i, segment)| {
@@ -108,7 +109,6 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                     )
                 },
             )),
-            span: p.span,
         });
 
         // Simple case, either no projections, or only fully-qualified.
@@ -182,6 +182,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
         explicit_owner: Option<NodeId>,
     ) -> &'hir hir::Path<'hir> {
         self.arena.alloc(hir::Path {
+            hir_id: self.next_id(p.span),
             res,
             segments: self.arena.alloc_from_iter(p.segments.iter().map(|segment| {
                 self.lower_path_segment(
@@ -194,7 +195,6 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                     explicit_owner,
                 )
             })),
-            span: p.span,
         })
     }
 

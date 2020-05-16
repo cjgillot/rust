@@ -1290,7 +1290,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                         segments: arena_vec![self; hir::PathSegment::from_ident(
                             Ident::with_dummy_span(kw::SelfUpper)
                         )],
-                        span: t.span,
+                        hir_id: self.next_id(t.span),
                     }),
                 ))
             }
@@ -1385,7 +1385,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                         hir::TyKind::Path(hir::QPath::Resolved(
                             None,
                             self.arena.alloc(hir::Path {
-                                span,
+                                hir_id: self.next_id(span),
                                 res: Res::Def(DefKind::TyParam, def_id.to_def_id()),
                                 segments: arena_vec![self; hir::PathSegment::from_ident(ident)],
                             }),
@@ -2250,7 +2250,8 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
             hir::QPath::Resolved(None, path) => path,
             qpath => panic!("lower_trait_ref: unexpected QPath `{:?}`", qpath),
         };
-        hir::TraitRef { path, hir_ref_id: self.lower_node_id(p.ref_id, path.span) }
+        let span = self.spans[path.hir_id];
+        hir::TraitRef { path, hir_ref_id: self.lower_node_id(p.ref_id, span) }
     }
 
     fn lower_poly_trait_ref(
@@ -2566,7 +2567,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
         segments.last_mut().unwrap().args = params;
 
         self.arena.alloc(hir::Path {
-            span,
+            hir_id: self.next_id(span),
             res: res.map_id(|_| panic!("unexpected `NodeId`")),
             segments: self.arena.alloc_from_iter(segments),
         })

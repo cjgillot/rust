@@ -4464,7 +4464,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         hir_id: hir::HirId,
     ) -> Option<(&'tcx ty::VariantDef, Ty<'tcx>)> {
         let path_span = match *qpath {
-            QPath::Resolved(_, ref path) => path.span,
+            QPath::Resolved(_, ref path) => self.tcx().hir().span(path.hir_id),
             QPath::TypeRelative(ref qself, _) => self.tcx().hir().span(qself.hir_id),
         };
         let (def, ty) = self.finish_resolving_struct_path(qpath, path_span, hir_id);

@@ -243,7 +243,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
             Some(res) => hir::PatKind::Path(hir::QPath::Resolved(
                 None,
                 self.arena.alloc(hir::Path {
-                    span: ident.span,
+                    hir_id: self.next_id(ident.span),
                     res: self.lower_res(res),
                     segments: arena_vec![self; hir::PathSegment::from_ident(ident)],
                 }),

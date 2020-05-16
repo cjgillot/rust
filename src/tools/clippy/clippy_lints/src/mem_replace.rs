@@ -127,7 +127,7 @@ fn check_replace_option_with_none(cx: &LateContext<'_, '_>, src: &Expr<'_>, dest
                 "consider `Option::take()` instead",
                 format!(
                     "{}.take()",
-                    snippet_with_applicability(cx, replaced_path.span, "", &mut applicability)
+                    snippet_with_applicability(cx, cx.tcx.hir().span(replaced_path.hir_id), "", &mut applicability)
                 ),
                 applicability,
             );

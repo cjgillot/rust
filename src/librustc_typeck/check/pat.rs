@@ -956,7 +956,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 //   |          ^  ^
                 [] => {
                     let qpath_span = match qpath {
-                        hir::QPath::Resolved(_, path) => path.span,
+                        hir::QPath::Resolved(_, path) => self.tcx.hir().span(path.hir_id),
                         hir::QPath::TypeRelative(_, ps) => ps.ident.span,
                     };
                     (qpath_span.shrink_to_hi(), pat_span)

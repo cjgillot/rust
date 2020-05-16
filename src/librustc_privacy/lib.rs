@@ -1263,7 +1263,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypePrivacyVisitor<'a, 'tcx> {
     }
 
     fn visit_trait_ref(&mut self, trait_ref: &'tcx hir::TraitRef<'tcx>) {
-        self.span = trait_ref.path.span;
+        self.span = self.tcx.hir().span(trait_ref.path.hir_id);
         if !self.in_body {
             // Avoid calling `hir_trait_to_predicates` in bodies, it will ICE.
             // The traits' privacy in bodies is already checked as a part of trait object types.
@@ -1349,7 +1349,9 @@ impl<'a, 'tcx> Visitor<'tcx> for TypePrivacyVisitor<'a, 'tcx> {
                 let sess = self.tcx.sess;
                 let sm = sess.source_map();
                 let name = match qpath {
-                    hir::QPath::Resolved(_, path) => sm.span_to_snippet(path.span).ok(),
+                    hir::QPath::Resolved(_, path) => {
+                        sm.span_to_snippet(self.tcx.hir().span(path.hir_id)).ok()
+                    }
                     hir::QPath::TypeRelative(_, segment) => Some(segment.ident.to_string()),
                 };
                 let kind = kind.descr(def_id);
