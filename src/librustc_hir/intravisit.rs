@@ -843,19 +843,19 @@ pub fn walk_where_predicate<'v, V: Visitor<'v>>(
             ref bounded_ty,
             bounds,
             bound_generic_params,
-            ..
+            hir_id,
         }) => {
+            visitor.visit_id(hir_id);
             visitor.visit_ty(bounded_ty);
             walk_list!(visitor, visit_param_bound, bounds);
             walk_list!(visitor, visit_generic_param, bound_generic_params);
         }
-        &WherePredicate::RegionPredicate(WhereRegionPredicate { ref lifetime, bounds, .. }) => {
+        &WherePredicate::RegionPredicate(WhereRegionPredicate { ref lifetime, bounds, hir_id }) => {
+            visitor.visit_id(hir_id);
             visitor.visit_lifetime(lifetime);
             walk_list!(visitor, visit_param_bound, bounds);
         }
-        &WherePredicate::EqPredicate(WhereEqPredicate {
-            hir_id, ref lhs_ty, ref rhs_ty, ..
-        }) => {
+        &WherePredicate::EqPredicate(WhereEqPredicate { hir_id, ref lhs_ty, ref rhs_ty }) => {
             visitor.visit_id(hir_id);
             visitor.visit_ty(lhs_ty);
             visitor.visit_ty(rhs_ty);

@@ -511,9 +511,9 @@ impl WhereClause<'_> {
 
     /// `Span` where further predicates would be suggested, accounting for trailing commas, like
     ///  in `fn foo<T>(t: T) where T: Foo,` so we don't suggest two trailing commas.
-    pub fn tail_span_for_suggestion(&self) -> Span {
+    pub fn tail_span_for_suggestion(&self, get_span: impl Fn(HirId) -> Span) -> Span {
         let end = self.span_for_predicates_or_empty_place().shrink_to_hi();
-        self.predicates.last().map(|p| p.span()).unwrap_or(end).shrink_to_hi().to(end)
+        self.predicates.last().map(|p| get_span(p.id())).unwrap_or(end).shrink_to_hi().to(end)
     }
 }
 
@@ -529,11 +529,11 @@ pub enum WherePredicate<'hir> {
 }
 
 impl WherePredicate<'_> {
-    pub fn span(&self) -> Span {
+    pub fn id(&self) -> HirId {
         match self {
-            &WherePredicate::BoundPredicate(ref p) => p.span,
-            &WherePredicate::RegionPredicate(ref p) => p.span,
-            &WherePredicate::EqPredicate(ref p) => p.span,
+            &WherePredicate::BoundPredicate(ref p) => p.hir_id,
+            &WherePredicate::RegionPredicate(ref p) => p.hir_id,
+            &WherePredicate::EqPredicate(ref p) => p.hir_id,
         }
     }
 }
@@ -541,7 +541,7 @@ impl WherePredicate<'_> {
 /// A type bound (e.g., `for<'c> Foo: Send + Clone + 'c`).
 #[derive(RustcEncodable, RustcDecodable, Debug, HashStable_Generic)]
 pub struct WhereBoundPredicate<'hir> {
-    pub span: Span,
+    pub hir_id: HirId,
     /// Any generics from a `for` binding.
     pub bound_generic_params: &'hir [GenericParam<'hir>],
     /// The type being bounded.
@@ -553,7 +553,7 @@ pub struct WhereBoundPredicate<'hir> {
 /// A lifetime predicate (e.g., `'a: 'b + 'c`).
 #[derive(RustcEncodable, RustcDecodable, Debug, HashStable_Generic)]
 pub struct WhereRegionPredicate<'hir> {
-    pub span: Span,
+    pub hir_id: HirId,
     pub lifetime: Lifetime,
     pub bounds: GenericBounds<'hir>,
 }
@@ -562,7 +562,6 @@ pub struct WhereRegionPredicate<'hir> {
 #[derive(RustcEncodable, RustcDecodable, Debug, HashStable_Generic)]
 pub struct WhereEqPredicate<'hir> {
     pub hir_id: HirId,
-    pub span: Span,
     pub lhs_ty: &'hir Ty<'hir>,
     pub rhs_ty: &'hir Ty<'hir>,
 }

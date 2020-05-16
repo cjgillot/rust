@@ -1103,7 +1103,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for TypeAliasBounds {
                         .where_clause
                         .predicates
                         .iter()
-                        .map(|pred| pred.span())
+                        .map(|pred| cx.tcx.hir().span(pred.id()))
                         .collect();
                     err.set_span(spans);
                     err.span_suggestion(
@@ -1690,7 +1690,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ExplicitOutlivesRequirements {
                             (
                                 Self::lifetimes_outliving_lifetime(inferred_outlives, index),
                                 &predicate.bounds,
-                                predicate.span,
+                                cx.tcx.hir().span(predicate.hir_id),
                             )
                         } else {
                             continue;
@@ -1706,7 +1706,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ExplicitOutlivesRequirements {
                                     (
                                         Self::lifetimes_outliving_type(inferred_outlives, index),
                                         &predicate.bounds,
-                                        predicate.span,
+                                        cx.tcx.hir().span(predicate.hir_id),
                                     )
                                 } else {
                                     continue;
@@ -1739,7 +1739,8 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ExplicitOutlivesRequirements {
                 // If all the bounds on a predicate were inferable and there are
                 // further predicates, we want to eat the trailing comma.
                 if drop_predicate && i + 1 < num_predicates {
-                    let next_predicate_span = hir_generics.where_clause.predicates[i + 1].span();
+                    let next_predicate_span =
+                        cx.tcx.hir().span(hir_generics.where_clause.predicates[i + 1].id());
                     where_lint_spans.push(span.to(next_predicate_span.shrink_to_lo()));
                 } else {
                     where_lint_spans.extend(self.consolidate_outlives_bound_spans(

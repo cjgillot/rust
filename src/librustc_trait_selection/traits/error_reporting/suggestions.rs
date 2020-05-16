@@ -177,9 +177,13 @@ pub trait InferCtxtExt<'tcx> {
     );
 }
 
-fn predicate_constraint(generics: &hir::Generics<'_>, pred: String) -> (Span, String) {
+fn predicate_constraint(
+    tcx: TyCtxt<'_>,
+    generics: &hir::Generics<'_>,
+    pred: String,
+) -> (Span, String) {
     (
-        generics.where_clause.tail_span_for_suggestion(),
+        generics.where_clause.tail_span_for_suggestion(|id| tcx.hir().span(id)),
         format!(
             "{} {}",
             if !generics.where_clause.predicates.is_empty() { "," } else { " where" },
@@ -283,7 +287,7 @@ fn suggest_restriction(
             },
             // `fn foo(t: impl Trait)`
             //                       ^ suggest `where <T as Trait>::A: Bound`
-            predicate_constraint(generics, pred),
+            predicate_constraint(tcx, generics, pred),
         ];
         sugg.extend(ty_spans.into_iter().map(|s| (s, type_param_name.to_string())));
 
@@ -299,6 +303,7 @@ fn suggest_restriction(
         // Trivial case: `T` needs an extra bound: `T: Bound`.
         let (sp, suggestion) = match super_traits {
             None => predicate_constraint(
+                tcx,
                 generics,
                 trait_ref.without_const().to_predicate(tcx).to_string(),
             ),

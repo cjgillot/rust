@@ -374,7 +374,7 @@ fn virtual_call_violation_for_method<'tcx>(
             tcx.hir().get_if_local(method.def_id).as_ref().and_then(|node| node.generics()).map(
                 |generics| match generics.where_clause.predicates {
                     [] => (" where Self: Sized", generics.where_clause.span),
-                    [.., pred] => (", Self: Sized", pred.span().shrink_to_hi()),
+                    [.., pred] => (", Self: Sized", tcx.hir().span(pred.id()).shrink_to_hi()),
                 },
             );
         return Some(MethodViolationCode::StaticMethod(sugg));

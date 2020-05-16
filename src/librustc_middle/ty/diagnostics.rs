@@ -210,13 +210,13 @@ pub fn suggest_constraining_type_param(
 
         for predicate in generics.where_clause.predicates {
             if let WherePredicate::BoundPredicate(WhereBoundPredicate {
-                span, bounded_ty, ..
+                hir_id, bounded_ty, ..
             }) = predicate
             {
                 if let TyKind::Path(QPath::Resolved(_, path)) = &bounded_ty.kind {
                     if let Some(segment) = path.segments.first() {
                         if segment.ident.to_string() == param_name {
-                            param_spans.push(span);
+                            param_spans.push(tcx.hir().span(*hir_id));
                         }
                     }
                 }
@@ -224,10 +224,10 @@ pub fn suggest_constraining_type_param(
         }
 
         match &param_spans[..] {
-            &[&param_span] => suggest_restrict(param_span.shrink_to_hi()),
+            &[param_span] => suggest_restrict(param_span.shrink_to_hi()),
             _ => {
                 err.span_suggestion_verbose(
-                    generics.where_clause.tail_span_for_suggestion(),
+                    generics.where_clause.tail_span_for_suggestion(|id| tcx.hir().span(id)),
                     &msg_restrict_type_further,
                     format!(", {}: {}", param_name, constraint),
                     Applicability::MachineApplicable,

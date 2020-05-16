@@ -74,7 +74,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for TraitBounds {
                     span_lint_and_help(
                         cx,
                         TYPE_REPETITION_IN_BOUNDS,
-                        p.span,
+                        cx.tcx.hir().span(p.hir_id),
                         "this type has already been used as a bound predicate",
                         None,
                         &hint_string,

@@ -1378,7 +1378,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                                 ),
                             }
                         })),
-                        span,
+                        hir_id: this.next_id(span),
                     })
                 })
             }
@@ -1387,7 +1387,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 ref bounds,
                 span,
             }) => hir::WherePredicate::RegionPredicate(hir::WhereRegionPredicate {
-                span,
+                hir_id: self.next_id(span),
                 lifetime: self.lower_lifetime(lifetime),
                 bounds: self.lower_param_bounds(bounds, ImplTraitContext::disallowed()),
             }),
@@ -1396,7 +1396,6 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     hir_id: self.lower_node_id(id, span),
                     lhs_ty: self.lower_ty(lhs_ty, ImplTraitContext::disallowed()),
                     rhs_ty: self.lower_ty(rhs_ty, ImplTraitContext::disallowed()),
-                    span,
                 })
             }
         }
