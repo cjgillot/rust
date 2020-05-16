@@ -1631,25 +1631,22 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                     && self.lifetimes_to_include.map_or(true, |lifetimes| lifetimes.contains(&name))
                 {
                     self.already_defined_lifetimes.insert(name);
+                    let span = self.context.spans[lifetime.hir_id];
 
                     self.output_lifetimes.push(hir::GenericArg::Lifetime(hir::Lifetime {
-                        hir_id: self.context.next_id(lifetime.span),
-                        span: lifetime.span,
+                        hir_id: self.context.next_id(span),
                         name,
                     }));
 
                     let def_node_id = self.context.resolver.next_node_id();
-                    let hir_id = self.context.lower_node_id_with_owner(
-                        def_node_id,
-                        self.opaque_ty_id,
-                        lifetime.span,
-                    );
+                    let hir_id =
+                        self.context.lower_node_id_with_owner(def_node_id, self.opaque_ty_id, span);
                     self.context.resolver.definitions().create_def_with_parent(
                         self.parent,
                         def_node_id,
                         DefPathData::LifetimeNs(name.ident().name),
                         ExpnId::root(),
-                        lifetime.span,
+                        span,
                     );
 
                     let (name, kind) = match name {
@@ -2023,7 +2020,6 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                 // Input lifetime like `'a` or `'1`:
                 GenericArg::Lifetime(hir::Lifetime {
                     hir_id: self.next_id(span),
-                    span,
                     name: hir::LifetimeName::Param(hir_name),
                 })
             })
@@ -2032,7 +2028,6 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
             // Output lifetime like `'_`.
             GenericArg::Lifetime(hir::Lifetime {
                 hir_id: self.next_id(span),
-                span,
                 name: hir::LifetimeName::Implicit,
             })));
         let generic_args = self.arena.alloc_from_iter(generic_args);
@@ -2135,7 +2130,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
         span: Span,
         name: hir::LifetimeName,
     ) -> hir::Lifetime {
-        hir::Lifetime { hir_id: self.lower_node_id(id, span), span, name }
+        hir::Lifetime { hir_id: self.lower_node_id(id, span), name }
     }
 
     fn lower_generic_params_mut<'s>(
@@ -2623,7 +2618,6 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                 let fresh_name = self.collect_fresh_in_band_lifetime(span);
                 hir::Lifetime {
                     hir_id: self.next_id(span),
-                    span,
                     name: hir::LifetimeName::Param(fresh_name),
                 }
             }
@@ -2718,7 +2712,6 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
 
         let r = hir::Lifetime {
             hir_id: self.next_id(span),
-            span,
             name: hir::LifetimeName::ImplicitObjectLifetimeDefault,
         };
         debug!("elided_dyn_bound: r={:?}", r);
@@ -2726,7 +2719,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
     }
 
     fn new_implicit_lifetime(&mut self, span: Span) -> hir::Lifetime {
-        hir::Lifetime { hir_id: self.next_id(span), span, name: hir::LifetimeName::Implicit }
+        hir::Lifetime { hir_id: self.next_id(span), name: hir::LifetimeName::Implicit }
     }
 
     fn maybe_lint_bare_trait(&mut self, span: Span, id: NodeId, is_global: bool) {

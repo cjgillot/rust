@@ -502,7 +502,7 @@ impl<'a, 'hir> Visitor<'hir> for NodeCollector<'a, 'hir> {
     }
 
     fn visit_lifetime(&mut self, lifetime: &'hir Lifetime) {
-        self.insert(lifetime.span, lifetime.hir_id, Node::Lifetime(lifetime));
+        self.insert(DUMMY_SP, lifetime.hir_id, Node::Lifetime(lifetime));
     }
 
     fn visit_vis(&mut self, visibility: &'hir Visibility<'hir>) {

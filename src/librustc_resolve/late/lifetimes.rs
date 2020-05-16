@@ -623,7 +623,7 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
                                 {
                                     struct_span_err!(
                                         self.tcx.sess,
-                                        lifetime.span,
+                                        self.tcx.hir().span(lifetime.hir_id),
                                         E0657,
                                         "`impl Trait` can only capture lifetimes \
                                          bound at the fn or impl level"
@@ -1398,8 +1398,11 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
                     hir::TyKind::Rptr(lt, _) => {
                         if lt.name.ident() == name {
                             // include the trailing whitespace between the lifetime and type names
-                            let lt_through_ty_span =
-                                lifetime.span.to(self.tcx.hir().span(input.hir_id).shrink_to_hi());
+                            let lt_through_ty_span = self.tcx.hir().span(lifetime.hir_id).to(self
+                                .tcx
+                                .hir()
+                                .span(input.hir_id)
+                                .shrink_to_hi());
                             remove_use = Some(
                                 self.tcx
                                     .sess
@@ -1416,7 +1419,7 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
                             for arg in generics.args.iter() {
                                 if let GenericArg::Lifetime(lt) = arg {
                                     if lt.name.ident() == name {
-                                        elide_use = Some(lt.span);
+                                        elide_use = Some(self.tcx.hir().span(lt.hir_id));
                                         break;
                                     }
                                 }
@@ -1520,7 +1523,7 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
                     if let Some((id, span, name)) = match self.tcx.hir().get(hir_id) {
                         Node::Lifetime(hir_lifetime) => Some((
                             hir_lifetime.hir_id,
-                            hir_lifetime.span,
+                            self.tcx.hir().span(hir_lifetime.hir_id),
                             hir_lifetime.name.ident(),
                         )),
                         Node::GenericParam(param) => {
@@ -1559,12 +1562,13 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
                                     "lifetime parameter `{}` only used once",
                                     name
                                 ));
-                                if span == lifetime.span {
+                                let lifetime_span = self.tcx.hir().span(lifetime.hir_id);
+                                if span == lifetime_span {
                                     // spans are the same for in-band lifetime declarations
                                     err.span_label(span, "this lifetime is only used here");
                                 } else {
                                     err.span_label(span, "this lifetime...");
-                                    err.span_label(lifetime.span, "...is used only here");
+                                    err.span_label(lifetime_span, "...is used only here");
                                 }
                                 self.suggest_eliding_single_use_lifetime(
                                     &mut err, def_id, lifetime,
@@ -1582,7 +1586,7 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
                     if let Some((id, span, name)) = match self.tcx.hir().get(hir_id) {
                         Node::Lifetime(hir_lifetime) => Some((
                             hir_lifetime.hir_id,
-                            hir_lifetime.span,
+                            self.tcx.hir().span(hir_lifetime.hir_id),
                             hir_lifetime.name.ident(),
                         )),
                         Node::GenericParam(param) => {
@@ -1806,14 +1810,15 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
                 match def {
                     Region::EarlyBound(_, _, LifetimeDefOrigin::InBand)
                     | Region::LateBound(_, _, LifetimeDefOrigin::InBand) => {
+                        let span = self.tcx.hir().span(lifetime_ref.hir_id);
                         struct_span_err!(
                             self.tcx.sess,
-                            lifetime_ref.span,
+                            span,
                             E0687,
                             "lifetimes used in `fn` or `Fn` syntax must be \
                              explicitly declared using `<...>` binders"
                         )
-                        .span_label(lifetime_ref.span, "in-band lifetime definition")
+                        .span_label(span, "in-band lifetime definition")
                         .emit();
                     }
 
@@ -2315,7 +2320,7 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
             return;
         }
 
-        let span = lifetime_refs[0].span;
+        let span = self.tcx.hir().span(lifetime_refs[0].hir_id);
         let mut late_depth = 0;
         let mut scope = self.scope;
         let mut lifetime_names = FxHashSet::default();
@@ -2545,7 +2550,7 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
                 match bound {
                     hir::GenericBound::Outlives(ref lt) => match lt.name {
                         hir::LifetimeName::Underscore => self.tcx.sess.delay_span_bug(
-                            lt.span,
+                            self.tcx.hir().span(lt.hir_id),
                             "use of `'_` in illegal place, but not caught by lowering",
                         ),
                         hir::LifetimeName::Static => {
@@ -2554,7 +2559,7 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
                             self.tcx
                                 .sess
                                 .struct_span_warn(
-                                    span_i.to(lt.span),
+                                    span_i.to(self.tcx.hir().span(lt.hir_id)),
                                     &format!(
                                         "unnecessary lifetime parameter `{}`",
                                         lifetime_i.name.ident(),
@@ -2571,7 +2576,7 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
                         }
                         hir::LifetimeName::ImplicitObjectLifetimeDefault => {
                             self.tcx.sess.delay_span_bug(
-                                lt.span,
+                                self.tcx.hir().span(lt.hir_id),
                                 "lowering generated `ImplicitObjectLifetimeDefault` \
                                  outside of an object type",
                             )
@@ -2674,7 +2679,7 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
             "insert_lifetime: {} resolved to {:?} span={:?}",
             self.tcx.hir().node_to_string(lifetime_ref.hir_id),
             def,
-            self.tcx.sess.source_map().span_to_string(lifetime_ref.span)
+            self.tcx.sess.source_map().span_to_string(self.tcx.hir().span(lifetime_ref.hir_id))
         );
         self.map.defs.insert(lifetime_ref.hir_id, def);
 

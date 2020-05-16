@@ -1010,14 +1010,15 @@ impl<'tcx> LifetimeContext<'_, 'tcx> {
     }
 
     crate fn emit_undeclared_lifetime_error(&self, lifetime_ref: &hir::Lifetime) {
+        let lifetime_span = self.tcx.hir().span(lifetime_ref.hir_id);
         let mut err = struct_span_err!(
             self.tcx.sess,
-            lifetime_ref.span,
+            lifetime_span,
             E0261,
             "use of undeclared lifetime name `{}`",
             lifetime_ref
         );
-        err.span_label(lifetime_ref.span, "undeclared lifetime");
+        err.span_label(lifetime_span, "undeclared lifetime");
         for missing in &self.missing_named_lifetime_spots {
             match missing {
                 MissingLifetimeSpot::Generics(generics) => {

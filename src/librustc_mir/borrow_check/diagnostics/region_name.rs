@@ -519,7 +519,7 @@ impl<'tcx> MirBorrowckCtxt<'_, 'tcx> {
             | hir::LifetimeName::Static
             | hir::LifetimeName::Underscore => {
                 let region_name = self.synthesize_region_name();
-                let ampersand_span = lifetime.span;
+                let ampersand_span = self.infcx.tcx.hir().span(lifetime.hir_id);
                 Some(RegionName {
                     name: region_name,
                     source: RegionNameSource::MatchedAdtAndSegment(ampersand_span),

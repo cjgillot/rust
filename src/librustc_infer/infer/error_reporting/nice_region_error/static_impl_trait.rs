@@ -134,9 +134,9 @@ impl<'a, 'tcx> NiceRegionError<'a, 'tcx> {
                                     .filter_map(|arg| match arg {
                                         GenericBound::Outlives(Lifetime {
                                             name: LifetimeName::Static,
-                                            span,
+                                            hir_id,
                                             ..
-                                        }) => Some(*span),
+                                        }) => Some(self.tcx().hir().span(*hir_id)),
                                         _ => None,
                                     })
                                     .next()
@@ -183,7 +183,7 @@ impl<'a, 'tcx> NiceRegionError<'a, 'tcx> {
                                 }
                                 _ => {
                                     err.span_suggestion_verbose(
-                                        lt.span,
+                                        self.tcx().hir().span(lt.hir_id),
                                         &format!("{} trait object's {}", consider, explicit_static),
                                         lifetime_name,
                                         Applicability::MaybeIncorrect,

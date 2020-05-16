@@ -27,7 +27,6 @@ use std::fmt;
 #[derive(Copy, Clone, RustcEncodable, RustcDecodable, HashStable_Generic)]
 pub struct Lifetime {
     pub hir_id: HirId,
-    pub span: Span,
 
     /// Either "`'a`", referring to a named lifetime definition,
     /// or "``" (i.e., `kw::Invalid`), for elision placeholders.

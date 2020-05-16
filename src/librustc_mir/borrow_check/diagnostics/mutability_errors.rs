@@ -707,7 +707,13 @@ fn annotate_struct_field(
                     let type_snippet =
                         tcx.sess.source_map().span_to_snippet(tcx.hir().span(ty.hir_id)).ok()?;
                     let lifetime_snippet = if !lifetime.is_elided() {
-                        format!("{} ", tcx.sess.source_map().span_to_snippet(lifetime.span).ok()?)
+                        format!(
+                            "{} ",
+                            tcx.sess
+                                .source_map()
+                                .span_to_snippet(tcx.hir().span(lifetime.hir_id))
+                                .ok()?
+                        )
                     } else {
                         String::new()
                     };

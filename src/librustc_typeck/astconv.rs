@@ -200,12 +200,13 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
             }
 
             None => {
-                self.re_infer(def, lifetime.span).unwrap_or_else(|| {
+                let lifetime_span = self.tcx().hir().span(lifetime.hir_id);
+                self.re_infer(def, lifetime_span).unwrap_or_else(|| {
                     // This indicates an illegal lifetime
                     // elision. `resolve_lifetime` should have
                     // reported an error in this case -- but if
                     // not, let's error out.
-                    tcx.sess.delay_span_bug(lifetime.span, "unelided lifetime in signature");
+                    tcx.sess.delay_span_bug(lifetime_span, "unelided lifetime in signature");
 
                     // Supply some dummy value. We don't have an
                     // `re_error`, annoyingly, so use `'static`.
@@ -1336,7 +1337,9 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
         }
 
         bounds.region_bounds.extend(
-            region_bounds.into_iter().map(|r| (self.ast_region_to_region(r, None), r.span)),
+            region_bounds
+                .into_iter()
+                .map(|r| (self.ast_region_to_region(r, None), self.tcx().hir().span(r.hir_id))),
         );
     }
 
@@ -2479,7 +2482,7 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
                         }
                         err_for_lt = true;
                         has_err = true;
-                        (lt.span, "lifetime")
+                        (self.tcx().hir().span(lt.hir_id), "lifetime")
                     }
                     hir::GenericArg::Type(ty) => {
                         if err_for_ty {

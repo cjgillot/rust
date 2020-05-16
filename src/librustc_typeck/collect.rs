@@ -1100,7 +1100,7 @@ fn has_late_bound_regions<'tcx>(tcx: TyCtxt<'tcx>, node: Node<'tcx>) -> Option<S
                     | rl::Region::Free(..),
                 )
                 | None => {
-                    self.has_late_bound_regions = Some(lt.span);
+                    self.has_late_bound_regions = Some(self.tcx.hir().span(lt.hir_id));
                 }
             }
         }
@@ -1834,7 +1834,7 @@ fn explicit_predicates_of(tcx: TyCtxt<'_>, def_id: DefId) -> ty::GenericPredicat
                     hir::GenericBound::Outlives(lt) => {
                         let bound = AstConv::ast_region_to_region(&icx, &lt, None);
                         let outlives = ty::Binder::bind(ty::OutlivesPredicate(region, bound));
-                        predicates.push((outlives.to_predicate(tcx), lt.span));
+                        predicates.push((outlives.to_predicate(tcx), tcx.hir().span(lt.hir_id)));
                     }
                     _ => bug!(),
                 });
@@ -1913,7 +1913,7 @@ fn explicit_predicates_of(tcx: TyCtxt<'_>, def_id: DefId) -> ty::GenericPredicat
                             let pred = ty::Binder::bind(ty::OutlivesPredicate(ty, region));
                             predicates.push((
                                 ty::PredicateKind::TypeOutlives(pred).to_predicate(tcx),
-                                lifetime.span,
+                                tcx.hir().span(lifetime.hir_id),
                             ))
                         }
                     }
@@ -1924,9 +1924,10 @@ fn explicit_predicates_of(tcx: TyCtxt<'_>, def_id: DefId) -> ty::GenericPredicat
                 let r1 = AstConv::ast_region_to_region(&icx, &region_pred.lifetime, None);
                 predicates.extend(region_pred.bounds.iter().map(|bound| {
                     let (r2, span) = match bound {
-                        hir::GenericBound::Outlives(lt) => {
-                            (AstConv::ast_region_to_region(&icx, lt, None), lt.span)
-                        }
+                        hir::GenericBound::Outlives(lt) => (
+                            AstConv::ast_region_to_region(&icx, lt, None),
+                            tcx.hir().span(lt.hir_id),
+                        ),
                         _ => bug!(),
                     };
                     let pred = ty::Binder::bind(ty::OutlivesPredicate(r1, r2));
@@ -2061,7 +2062,10 @@ fn predicates_from_bound<'tcx>(
         hir::GenericBound::Outlives(ref lifetime) => {
             let region = astconv.ast_region_to_region(lifetime, None);
             let pred = ty::Binder::bind(ty::OutlivesPredicate(param_ty, region));
-            vec![(ty::PredicateKind::TypeOutlives(pred).to_predicate(astconv.tcx()), lifetime.span)]
+            vec![(
+                ty::PredicateKind::TypeOutlives(pred).to_predicate(astconv.tcx()),
+                astconv.tcx().hir().span(lifetime.hir_id),
+            )]
         }
     }
 }
