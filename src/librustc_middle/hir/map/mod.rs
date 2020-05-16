@@ -259,6 +259,7 @@ impl<'hir> Map<'hir> {
             | Node::PathSegment(_)
             | Node::Ty(_)
             | Node::TraitRef(_)
+            | Node::PolyTraitRef(_)
             | Node::Pat(_)
             | Node::Binding(_)
             | Node::Local(_)
@@ -1011,6 +1012,7 @@ fn hir_id_to_string(map: &Map<'_>, id: HirId) -> String {
         Some(Node::PathSegment(_)) => node_str("path segment"),
         Some(Node::Ty(_)) => node_str("type"),
         Some(Node::TraitRef(_)) => node_str("trait ref"),
+        Some(Node::PolyTraitRef(_)) => node_str("polymorphic trait ref"),
         Some(Node::Binding(_)) => node_str("local"),
         Some(Node::Pat(_)) => node_str("pat"),
         Some(Node::Param(_)) => node_str("param"),

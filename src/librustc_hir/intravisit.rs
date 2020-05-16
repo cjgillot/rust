@@ -524,6 +524,7 @@ pub fn walk_poly_trait_ref<'v, V: Visitor<'v>>(
 ) {
     walk_list!(visitor, visit_generic_param, trait_ref.bound_generic_params);
     visitor.visit_trait_ref(&trait_ref.trait_ref);
+    visitor.visit_id(trait_ref.hir_id);
 }
 
 pub fn walk_trait_ref<'v, V: Visitor<'v>>(visitor: &mut V, trait_ref: &'v TraitRef<'v>) {

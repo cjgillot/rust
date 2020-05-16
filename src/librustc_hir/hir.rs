@@ -366,6 +366,13 @@ impl GenericBound<'_> {
         }
     }
 
+    pub fn id(&self) -> HirId {
+        match self {
+            &GenericBound::Trait(ref t, ..) => t.hir_id,
+            &GenericBound::Outlives(ref l) => l.hir_id,
+        }
+    }
+
     pub fn span(&self) -> Span {
         match self {
             &GenericBound::Trait(ref t, ..) => t.span,
@@ -2314,6 +2321,7 @@ pub struct PolyTraitRef<'hir> {
     /// The `Foo<&'a T>` in `for<'a> Foo<&'a T>`.
     pub trait_ref: TraitRef<'hir>,
 
+    pub hir_id: HirId,
     pub span: Span,
 }
 
@@ -2642,6 +2650,7 @@ pub enum Node<'hir> {
     PathSegment(&'hir PathSegment<'hir>),
     Ty(&'hir Ty<'hir>),
     TraitRef(&'hir TraitRef<'hir>),
+    PolyTraitRef(&'hir PolyTraitRef<'hir>),
     Binding(&'hir Pat<'hir>),
     Pat(&'hir Pat<'hir>),
     Arm(&'hir Arm<'hir>),
@@ -2723,6 +2732,7 @@ impl Node<'_> {
             | Node::MacroDef(MacroDef { hir_id, .. })
             | Node::Lifetime(Lifetime { hir_id, .. })
             | Node::Param(Param { hir_id, .. })
+            | Node::PolyTraitRef(PolyTraitRef { hir_id, .. })
             | Node::GenericParam(GenericParam { hir_id, .. }) => Some(*hir_id),
             Node::TraitRef(TraitRef { hir_ref_id, .. }) => Some(*hir_ref_id),
             Node::PathSegment(PathSegment { hir_id, .. }) => *hir_id,

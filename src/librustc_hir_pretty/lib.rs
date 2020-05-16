@@ -104,6 +104,7 @@ impl<'a> State<'a> {
             Node::PathSegment(a) => self.print_path_segment(&a),
             Node::Ty(a) => self.print_type(&a),
             Node::TraitRef(a) => self.print_trait_ref(&a),
+            Node::PolyTraitRef(a) => self.print_poly_trait_ref(&a),
             Node::Binding(a) | Node::Pat(a) => self.print_pat(&a),
             Node::Arm(a) => self.print_arm(&a),
             Node::Block(a) => {
