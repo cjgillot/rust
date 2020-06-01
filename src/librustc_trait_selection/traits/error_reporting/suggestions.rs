@@ -274,7 +274,7 @@ fn suggest_restriction(
             {
                 // `fn foo(t: impl Trait)`
                 //        ^ suggest `<T: Trait>` here
-                None => (generics.span, format!("<{}>", type_param)),
+                None => (tcx.hir().span(generics.hir_id), format!("<{}>", type_param)),
                 // `fn foo<A>(t: impl Trait)`
                 //        ^^^ suggest `<A, T: Trait>` here
                 Some(param) => (

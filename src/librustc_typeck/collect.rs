@@ -193,7 +193,13 @@ fn reject_placeholder_type_signatures_in_item(tcx: TyCtxt<'tcx>, item: &'tcx hir
     let mut visitor = PlaceholderHirTyCollector::new(tcx);
     visitor.visit_item(item);
 
-    placeholder_type_error(tcx, generics.span, &generics.params[..], visitor.0, suggest);
+    placeholder_type_error(
+        tcx,
+        tcx.hir().span(generics.hir_id),
+        &generics.params[..],
+        visitor.0,
+        suggest,
+    );
 }
 
 impl Visitor<'tcx> for CollectItemTypesVisitor<'tcx> {
@@ -365,7 +371,9 @@ impl AstConv<'tcx> for ItemCtxt<'tcx> {
                         | hir::ItemKind::Union(_, generics) => {
                             let lt_name = get_new_lifetime_name(self.tcx, poly_trait_ref, generics);
                             let (lt_sp, sugg) = match &generics.params[..] {
-                                [] => (generics.span, format!("<{}>", lt_name)),
+                                [] => {
+                                    (self.tcx.hir().span(generics.hir_id), format!("<{}>", lt_name))
+                                }
                                 [bound, ..] => {
                                     let bound_span = self.tcx.hir().span(bound.hir_id);
                                     (bound_span.shrink_to_lo(), format!("{}, ", lt_name))
@@ -1223,15 +1231,16 @@ fn generics_of(tcx: TyCtxt<'_>, def_id: DefId) -> ty::Generics {
     let mut opt_self = None;
     let mut allow_defaults = false;
 
-    let no_generics = hir::Generics::empty();
     let ast_generics = match node {
-        Node::TraitItem(item) => &item.generics,
+        Node::TraitItem(item) => Some(&item.generics),
 
-        Node::ImplItem(item) => &item.generics,
+        Node::ImplItem(item) => Some(&item.generics),
 
         Node::Item(item) => {
             match item.kind {
-                ItemKind::Fn(.., ref generics, _) | ItemKind::Impl { ref generics, .. } => generics,
+                ItemKind::Fn(.., ref generics, _) | ItemKind::Impl { ref generics, .. } => {
+                    Some(generics)
+                }
 
                 ItemKind::TyAlias(_, ref generics)
                 | ItemKind::Enum(_, ref generics)
@@ -1239,7 +1248,7 @@ fn generics_of(tcx: TyCtxt<'_>, def_id: DefId) -> ty::Generics {
                 | ItemKind::OpaqueTy(hir::OpaqueTy { ref generics, .. })
                 | ItemKind::Union(_, ref generics) => {
                     allow_defaults = true;
-                    generics
+                    Some(generics)
                 }
 
                 ItemKind::Trait(_, _, ref generics, ..)
@@ -1263,20 +1272,20 @@ fn generics_of(tcx: TyCtxt<'_>, def_id: DefId) -> ty::Generics {
                     });
 
                     allow_defaults = true;
-                    generics
+                    Some(generics)
                 }
 
-                _ => &no_generics,
+                _ => None,
             }
         }
 
         Node::ForeignItem(item) => match item.kind {
-            ForeignItemKind::Static(..) => &no_generics,
-            ForeignItemKind::Fn(_, _, ref generics) => generics,
-            ForeignItemKind::Type => &no_generics,
+            ForeignItemKind::Static(..) => None,
+            ForeignItemKind::Fn(_, _, ref generics) => Some(generics),
+            ForeignItemKind::Type => None,
         },
 
-        _ => &no_generics,
+        _ => None,
     };
 
     let has_self = opt_self.is_some();
@@ -1292,83 +1301,88 @@ fn generics_of(tcx: TyCtxt<'_>, def_id: DefId) -> ty::Generics {
 
     let mut params: Vec<_> = opt_self.into_iter().collect();
 
-    let early_lifetimes = early_bound_lifetimes_from_generics(tcx, ast_generics);
-    params.extend(early_lifetimes.enumerate().map(|(i, param)| ty::GenericParamDef {
-        name: param.name.ident().name,
-        index: own_start + i as u32,
-        def_id: tcx.hir().local_def_id(param.hir_id).to_def_id(),
-        pure_wrt_drop: param.pure_wrt_drop,
-        kind: ty::GenericParamDefKind::Lifetime,
-    }));
-
-    let object_lifetime_defaults = tcx.object_lifetime_defaults(hir_id);
+    if let Some(ast_generics) = ast_generics {
+        let early_lifetimes = early_bound_lifetimes_from_generics(tcx, ast_generics);
+        params.extend(early_lifetimes.enumerate().map(|(i, param)| ty::GenericParamDef {
+            name: param.name.ident().name,
+            index: own_start + i as u32,
+            def_id: tcx.hir().local_def_id(param.hir_id).to_def_id(),
+            pure_wrt_drop: param.pure_wrt_drop,
+            kind: ty::GenericParamDefKind::Lifetime,
+        }));
+    }
 
     // Now create the real type and const parameters.
     let type_start = own_start - has_self as u32 + params.len() as u32;
-    let mut i = 0;
 
-    // FIXME(const_generics): a few places in the compiler expect generic params
-    // to be in the order lifetimes, then type params, then const params.
-    //
-    // To prevent internal errors in case const parameters are supplied before
-    // type parameters we first add all type params, then all const params.
-    params.extend(ast_generics.params.iter().filter_map(|param| {
-        if let GenericParamKind::Type { ref default, synthetic, .. } = param.kind {
-            if !allow_defaults && default.is_some() {
-                if !tcx.features().default_type_parameter_fallback {
-                    let param_span = tcx.hir().span(param.hir_id);
-                    tcx.struct_span_lint_hir(
-                        lint::builtin::INVALID_TYPE_PARAM_DEFAULT,
-                        param.hir_id,
-                        param_span,
-                        |lint| {
-                            lint.build(
-                                "defaults for type parameters are only allowed in \
-                                        `struct`, `enum`, `type`, or `trait` definitions.",
-                            )
-                            .emit();
-                        },
-                    );
+    if let Some(ast_generics) = ast_generics {
+        let object_lifetime_defaults = tcx.object_lifetime_defaults(hir_id);
+
+        let mut i = 0;
+
+        // FIXME(const_generics): a few places in the compiler expect generic params
+        // to be in the order lifetimes, then type params, then const params.
+        //
+        // To prevent internal errors in case const parameters are supplied before
+        // type parameters we first add all type params, then all const params.
+        params.extend(ast_generics.params.iter().filter_map(|param| {
+            if let GenericParamKind::Type { ref default, synthetic, .. } = param.kind {
+                if !allow_defaults && default.is_some() {
+                    if !tcx.features().default_type_parameter_fallback {
+                        let param_span = tcx.hir().span(param.hir_id);
+                        tcx.struct_span_lint_hir(
+                            lint::builtin::INVALID_TYPE_PARAM_DEFAULT,
+                            param.hir_id,
+                            param_span,
+                            |lint| {
+                                lint.build(
+                                    "defaults for type parameters are only allowed in \
+                                            `struct`, `enum`, `type`, or `trait` definitions.",
+                                )
+                                .emit();
+                            },
+                        );
+                    }
                 }
+
+                let kind = ty::GenericParamDefKind::Type {
+                    has_default: default.is_some(),
+                    object_lifetime_default: object_lifetime_defaults
+                        .as_ref()
+                        .map_or(rl::Set1::Empty, |o| o[i]),
+                    synthetic,
+                };
+
+                let param_def = ty::GenericParamDef {
+                    index: type_start + i as u32,
+                    name: param.name.ident().name,
+                    def_id: tcx.hir().local_def_id(param.hir_id).to_def_id(),
+                    pure_wrt_drop: param.pure_wrt_drop,
+                    kind,
+                };
+                i += 1;
+                Some(param_def)
+            } else {
+                None
             }
+        }));
 
-            let kind = ty::GenericParamDefKind::Type {
-                has_default: default.is_some(),
-                object_lifetime_default: object_lifetime_defaults
-                    .as_ref()
-                    .map_or(rl::Set1::Empty, |o| o[i]),
-                synthetic,
-            };
-
-            let param_def = ty::GenericParamDef {
-                index: type_start + i as u32,
-                name: param.name.ident().name,
-                def_id: tcx.hir().local_def_id(param.hir_id).to_def_id(),
-                pure_wrt_drop: param.pure_wrt_drop,
-                kind,
-            };
-            i += 1;
-            Some(param_def)
-        } else {
-            None
-        }
-    }));
-
-    params.extend(ast_generics.params.iter().filter_map(|param| {
-        if let GenericParamKind::Const { .. } = param.kind {
-            let param_def = ty::GenericParamDef {
-                index: type_start + i as u32,
-                name: param.name.ident().name,
-                def_id: tcx.hir().local_def_id(param.hir_id).to_def_id(),
-                pure_wrt_drop: param.pure_wrt_drop,
-                kind: ty::GenericParamDefKind::Const,
-            };
-            i += 1;
-            Some(param_def)
-        } else {
-            None
-        }
-    }));
+        params.extend(ast_generics.params.iter().filter_map(|param| {
+            if let GenericParamKind::Const { .. } = param.kind {
+                let param_def = ty::GenericParamDef {
+                    index: type_start + i as u32,
+                    name: param.name.ident().name,
+                    def_id: tcx.hir().local_def_id(param.hir_id).to_def_id(),
+                    pure_wrt_drop: param.pure_wrt_drop,
+                    kind: ty::GenericParamDefKind::Const,
+                };
+                i += 1;
+                Some(param_def)
+            } else {
+                None
+            }
+        }));
+    }
 
     // provide junk type parameter defs - the only place that
     // cares about anything but the length is instantiation,
@@ -1488,7 +1502,7 @@ fn fn_sig(tcx: TyCtxt<'_>, def_id: DefId) -> ty::PolyFnSig<'_> {
                     sig.header.unsafety,
                     sig.header.abi,
                     &sig.decl,
-                    &generics,
+                    Some(&generics),
                     Some(ident.span),
                 ),
             }
@@ -1499,9 +1513,14 @@ fn fn_sig(tcx: TyCtxt<'_>, def_id: DefId) -> ty::PolyFnSig<'_> {
             ident,
             generics,
             ..
-        }) => {
-            AstConv::ty_of_fn(&icx, header.unsafety, header.abi, decl, &generics, Some(ident.span))
-        }
+        }) => AstConv::ty_of_fn(
+            &icx,
+            header.unsafety,
+            header.abi,
+            decl,
+            Some(&generics),
+            Some(ident.span),
+        ),
 
         ForeignItem(&hir::ForeignItem {
             kind: ForeignItemKind::Fn(ref fn_decl, _, _),
@@ -1707,8 +1726,6 @@ fn explicit_predicates_of(tcx: TyCtxt<'_>, def_id: DefId) -> ty::GenericPredicat
     let icx = ItemCtxt::new(tcx, def_id);
     let constness = icx.default_constness_for_trait_bounds();
 
-    const NO_GENERICS: &hir::Generics<'_> = &hir::Generics::empty();
-
     let mut predicates = UniquePredicates::new();
 
     let ast_generics = match node {
@@ -1716,10 +1733,10 @@ fn explicit_predicates_of(tcx: TyCtxt<'_>, def_id: DefId) -> ty::GenericPredicat
             if let hir::TraitItemKind::Type(bounds, _) = item.kind {
                 is_trait_associated_type = Some((bounds, item.hir_id));
             }
-            &item.generics
+            Some(&item.generics)
         }
 
-        Node::ImplItem(item) => &item.generics,
+        Node::ImplItem(item) => Some(&item.generics),
 
         Node::Item(item) => {
             match item.kind {
@@ -1727,21 +1744,21 @@ fn explicit_predicates_of(tcx: TyCtxt<'_>, def_id: DefId) -> ty::GenericPredicat
                     if defaultness.is_default() {
                         is_default_impl_trait = tcx.impl_trait_ref(def_id);
                     }
-                    generics
+                    Some(generics)
                 }
                 ItemKind::Fn(.., ref generics, _)
                 | ItemKind::TyAlias(_, ref generics)
                 | ItemKind::Enum(_, ref generics)
                 | ItemKind::Struct(_, ref generics)
-                | ItemKind::Union(_, ref generics) => generics,
+                | ItemKind::Union(_, ref generics) => Some(generics),
 
                 ItemKind::Trait(_, _, ref generics, .., items) => {
                     is_trait = Some((ty::TraitRef::identity(tcx, def_id), items));
-                    generics
+                    Some(generics)
                 }
                 ItemKind::TraitAlias(ref generics, _) => {
                     is_trait = Some((ty::TraitRef::identity(tcx, def_id), &[]));
-                    generics
+                    Some(generics)
                 }
                 ItemKind::OpaqueTy(OpaqueTy {
                     ref bounds,
@@ -1773,21 +1790,21 @@ fn explicit_predicates_of(tcx: TyCtxt<'_>, def_id: DefId) -> ty::GenericPredicat
                     } else {
                         // named opaque types
                         predicates.extend(bounds_predicates);
-                        generics
+                        Some(generics)
                     }
                 }
 
-                _ => NO_GENERICS,
+                _ => None,
             }
         }
 
         Node::ForeignItem(item) => match item.kind {
-            ForeignItemKind::Static(..) => NO_GENERICS,
-            ForeignItemKind::Fn(_, _, ref generics) => generics,
-            ForeignItemKind::Type => NO_GENERICS,
+            ForeignItemKind::Static(..) => None,
+            ForeignItemKind::Fn(_, _, ref generics) => Some(generics),
+            ForeignItemKind::Type => None,
         },
 
-        _ => NO_GENERICS,
+        _ => None,
     };
 
     let generics = tcx.generics_of(def_id);
@@ -1817,128 +1834,131 @@ fn explicit_predicates_of(tcx: TyCtxt<'_>, def_id: DefId) -> ty::GenericPredicat
         ));
     }
 
-    // Collect the region predicates that were declared inline as
-    // well. In the case of parameters declared on a fn or method, we
-    // have to be careful to only iterate over early-bound regions.
-    let mut index = parent_count + has_own_self as u32;
-    for param in early_bound_lifetimes_from_generics(tcx, ast_generics) {
-        let region = tcx.mk_region(ty::ReEarlyBound(ty::EarlyBoundRegion {
-            def_id: tcx.hir().local_def_id(param.hir_id).to_def_id(),
-            index,
-            name: param.name.ident().name,
-        }));
-        index += 1;
-
-        match param.kind {
-            GenericParamKind::Lifetime { .. } => {
-                param.bounds.iter().for_each(|bound| match bound {
-                    hir::GenericBound::Outlives(lt) => {
-                        let bound = AstConv::ast_region_to_region(&icx, &lt, None);
-                        let outlives = ty::Binder::bind(ty::OutlivesPredicate(region, bound));
-                        predicates.push((outlives.to_predicate(tcx), tcx.hir().span(lt.hir_id)));
-                    }
-                    _ => bug!(),
-                });
-            }
-            _ => bug!(),
-        }
-    }
-
-    // Collect the predicates that were written inline by the user on each
-    // type parameter (e.g., `<T: Foo>`).
-    for param in ast_generics.params {
-        if let GenericParamKind::Type { .. } = param.kind {
-            let name = param.name.ident().name;
-            let param_ty = ty::ParamTy::new(index, name).to_ty(tcx);
+    if let Some(ast_generics) = ast_generics {
+        // Collect the region predicates that were declared inline as
+        // well. In the case of parameters declared on a fn or method, we
+        // have to be careful to only iterate over early-bound regions.
+        let mut index = parent_count + has_own_self as u32;
+        for param in early_bound_lifetimes_from_generics(tcx, ast_generics) {
+            let region = tcx.mk_region(ty::ReEarlyBound(ty::EarlyBoundRegion {
+                def_id: tcx.hir().local_def_id(param.hir_id).to_def_id(),
+                index,
+                name: param.name.ident().name,
+            }));
             index += 1;
 
-            let sized = SizedByDefault::Yes;
-            let span = tcx.hir().span(param.hir_id);
-            let bounds = AstConv::compute_bounds(&icx, param_ty, &param.bounds, sized, span);
-            predicates.extend(bounds.predicates(tcx, param_ty));
-        }
-    }
-
-    // Add in the bounds that appear in the where-clause.
-    let where_clause = &ast_generics.where_clause;
-    for predicate in where_clause.predicates {
-        match predicate {
-            &hir::WherePredicate::BoundPredicate(ref bound_pred) => {
-                let ty = icx.to_ty(&bound_pred.bounded_ty);
-
-                // Keep the type around in a dummy predicate, in case of no bounds.
-                // That way, `where Ty:` is not a complete noop (see #53696) and `Ty`
-                // is still checked for WF.
-                if bound_pred.bounds.is_empty() {
-                    if let ty::Param(_) = ty.kind {
-                        // This is a `where T:`, which can be in the HIR from the
-                        // transformation that moves `?Sized` to `T`'s declaration.
-                        // We can skip the predicate because type parameters are
-                        // trivially WF, but also we *should*, to avoid exposing
-                        // users who never wrote `where Type:,` themselves, to
-                        // compiler/tooling bugs from not handling WF predicates.
-                    } else {
-                        let span = tcx.hir().span(bound_pred.bounded_ty.hir_id);
-                        let re_root_empty = tcx.lifetimes.re_root_empty;
-                        let predicate = ty::OutlivesPredicate(ty, re_root_empty);
-                        predicates.push((
-                            ty::PredicateKind::TypeOutlives(ty::Binder::dummy(predicate))
-                                .to_predicate(tcx),
-                            span,
-                        ));
-                    }
-                }
-
-                for bound in bound_pred.bounds.iter() {
-                    match bound {
-                        &hir::GenericBound::Trait(ref poly_trait_ref, modifier) => {
-                            let constness = match modifier {
-                                hir::TraitBoundModifier::MaybeConst => hir::Constness::NotConst,
-                                hir::TraitBoundModifier::None => constness,
-                                hir::TraitBoundModifier::Maybe => bug!("this wasn't handled"),
-                            };
-
-                            let mut bounds = Bounds::default();
-                            let _ = AstConv::instantiate_poly_trait_ref(
-                                &icx,
-                                poly_trait_ref,
-                                constness,
-                                ty,
-                                &mut bounds,
-                            );
-                            predicates.extend(bounds.predicates(tcx, ty));
+            match param.kind {
+                GenericParamKind::Lifetime { .. } => {
+                    param.bounds.iter().for_each(|bound| match bound {
+                        hir::GenericBound::Outlives(lt) => {
+                            let bound = AstConv::ast_region_to_region(&icx, &lt, None);
+                            let outlives = ty::Binder::bind(ty::OutlivesPredicate(region, bound));
+                            predicates
+                                .push((outlives.to_predicate(tcx), tcx.hir().span(lt.hir_id)));
                         }
-
-                        &hir::GenericBound::Outlives(ref lifetime) => {
-                            let region = AstConv::ast_region_to_region(&icx, lifetime, None);
-                            let pred = ty::Binder::bind(ty::OutlivesPredicate(ty, region));
-                            predicates.push((
-                                ty::PredicateKind::TypeOutlives(pred).to_predicate(tcx),
-                                tcx.hir().span(lifetime.hir_id),
-                            ))
-                        }
-                    }
-                }
-            }
-
-            &hir::WherePredicate::RegionPredicate(ref region_pred) => {
-                let r1 = AstConv::ast_region_to_region(&icx, &region_pred.lifetime, None);
-                predicates.extend(region_pred.bounds.iter().map(|bound| {
-                    let (r2, span) = match bound {
-                        hir::GenericBound::Outlives(lt) => (
-                            AstConv::ast_region_to_region(&icx, lt, None),
-                            tcx.hir().span(lt.hir_id),
-                        ),
                         _ => bug!(),
-                    };
-                    let pred = ty::Binder::bind(ty::OutlivesPredicate(r1, r2));
-
-                    (ty::PredicateKind::RegionOutlives(pred).to_predicate(icx.tcx), span)
-                }))
+                    });
+                }
+                _ => bug!(),
             }
+        }
 
-            &hir::WherePredicate::EqPredicate(..) => {
-                // FIXME(#20041)
+        // Collect the predicates that were written inline by the user on each
+        // type parameter (e.g., `<T: Foo>`).
+        for param in ast_generics.params {
+            if let GenericParamKind::Type { .. } = param.kind {
+                let name = param.name.ident().name;
+                let param_ty = ty::ParamTy::new(index, name).to_ty(tcx);
+                index += 1;
+
+                let sized = SizedByDefault::Yes;
+                let span = tcx.hir().span(param.hir_id);
+                let bounds = AstConv::compute_bounds(&icx, param_ty, &param.bounds, sized, span);
+                predicates.extend(bounds.predicates(tcx, param_ty));
+            }
+        }
+
+        // Add in the bounds that appear in the where-clause.
+        let where_clause = &ast_generics.where_clause;
+        for predicate in where_clause.predicates {
+            match predicate {
+                &hir::WherePredicate::BoundPredicate(ref bound_pred) => {
+                    let ty = icx.to_ty(&bound_pred.bounded_ty);
+
+                    // Keep the type around in a dummy predicate, in case of no bounds.
+                    // That way, `where Ty:` is not a complete noop (see #53696) and `Ty`
+                    // is still checked for WF.
+                    if bound_pred.bounds.is_empty() {
+                        if let ty::Param(_) = ty.kind {
+                            // This is a `where T:`, which can be in the HIR from the
+                            // transformation that moves `?Sized` to `T`'s declaration.
+                            // We can skip the predicate because type parameters are
+                            // trivially WF, but also we *should*, to avoid exposing
+                            // users who never wrote `where Type:,` themselves, to
+                            // compiler/tooling bugs from not handling WF predicates.
+                        } else {
+                            let span = tcx.hir().span(bound_pred.bounded_ty.hir_id);
+                            let re_root_empty = tcx.lifetimes.re_root_empty;
+                            let predicate = ty::OutlivesPredicate(ty, re_root_empty);
+                            predicates.push((
+                                ty::PredicateKind::TypeOutlives(ty::Binder::dummy(predicate))
+                                    .to_predicate(tcx),
+                                span,
+                            ));
+                        }
+                    }
+
+                    for bound in bound_pred.bounds.iter() {
+                        match bound {
+                            &hir::GenericBound::Trait(ref poly_trait_ref, modifier) => {
+                                let constness = match modifier {
+                                    hir::TraitBoundModifier::MaybeConst => hir::Constness::NotConst,
+                                    hir::TraitBoundModifier::None => constness,
+                                    hir::TraitBoundModifier::Maybe => bug!("this wasn't handled"),
+                                };
+
+                                let mut bounds = Bounds::default();
+                                let _ = AstConv::instantiate_poly_trait_ref(
+                                    &icx,
+                                    poly_trait_ref,
+                                    constness,
+                                    ty,
+                                    &mut bounds,
+                                );
+                                predicates.extend(bounds.predicates(tcx, ty));
+                            }
+
+                            &hir::GenericBound::Outlives(ref lifetime) => {
+                                let region = AstConv::ast_region_to_region(&icx, lifetime, None);
+                                let pred = ty::Binder::bind(ty::OutlivesPredicate(ty, region));
+                                predicates.push((
+                                    ty::PredicateKind::TypeOutlives(pred).to_predicate(tcx),
+                                    tcx.hir().span(lifetime.hir_id),
+                                ))
+                            }
+                        }
+                    }
+                }
+
+                &hir::WherePredicate::RegionPredicate(ref region_pred) => {
+                    let r1 = AstConv::ast_region_to_region(&icx, &region_pred.lifetime, None);
+                    predicates.extend(region_pred.bounds.iter().map(|bound| {
+                        let (r2, span) = match bound {
+                            hir::GenericBound::Outlives(lt) => (
+                                AstConv::ast_region_to_region(&icx, lt, None),
+                                tcx.hir().span(lt.hir_id),
+                            ),
+                            _ => bug!(),
+                        };
+                        let pred = ty::Binder::bind(ty::OutlivesPredicate(r1, r2));
+
+                        (ty::PredicateKind::RegionOutlives(pred).to_predicate(icx.tcx), span)
+                    }))
+                }
+
+                &hir::WherePredicate::EqPredicate(..) => {
+                    // FIXME(#20041)
+                }
             }
         }
     }
@@ -2083,14 +2103,8 @@ fn compute_sig_of_foreign_fn_decl<'tcx>(
     } else {
         hir::Unsafety::Unsafe
     };
-    let fty = AstConv::ty_of_fn(
-        &ItemCtxt::new(tcx, def_id),
-        unsafety,
-        abi,
-        decl,
-        &hir::Generics::empty(),
-        Some(ident.span),
-    );
+    let fty =
+        AstConv::ty_of_fn(&ItemCtxt::new(tcx, def_id), unsafety, abi, decl, None, Some(ident.span));
 
     // Feature gate SIMD types in FFI, since I am not sure that the
     // ABIs are handled at all correctly. -huonw

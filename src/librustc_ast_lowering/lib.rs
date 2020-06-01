@@ -1472,7 +1472,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                 generics: hir::Generics {
                     params: lifetime_defs,
                     where_clause: hir::WhereClause { predicates: &[], span },
-                    span,
+                    hir_id: lctx.next_id(span),
                 },
                 bounds: hir_bounds,
                 impl_trait_fn: fn_def_id,
@@ -1984,7 +1984,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                 generics: hir::Generics {
                     params: generic_params,
                     where_clause: hir::WhereClause { predicates: &[], span },
-                    span,
+                    hir_id: this.next_id(span),
                 },
                 bounds: arena_vec![this; future_bound],
                 impl_trait_fn: Some(fn_def_id),

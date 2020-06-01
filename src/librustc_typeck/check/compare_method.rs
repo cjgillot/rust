@@ -366,7 +366,11 @@ fn check_region_bounds_on_impl_item<'tcx>(
     if trait_params != impl_params {
         let item_kind = assoc_item_kind_str(impl_m);
         let def_span = tcx.sess.source_map().guess_head_span(span);
-        let span = tcx.hir().get_generics(impl_m.def_id).map(|g| g.span).unwrap_or(def_span);
+        let span = tcx
+            .hir()
+            .get_generics(impl_m.def_id)
+            .map(|g| tcx.hir().span(g.hir_id))
+            .unwrap_or(def_span);
         let mut err = struct_span_err!(
             tcx.sess,
             span,
@@ -378,7 +382,11 @@ fn check_region_bounds_on_impl_item<'tcx>(
         err.span_label(span, &format!("lifetimes do not match {} in trait", item_kind));
         if let Some(sp) = tcx.hir().span_if_local(trait_m.def_id) {
             let def_sp = tcx.sess.source_map().guess_head_span(sp);
-            let sp = tcx.hir().get_generics(trait_m.def_id).map(|g| g.span).unwrap_or(def_sp);
+            let sp = tcx
+                .hir()
+                .get_generics(trait_m.def_id)
+                .map(|g| tcx.hir().span(g.hir_id))
+                .unwrap_or(def_sp);
             err.span_label(
                 sp,
                 &format!("lifetimes in impl do not match this {} in trait", item_kind),
@@ -601,7 +609,7 @@ fn compare_number_of_generics<'tcx>(
                 let trait_hir_id = tcx.hir().as_local_hir_id(def_id);
                 let trait_item = tcx.hir().expect_trait_item(trait_hir_id);
                 if trait_item.generics.params.is_empty() {
-                    (Some(vec![trait_item.generics.span]), vec![])
+                    (Some(vec![tcx.hir().span(trait_item.generics.hir_id)]), vec![])
                 } else {
                     let arg_spans: Vec<Span> = trait_item
                         .generics
@@ -642,7 +650,7 @@ fn compare_number_of_generics<'tcx>(
                 })
                 .collect();
             let spans: rustc_span::MultiSpan = if impl_item.generics.params.is_empty() {
-                impl_item.generics.span.into()
+                tcx.hir().span(impl_item.generics.hir_id).into()
             } else {
                 impl_item
                     .generics
@@ -868,11 +876,16 @@ fn compare_synthetic_generics<'tcx>(
                         let new_generics_span =
                             tcx.sess.source_map().generate_fn_name_span(impl_span)?.shrink_to_hi();
                         // in case there are generics, just replace them
-                        let generics_span =
-                            impl_m.generics.span.substitute_dummy(new_generics_span);
+                        let generics_span = tcx
+                            .hir()
+                            .span(impl_m.generics.hir_id)
+                            .substitute_dummy(new_generics_span);
                         // replace with the generics from the trait
-                        let new_generics =
-                            tcx.sess.source_map().span_to_snippet(trait_m.generics.span).ok()?;
+                        let new_generics = tcx
+                            .sess
+                            .source_map()
+                            .span_to_snippet(tcx.hir().span(trait_m.generics.hir_id))
+                            .ok()?;
 
                         err.multipart_suggestion(
                             "try changing the `impl Trait` argument to a generic parameter",
@@ -949,7 +962,7 @@ fn compare_synthetic_generics<'tcx>(
                             "try removing the generic parameter and using `impl Trait` instead",
                             vec![
                                 // delete generic parameters
-                                (impl_m.generics.span, String::new()),
+                                (tcx.hir().span(impl_m.generics.hir_id), String::new()),
                                 // replace param usage with `impl Trait`
                                 (span, format!("impl {}", bounds)),
                             ],

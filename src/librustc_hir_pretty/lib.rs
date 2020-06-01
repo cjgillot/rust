@@ -249,7 +249,7 @@ pub fn fn_to_string(
     arg_names: &[Ident],
     body_id: Option<hir::BodyId>,
 ) -> String {
-    to_string(NO_ANN, |s| s.print_fn(decl, header, name, generics, vis, arg_names, body_id))
+    to_string(NO_ANN, |s| s.print_fn(decl, header, name, Some(generics), vis, arg_names, body_id))
 }
 
 pub fn enum_def_to_string(
@@ -483,7 +483,7 @@ impl<'a> State<'a> {
                         asyncness: hir::IsAsync::NotAsync,
                     },
                     Some(item.ident.name),
-                    generics,
+                    Some(generics),
                     &item.vis,
                     arg_names,
                     None,
@@ -649,7 +649,7 @@ impl<'a> State<'a> {
                     &sig.decl,
                     sig.header,
                     Some(item.ident.name),
-                    param_names,
+                    Some(param_names),
                     &item.vis,
                     &[],
                     Some(body),
@@ -705,11 +705,11 @@ impl<'a> State<'a> {
             }
             hir::ItemKind::Struct(ref struct_def, ref generics) => {
                 self.head(visibility_qualified(&item.vis, "struct"));
-                self.print_struct(struct_def, generics, item.ident.name, span, true);
+                self.print_struct(struct_def, Some(generics), item.ident.name, span, true);
             }
             hir::ItemKind::Union(ref struct_def, ref generics) => {
                 self.head(visibility_qualified(&item.vis, "union"));
-                self.print_struct(struct_def, generics, item.ident.name, span, true);
+                self.print_struct(struct_def, Some(generics), item.ident.name, span, true);
             }
             hir::ItemKind::Impl {
                 unsafety,
@@ -891,13 +891,15 @@ impl<'a> State<'a> {
     pub fn print_struct(
         &mut self,
         struct_def: &hir::VariantData<'_>,
-        generics: &hir::Generics<'_>,
+        generics: Option<&hir::Generics<'_>>,
         name: Symbol,
         span: rustc_span::Span,
         print_finalizer: bool,
     ) {
         self.print_name(name);
-        self.print_generic_params(&generics.params);
+        if let Some(generics) = generics {
+            self.print_generic_params(&generics.params);
+        }
         match struct_def {
             hir::VariantData::Tuple(..) | hir::VariantData::Unit(..) => {
                 if let hir::VariantData::Tuple(..) = struct_def {
@@ -911,7 +913,9 @@ impl<'a> State<'a> {
                     });
                     self.pclose();
                 }
-                self.print_where_clause(&generics.where_clause);
+                if let Some(generics) = generics {
+                    self.print_where_clause(&generics.where_clause);
+                }
                 if print_finalizer {
                     self.s.word(";");
                 }
@@ -919,7 +923,9 @@ impl<'a> State<'a> {
                 self.end() // close the outer-box
             }
             hir::VariantData::Struct(..) => {
-                self.print_where_clause(&generics.where_clause);
+                if let Some(generics) = generics {
+                    self.print_where_clause(&generics.where_clause);
+                }
                 self.nbsp();
                 self.bopen();
                 self.hardbreak_if_not_bol();
@@ -943,8 +949,7 @@ impl<'a> State<'a> {
 
     pub fn print_variant(&mut self, v: &hir::Variant<'_>) {
         self.head("");
-        let generics = hir::Generics::empty();
-        self.print_struct(&v.data, &generics, v.ident.name, self.span(v.id), false);
+        self.print_struct(&v.data, None, v.ident.name, self.span(v.id), false);
         if let Some(ref d) = v.disr_expr {
             self.s.space();
             self.word_space("=");
@@ -960,7 +965,7 @@ impl<'a> State<'a> {
         arg_names: &[Ident],
         body_id: Option<hir::BodyId>,
     ) {
-        self.print_fn(&m.decl, m.header, Some(ident.name), generics, vis, arg_names, body_id)
+        self.print_fn(&m.decl, m.header, Some(ident.name), Some(generics), vis, arg_names, body_id)
     }
 
     pub fn print_trait_item(&mut self, ti: &hir::TraitItem<'_>) {
@@ -2059,7 +2064,7 @@ impl<'a> State<'a> {
         decl: &hir::FnDecl<'_>,
         header: hir::FnHeader,
         name: Option<Symbol>,
-        generics: &hir::Generics<'_>,
+        generics: Option<&hir::Generics<'_>>,
         vis: &hir::Visibility<'_>,
         arg_names: &[Ident],
         body_id: Option<hir::BodyId>,
@@ -2070,7 +2075,9 @@ impl<'a> State<'a> {
             self.nbsp();
             self.print_name(name);
         }
-        self.print_generic_params(&generics.params);
+        if let Some(generics) = generics {
+            self.print_generic_params(&generics.params);
+        }
 
         self.popen();
         let mut i = 0;
@@ -2097,7 +2104,9 @@ impl<'a> State<'a> {
         self.pclose();
 
         self.print_fn_output(decl);
-        self.print_where_clause(&generics.where_clause)
+        if let Some(generics) = generics {
+            self.print_where_clause(&generics.where_clause)
+        }
     }
 
     fn print_closure_params(&mut self, decl: &hir::FnDecl<'_>, body_id: hir::BodyId) {
@@ -2333,11 +2342,6 @@ impl<'a> State<'a> {
             self.s.word("for");
             self.print_generic_params(generic_params);
         }
-        let generics = hir::Generics {
-            params: &[],
-            where_clause: hir::WhereClause { predicates: &[], span: rustc_span::DUMMY_SP },
-            span: rustc_span::DUMMY_SP,
-        };
         self.print_fn(
             decl,
             hir::FnHeader {
@@ -2347,7 +2351,7 @@ impl<'a> State<'a> {
                 asyncness: hir::IsAsync::NotAsync,
             },
             name,
-            &generics,
+            None,
             &Spanned { span: rustc_span::DUMMY_SP, node: hir::VisibilityKind::Inherited },
             arg_names,
             None,

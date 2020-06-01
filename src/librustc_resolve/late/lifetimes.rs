@@ -1355,7 +1355,7 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
                 } else {
                     if generics.params.len() == 1 {
                         // if sole lifetime, remove the entire `<>` brackets
-                        Some(generics.span)
+                        Some(self.tcx.hir().span(generics.hir_id))
                     } else {
                         // if removing within `<>` brackets, we also want to
                         // delete a leading or trailing comma as appropriate

@@ -166,8 +166,9 @@ fn check_main_fn_ty(tcx: TyCtxt<'_>, main_def_id: LocalDefId) {
                                    parameters"
                             .to_owned();
                         let label = "`main` cannot have generic parameters".to_string();
-                        struct_span_err!(tcx.sess, generics.span, E0131, "{}", msg)
-                            .span_label(generics.span, label)
+                        let generics_span = tcx.hir().span(generics.hir_id);
+                        struct_span_err!(tcx.sess, generics_span, E0131, "{}", msg)
+                            .span_label(generics_span, label)
                             .emit();
                         error = true;
                     }
@@ -242,13 +243,14 @@ fn check_start_fn_ty(tcx: TyCtxt<'_>, start_def_id: LocalDefId) {
                 if let hir::ItemKind::Fn(ref sig, ref generics, _) = it.kind {
                     let mut error = false;
                     if !generics.params.is_empty() {
+                        let generics_span = tcx.hir().span(generics.hir_id);
                         struct_span_err!(
                             tcx.sess,
-                            generics.span,
+                            generics_span,
                             E0132,
                             "start function is not allowed to have type parameters"
                         )
-                        .span_label(generics.span, "start function cannot have type parameters")
+                        .span_label(generics_span, "start function cannot have type parameters")
                         .emit();
                         error = true;
                     }

@@ -33,7 +33,7 @@ impl_lint_pass!(TraitBounds => [TYPE_REPETITION_IN_BOUNDS]);
 
 impl<'a, 'tcx> LateLintPass<'a, 'tcx> for TraitBounds {
     fn check_generics(&mut self, cx: &LateContext<'a, 'tcx>, gen: &'tcx Generics<'_>) {
-        if in_macro(gen.span) {
+        if in_macro(cx.tcx.hir().span(gen.hir_id)) {
             return;
         }
         let hash = |ty| -> u64 {

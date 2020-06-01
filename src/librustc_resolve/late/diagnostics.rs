@@ -1033,7 +1033,7 @@ impl<'tcx> LifetimeContext<'_, 'tcx> {
                         let span = self.tcx.hir().span(param.hir_id);
                         (span.shrink_to_lo(), format!("{}, ", lifetime_ref))
                     } else {
-                        (generics.span, format!("<{}>", lifetime_ref))
+                        (self.tcx.hir().span(generics.hir_id), format!("<{}>", lifetime_ref))
                     };
                     err.span_suggestion(
                         span,
@@ -1136,7 +1136,7 @@ impl<'tcx> LifetimeContext<'_, 'tcx> {
                             let span = self.tcx.hir().span(param.hir_id);
                             (span.shrink_to_lo(), "'a, ".to_string())
                         } else {
-                            (generics.span, "<'a>".to_string())
+                            (self.tcx.hir().span(generics.hir_id), "<'a>".to_string())
                         }
                     }
                     MissingLifetimeSpot::HigherRanked { span, span_type } => {

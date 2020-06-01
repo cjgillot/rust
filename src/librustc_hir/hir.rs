@@ -443,15 +443,15 @@ pub struct GenericParamCount {
 pub struct Generics<'hir> {
     pub params: &'hir [GenericParam<'hir>],
     pub where_clause: WhereClause<'hir>,
-    pub span: Span,
+    pub hir_id: HirId,
 }
 
 impl Generics<'hir> {
-    pub const fn empty() -> Generics<'hir> {
+    pub const fn empty(hir_id: HirId) -> Generics<'hir> {
         Generics {
             params: &[],
             where_clause: WhereClause { predicates: &[], span: DUMMY_SP },
-            span: DUMMY_SP,
+            hir_id,
         }
     }
 

@@ -2835,13 +2835,7 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
             }
             hir::TyKind::BareFn(ref bf) => {
                 require_c_abi_if_c_variadic(tcx, &bf.decl, bf.abi, tcx.hir().span(ast_ty.hir_id));
-                tcx.mk_fn_ptr(self.ty_of_fn(
-                    bf.unsafety,
-                    bf.abi,
-                    &bf.decl,
-                    &hir::Generics::empty(),
-                    None,
-                ))
+                tcx.mk_fn_ptr(self.ty_of_fn(bf.unsafety, bf.abi, &bf.decl, None, None))
             }
             hir::TyKind::TraitObject(ref bounds, ref lifetime) => {
                 self.conv_object_ty_poly_trait_ref(tcx.hir().span(ast_ty.hir_id), bounds, lifetime)
@@ -2981,7 +2975,7 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
         unsafety: hir::Unsafety,
         abi: abi::Abi,
         decl: &hir::FnDecl<'_>,
-        generics: &hir::Generics<'_>,
+        generics: Option<&hir::Generics<'_>>,
         ident_span: Option<Span>,
     ) -> ty::PolyFnSig<'tcx> {
         debug!("ty_of_fn");
@@ -2993,7 +2987,9 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
         for ty in decl.inputs {
             visitor.visit_ty(ty);
         }
-        walk_generics(&mut visitor, generics);
+        if let Some(generics) = generics {
+            walk_generics(&mut visitor, generics);
+        }
 
         let input_tys = decl.inputs.iter().map(|a| self.ty_of_arg(a, None));
         let output_ty = match decl.output {
@@ -3017,7 +3013,7 @@ impl<'o, 'tcx> dyn AstConv<'tcx> + 'o {
             crate::collect::placeholder_type_error(
                 tcx,
                 ident_span.shrink_to_hi(),
-                &generics.params[..],
+                if let Some(generics) = generics { &generics.params[..] } else { &[] },
                 visitor.0,
                 true,
             );

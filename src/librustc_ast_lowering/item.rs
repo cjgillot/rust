@@ -736,7 +736,8 @@ impl<'hir> LoweringContext<'_, 'hir> {
             AssocItemKind::Const(_, ref ty, ref default) => {
                 let ty = self.lower_ty(ty, ImplTraitContext::disallowed());
                 let body = default.as_ref().map(|x| self.lower_const_body(i.span, Some(x)));
-                (hir::Generics::empty(), hir::TraitItemKind::Const(ty, body))
+                let generics = hir::Generics::empty(self.next_id(DUMMY_SP));
+                (generics, hir::TraitItemKind::Const(ty, body))
             }
             AssocItemKind::Fn(_, ref sig, ref generics, None) => {
                 let names = self.lower_fn_params_to_names(&sig.decl);
@@ -800,7 +801,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
             AssocItemKind::Const(_, ty, expr) => {
                 let ty = self.lower_ty(ty, ImplTraitContext::disallowed());
                 (
-                    hir::Generics::empty(),
+                    hir::Generics::empty(self.next_id(DUMMY_SP)),
                     hir::ImplItemKind::Const(ty, self.lower_const_body(i.span, expr.as_deref())),
                 )
             }
@@ -1329,7 +1330,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         GenericsCtor {
             params: self.lower_generic_params_mut(&generics.params, &add_bounds, itctx).collect(),
             where_clause: self.lower_where_clause(&generics.where_clause),
-            span: generics.span,
+            hir_id: self.next_id(generics.span),
         }
     }
 
@@ -1407,7 +1408,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
 pub(super) struct GenericsCtor<'hir> {
     pub(super) params: SmallVec<[hir::GenericParam<'hir>; 4]>,
     where_clause: hir::WhereClause<'hir>,
-    span: Span,
+    hir_id: hir::HirId,
 }
 
 impl<'hir> GenericsCtor<'hir> {
@@ -1415,7 +1416,7 @@ impl<'hir> GenericsCtor<'hir> {
         hir::Generics {
             params: arena.alloc_from_iter(self.params),
             where_clause: self.where_clause,
-            span: self.span,
+            hir_id: self.hir_id,
         }
     }
 }

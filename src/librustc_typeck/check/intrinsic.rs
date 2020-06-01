@@ -38,7 +38,7 @@ fn equate_intrinsic_type<'tcx>(
     let i_n_tps = tcx.generics_of(def_id).own_counts().types;
     if i_n_tps != n_tps {
         let span = match it.kind {
-            hir::ForeignItemKind::Fn(_, _, ref generics) => generics.span,
+            hir::ForeignItemKind::Fn(_, _, ref generics) => tcx.hir().span(generics.hir_id),
             _ => bug!(),
         };
 

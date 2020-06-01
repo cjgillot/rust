@@ -2353,7 +2353,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ImplicitHasher {
                         return;
                     }
 
-                    let generics_suggestion_span = generics.span.substitute_dummy({
+                    let generics_suggestion_span = cx.tcx.hir().span(generics.hir_id).substitute_dummy({
                         let pos = snippet_opt(cx, item_span.until(target.span()))
                             .and_then(|snip| Some(item_span.lo() + BytePos(snip.find("impl")? as u32 + 4)));
                         if let Some(pos) = pos {
@@ -2377,7 +2377,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ImplicitHasher {
                             target.type_name()
                         ),
                         move |diag| {
-                            suggestion(cx, diag, generics.span, generics_suggestion_span, target, ctr_vis);
+                            suggestion(cx, diag, cx.tcx.hir().span(generics.hir_id), generics_suggestion_span, target, ctr_vis);
                         },
                     );
                 }
@@ -2390,10 +2390,11 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ImplicitHasher {
                     vis.visit_ty(ty);
 
                     for target in &vis.found {
-                        if in_external_macro(cx.sess(), generics.span) {
+                        let generics_span = cx.tcx.hir().span(generics.hir_id);
+                        if in_external_macro(cx.sess(), generics_span) {
                             continue;
                         }
-                        let generics_suggestion_span = generics.span.substitute_dummy({
+                        let generics_suggestion_span = generics_span.substitute_dummy({
                             let pos = snippet_opt(cx, item_span.until(cx.tcx.hir().span(body.params[0].pat.hir_id)))
                                 .and_then(|snip| {
                                     let i = snip.find("fn")?;
@@ -2415,7 +2416,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ImplicitHasher {
                                 target.type_name()
                             ),
                             move |diag| {
-                                suggestion(cx, diag, generics.span, generics_suggestion_span, target, ctr_vis);
+                                suggestion(cx, diag, generics_span, generics_suggestion_span, target, ctr_vis);
                             },
                         );
                     }

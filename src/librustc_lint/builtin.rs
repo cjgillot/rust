@@ -1766,7 +1766,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ExplicitOutlivesRequirements {
                     if let hir::ItemKind::Struct(hir::VariantData::Tuple(..), _) = item.kind {
                         where_span
                     } else {
-                        hir_generics.span.shrink_to_hi().to(where_span)
+                        cx.tcx.hir().span(hir_generics.hir_id).shrink_to_hi().to(where_span)
                     };
                 lint_spans.push(full_where_span);
             } else {
