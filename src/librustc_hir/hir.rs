@@ -16,7 +16,7 @@ use rustc_macros::HashStable_Generic;
 use rustc_span::def_id::LocalDefId;
 use rustc_span::source_map::{SourceMap, Spanned};
 use rustc_span::symbol::{kw, sym, Ident, Symbol};
-use rustc_span::{Span, DUMMY_SP};
+use rustc_span::Span;
 use rustc_target::asm::InlineAsmRegOrRegClass;
 use rustc_target::spec::abi::Abi;
 
@@ -448,11 +448,7 @@ pub struct Generics<'hir> {
 
 impl Generics<'hir> {
     pub const fn empty(hir_id: HirId) -> Generics<'hir> {
-        Generics {
-            params: &[],
-            where_clause: WhereClause { predicates: &[], span: DUMMY_SP },
-            hir_id,
-        }
+        Generics { params: &[], where_clause: WhereClause { predicates: &[], hir_id }, hir_id }
     }
 
     pub fn own_counts(&self) -> GenericParamCount {
@@ -495,24 +491,18 @@ pub enum SyntheticTyParamKind {
 pub struct WhereClause<'hir> {
     pub predicates: &'hir [WherePredicate<'hir>],
     // Only valid if predicates aren't empty.
-    pub span: Span,
+    pub hir_id: HirId,
 }
 
 impl WhereClause<'_> {
-    pub fn span(&self) -> Option<Span> {
-        if self.predicates.is_empty() { None } else { Some(self.span) }
-    }
-
-    /// The `WhereClause` under normal circumstances points at either the predicates or the empty
-    /// space where the `where` clause should be. Only of use for diagnostic suggestions.
-    pub fn span_for_predicates_or_empty_place(&self) -> Span {
-        self.span
+    pub fn has_predicates(&self) -> bool {
+        self.predicates.is_empty()
     }
 
     /// `Span` where further predicates would be suggested, accounting for trailing commas, like
     ///  in `fn foo<T>(t: T) where T: Foo,` so we don't suggest two trailing commas.
     pub fn tail_span_for_suggestion(&self, get_span: impl Fn(HirId) -> Span) -> Span {
-        let end = self.span_for_predicates_or_empty_place().shrink_to_hi();
+        let end = get_span(self.hir_id).shrink_to_hi();
         self.predicates.last().map(|p| get_span(p.id())).unwrap_or(end).shrink_to_hi().to(end)
     }
 }

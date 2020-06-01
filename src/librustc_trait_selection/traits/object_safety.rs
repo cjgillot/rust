@@ -373,7 +373,7 @@ fn virtual_call_violation_for_method<'tcx>(
         let sugg =
             tcx.hir().get_if_local(method.def_id).as_ref().and_then(|node| node.generics()).map(
                 |generics| match generics.where_clause.predicates {
-                    [] => (" where Self: Sized", generics.where_clause.span),
+                    [] => (" where Self: Sized", tcx.hir().span(generics.where_clause.hir_id)),
                     [.., pred] => (", Self: Sized", tcx.hir().span(pred.id()).shrink_to_hi()),
                 },
             );

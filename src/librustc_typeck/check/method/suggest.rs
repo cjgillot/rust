@@ -592,8 +592,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                                     false,
                                                 ),
                                                 [] => (
-                                                    g.where_clause
-                                                        .span_for_predicates_or_empty_place(),
+                                                    self.tcx.hir().span(g.where_clause.hir_id),
                                                     true,
                                                 ),
                                             };

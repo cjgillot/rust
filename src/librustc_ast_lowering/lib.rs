@@ -1471,7 +1471,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
             let opaque_ty_item = hir::OpaqueTy {
                 generics: hir::Generics {
                     params: lifetime_defs,
-                    where_clause: hir::WhereClause { predicates: &[], span },
+                    where_clause: hir::WhereClause { predicates: &[], hir_id: lctx.next_id(span) },
                     hir_id: lctx.next_id(span),
                 },
                 bounds: hir_bounds,
@@ -1983,7 +1983,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
             let opaque_ty_item = hir::OpaqueTy {
                 generics: hir::Generics {
                     params: generic_params,
-                    where_clause: hir::WhereClause { predicates: &[], span },
+                    where_clause: hir::WhereClause { predicates: &[], hir_id: this.next_id(span) },
                     hir_id: this.next_id(span),
                 },
                 bounds: arena_vec![this; future_bound],

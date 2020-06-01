@@ -172,7 +172,8 @@ fn check_main_fn_ty(tcx: TyCtxt<'_>, main_def_id: LocalDefId) {
                             .emit();
                         error = true;
                     }
-                    if let Some(sp) = generics.where_clause.span() {
+                    if !generics.where_clause.has_predicates() {
+                        let sp = tcx.hir().span(generics.where_clause.hir_id);
                         struct_span_err!(
                             tcx.sess,
                             sp,
@@ -254,7 +255,8 @@ fn check_start_fn_ty(tcx: TyCtxt<'_>, start_def_id: LocalDefId) {
                         .emit();
                         error = true;
                     }
-                    if let Some(sp) = generics.where_clause.span() {
+                    if !generics.where_clause.has_predicates() {
+                        let sp = tcx.hir().span(generics.where_clause.hir_id);
                         struct_span_err!(
                             tcx.sess,
                             sp,

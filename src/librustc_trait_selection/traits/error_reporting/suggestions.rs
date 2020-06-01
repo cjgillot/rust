@@ -210,7 +210,7 @@ fn suggest_restriction(
     //              -  ^^^^^^^^^ GenericBounds
     //              |
     //              &Ident
-    let span = generics.where_clause.span_for_predicates_or_empty_place();
+    let span = tcx.hir().span(generics.where_clause.hir_id);
     if span.from_expansion() || span.desugaring_kind().is_some() {
         return;
     }

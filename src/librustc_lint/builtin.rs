@@ -1107,7 +1107,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for TypeAliasBounds {
                         .collect();
                     err.set_span(spans);
                     err.span_suggestion(
-                        type_alias_generics.where_clause.span_for_predicates_or_empty_place(),
+                        cx.tcx.hir().span(type_alias_generics.where_clause.hir_id),
                         "the clause will not be checked when the type alias is used, and should be removed",
                         String::new(),
                         Applicability::MachineApplicable,
@@ -1755,10 +1755,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ExplicitOutlivesRequirements {
             // If all predicates are inferable, drop the entire clause
             // (including the `where`)
             if num_predicates > 0 && dropped_predicate_count == num_predicates {
-                let where_span = hir_generics
-                    .where_clause
-                    .span()
-                    .expect("span of (nonempty) where clause should exist");
+                let where_span = cx.tcx.hir().span(hir_generics.where_clause.hir_id);
                 // Extend the where clause back to the closing `>` of the
                 // generics, except for tuple struct, which have the `where`
                 // after the fields of the struct.

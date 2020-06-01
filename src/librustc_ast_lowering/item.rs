@@ -1349,7 +1349,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 predicates: this.arena.alloc_from_iter(
                     wc.predicates.iter().map(|predicate| this.lower_where_predicate(predicate)),
                 ),
-                span: wc.span,
+                hir_id: this.next_id(wc.span),
             }
         })
     }
