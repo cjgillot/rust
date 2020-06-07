@@ -2,7 +2,7 @@ use crate::ich::StableHashingContext;
 use crate::middle::codegen_fn_attrs::CodegenFnAttrFlags;
 use crate::mir::{GeneratorLayout, GeneratorSavedLocal};
 use crate::ty::subst::Subst;
-use crate::ty::{self, subst::SubstsRef, ReprOptions, Ty, TyCtxt, TypeFoldable};
+use crate::ty::{self, subst::SubstsRef, ReprOptions, Ty, TyCtxt, TyCtxtAt, TypeFoldable};
 
 use rustc_ast::ast::{self, IntTy, UintTy};
 use rustc_attr as attr;
@@ -1920,7 +1920,7 @@ impl<'tcx> LayoutOf for LayoutCx<'tcx, TyCtxt<'tcx>> {
     }
 }
 
-impl LayoutOf for LayoutCx<'tcx, ty::query::TyCtxtAt<'tcx>> {
+impl LayoutOf for LayoutCx<'tcx, TyCtxtAt<'tcx>> {
     type Ty = Ty<'tcx>;
     type TyAndLayout = Result<TyAndLayout<'tcx>, LayoutError<'tcx>>;
 
@@ -1959,7 +1959,7 @@ impl TyCtxt<'tcx> {
     }
 }
 
-impl ty::query::TyCtxtAt<'tcx> {
+impl TyCtxtAt<'tcx> {
     /// Computes the layout of a type. Note that this implicitly
     /// executes in "reveal all" mode.
     #[inline]

@@ -15,7 +15,7 @@ use rustc_middle::mir::interpret::{
 };
 use rustc_middle::ty::layout::{self, TyAndLayout};
 use rustc_middle::ty::{
-    self, fold::BottomUpFolder, query::TyCtxtAt, subst::SubstsRef, Ty, TyCtxt, TypeFoldable,
+    self, fold::BottomUpFolder, subst::SubstsRef, Ty, TyCtxt, TyCtxtAt, TypeFoldable,
 };
 use rustc_span::{source_map::DUMMY_SP, Span};
 use rustc_target::abi::{Align, HasDataLayout, LayoutOf, Size, TargetDataLayout};

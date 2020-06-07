@@ -882,6 +882,41 @@ impl<'tcx> Deref for TyCtxt<'tcx> {
     }
 }
 
+#[derive(Copy, Clone)]
+pub struct TyCtxtAt<'tcx> {
+    pub tcx: TyCtxt<'tcx>,
+    pub span: Span,
+}
+
+impl Deref for TyCtxtAt<'tcx> {
+    type Target = TyCtxt<'tcx>;
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        &self.tcx
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct TyCtxtEnsure<'tcx> {
+    pub tcx: TyCtxt<'tcx>,
+}
+
+impl TyCtxt<'tcx> {
+    /// Returns a transparent wrapper for `TyCtxt`, which ensures queries
+    /// are executed instead of just returning their results.
+    #[inline(always)]
+    pub fn ensure(self) -> TyCtxtEnsure<'tcx> {
+        TyCtxtEnsure { tcx: self }
+    }
+
+    /// Returns a transparent wrapper for `TyCtxt` which uses
+    /// `span` as the location of queries performed through it.
+    #[inline(always)]
+    pub fn at(self, span: Span) -> TyCtxtAt<'tcx> {
+        TyCtxtAt { tcx: self, span }
+    }
+}
+
 pub struct GlobalCtxt<'tcx> {
     pub arena: &'tcx WorkerLocal<Arena<'tcx>>,
 

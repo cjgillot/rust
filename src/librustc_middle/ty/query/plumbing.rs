@@ -375,11 +375,6 @@ macro_rules! define_queries_inner {
             }
         })*
 
-        #[derive(Copy, Clone)]
-        pub struct TyCtxtEnsure<'tcx> {
-            pub tcx: TyCtxt<'tcx>,
-        }
-
         impl TyCtxtEnsure<$tcx> {
             $($(#[$attr])*
             #[inline(always)]
@@ -388,40 +383,7 @@ macro_rules! define_queries_inner {
             })*
         }
 
-        #[derive(Copy, Clone)]
-        pub struct TyCtxtAt<'tcx> {
-            pub tcx: TyCtxt<'tcx>,
-            pub span: Span,
-        }
-
-        impl Deref for TyCtxtAt<'tcx> {
-            type Target = TyCtxt<'tcx>;
-            #[inline(always)]
-            fn deref(&self) -> &Self::Target {
-                &self.tcx
-            }
-        }
-
         impl TyCtxt<$tcx> {
-            /// Returns a transparent wrapper for `TyCtxt`, which ensures queries
-            /// are executed instead of just returning their results.
-            #[inline(always)]
-            pub fn ensure(self) -> TyCtxtEnsure<$tcx> {
-                TyCtxtEnsure {
-                    tcx: self,
-                }
-            }
-
-            /// Returns a transparent wrapper for `TyCtxt` which uses
-            /// `span` as the location of queries performed through it.
-            #[inline(always)]
-            pub fn at(self, span: Span) -> TyCtxtAt<$tcx> {
-                TyCtxtAt {
-                    tcx: self,
-                    span
-                }
-            }
-
             $($(#[$attr])*
             #[inline(always)]
             #[must_use]
@@ -462,8 +424,7 @@ macro_rules! define_queries_inner {
         }
 
         impl TyCtxtAt<$tcx> {
-            $($(#[$attr])*
-            #[inline(always)]
+            $(#[inline(always)]
             pub fn $name(self, key: query_helper_param_ty!($($K)*))
                 -> <queries::$name<$tcx> as QueryConfig<TyCtxt<$tcx>>>::Stored
             {

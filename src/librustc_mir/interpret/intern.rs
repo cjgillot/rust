@@ -7,7 +7,7 @@ use super::validity::RefTracking;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_hir as hir;
 use rustc_middle::mir::interpret::InterpResult;
-use rustc_middle::ty::{self, query::TyCtxtAt, Ty};
+use rustc_middle::ty::{self, Ty, TyCtxtAt};
 
 use rustc_ast::ast::Mutability;
 

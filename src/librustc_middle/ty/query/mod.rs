@@ -31,7 +31,9 @@ use crate::traits::{self, ImplSource};
 use crate::ty::steal::Steal;
 use crate::ty::subst::{GenericArg, SubstsRef};
 use crate::ty::util::AlwaysRequiresDrop;
-use crate::ty::{self, AdtSizedConstraint, CrateInherentImpls, ParamEnvAnd, Ty, TyCtxt};
+use crate::ty::{
+    self, AdtSizedConstraint, CrateInherentImpls, ParamEnvAnd, Ty, TyCtxt, TyCtxtAt, TyCtxtEnsure,
+};
 use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet, FxIndexMap};
 use rustc_data_structures::stable_hasher::StableVec;
@@ -55,7 +57,6 @@ use rustc_span::symbol::Symbol;
 use rustc_span::{Span, DUMMY_SP};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::ops::Deref;
 use std::sync::Arc;
 
 #[macro_use]

@@ -2,8 +2,7 @@ use super::{AllocId, Pointer, RawConst, Scalar};
 
 use crate::mir::interpret::ConstValue;
 use crate::ty::layout::LayoutError;
-use crate::ty::query::TyCtxtAt;
-use crate::ty::{self, layout, tls, FnSig, Ty};
+use crate::ty::{self, layout, tls, FnSig, Ty, TyCtxtAt};
 
 use rustc_data_structures::sync::Lock;
 use rustc_errors::{pluralize, struct_span_err, DiagnosticBuilder, ErrorReported};
