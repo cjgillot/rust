@@ -475,11 +475,6 @@ macro_rules! define_queries_inner {
             tcx: $tcx,
             input: ($(([$($modifiers)*] [$name] [$($K)*] [$V]))*)
         }
-
-        impl<$tcx> Copy for Providers<$tcx> {}
-        impl<$tcx> Clone for Providers<$tcx> {
-            fn clone(&self) -> Self { *self }
-        }
     }
 }
 
@@ -549,6 +544,11 @@ macro_rules! define_provider_struct {
                 })*
                 Providers { $($name),* }
             }
+        }
+
+        impl<$tcx> Copy for Providers<$tcx> {}
+        impl<$tcx> Clone for Providers<$tcx> {
+            fn clone(&self) -> Self { *self }
         }
     };
 }
