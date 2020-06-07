@@ -236,10 +236,10 @@ macro_rules! hash_result {
 
 macro_rules! define_queries {
     (<$tcx:tt> $($category:tt {
-        $($(#[$attr:meta])* [$($modifiers:tt)*] fn $name:ident: $node:ident($($K:tt)*) -> $V:ty,)*
+        $([$($modifiers:tt)*] fn $name:ident: $node:ident($($K:tt)*) -> $V:ty,)*
     },)*) => {
         define_queries_inner! { <$tcx>
-            $($( $(#[$attr])* category<$category> [$($modifiers)*] fn $name: $node($($K)*) -> $V,)*)*
+            $($(category<$category> [$($modifiers)*] fn $name: $node($($K)*) -> $V,)*)*
         }
     }
 }
@@ -251,7 +251,7 @@ macro_rules! query_helper_param_ty {
 
 macro_rules! define_queries_inner {
     (<$tcx:tt>
-     $($(#[$attr:meta])* category<$category:tt>
+     $(category<$category:tt>
         [$($modifiers:tt)*] fn $name:ident: $node:ident($($K:tt)*) -> $V:ty,)*) => {
 
         use std::mem;
@@ -263,13 +263,13 @@ macro_rules! define_queries_inner {
 
         define_queries_struct! {
             tcx: $tcx,
-            input: ($(([$($modifiers)*] [$($attr)*] [$name]))*)
+            input: ($(([$($modifiers)*] [$name]))*)
         }
 
         #[allow(nonstandard_style)]
         #[derive(Clone, Debug)]
         pub enum Query<$tcx> {
-            $($(#[$attr])* $name($($K)*)),*
+            $($name($($K)*)),*
         }
 
         impl<$tcx> Query<$tcx> {
@@ -376,16 +376,14 @@ macro_rules! define_queries_inner {
         })*
 
         impl TyCtxtEnsure<$tcx> {
-            $($(#[$attr])*
-            #[inline(always)]
+            $(#[inline(always)]
             pub fn $name(self, key: query_helper_param_ty!($($K)*)) {
                 ensure_query::<queries::$name<'_>, _>(self.tcx, key.into_query_param())
             })*
         }
 
         impl TyCtxt<$tcx> {
-            $($(#[$attr])*
-            #[inline(always)]
+            $(#[inline(always)]
             #[must_use]
             pub fn $name(self, key: query_helper_param_ty!($($K)*))
                 -> <queries::$name<$tcx> as QueryConfig<TyCtxt<$tcx>>>::Stored
@@ -441,7 +439,7 @@ macro_rules! define_queries_inner {
 
 macro_rules! define_queries_struct {
     (tcx: $tcx:tt,
-     input: ($(([$($modifiers:tt)*] [$($attr:tt)*] [$name:ident]))*)) => {
+     input: ($(([$($modifiers:tt)*] [$name:ident]))*)) => {
         pub struct Queries<$tcx> {
             /// This provides access to the incrimental comilation on-disk cache for query results.
             /// Do not access this directly. It is only meant to be used by
@@ -451,7 +449,7 @@ macro_rules! define_queries_struct {
             providers: IndexVec<CrateNum, Providers<$tcx>>,
             fallback_extern_providers: Box<Providers<$tcx>>,
 
-            $($(#[$attr])*  $name: QueryState<
+            $($name: QueryState<
                 TyCtxt<$tcx>,
                 <queries::$name<$tcx> as QueryAccessors<TyCtxt<'tcx>>>::Cache,
             >,)*
