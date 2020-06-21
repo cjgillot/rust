@@ -101,6 +101,9 @@ pub use self::profiling_support::{IntoSelfProfilingString, QueryKeyStringBuilder
 // Queries marked with `fatal_cycle` do not need the latter implementation,
 // as they will raise an fatal error on query cycles instead.
 
+rustc_query_append! { [define_queries_struct!][<'tcx>] }
+rustc_query_append! { [define_query_enum!][<'tcx>] }
+rustc_query_append! { [define_provider_struct!][<'tcx>] }
 rustc_query_append! { [define_queries!][<'tcx>] }
 
 /// The red/green evaluation system will try to mark a specific DepNode in the
