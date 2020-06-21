@@ -4,17 +4,16 @@
 
 use crate::dep_graph::DepGraph;
 use crate::ty::query::Query;
-use crate::ty::tls::{self, ImplicitCtxt};
-use crate::ty::{self, TyCtxt};
+use crate::ty::tls;
+use crate::ty::TyCtxt;
 use rustc_query_system::query::QueryContext;
-use rustc_query_system::query::{CycleError, QueryJobId, QueryJobInfo};
+use rustc_query_system::query::{QueryJobId, QueryJobInfo};
 
 use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::sync::Lock;
 use rustc_data_structures::thin_vec::ThinVec;
-use rustc_errors::{struct_span_err, Diagnostic, DiagnosticBuilder, Handler, Level};
+use rustc_errors::Diagnostic;
 use rustc_span::def_id::DefId;
-use rustc_span::Span;
 
 impl QueryContext for TyCtxt<'tcx> {
     type Query = Query<'tcx>;
@@ -54,116 +53,7 @@ impl QueryContext for TyCtxt<'tcx> {
         diagnostics: Option<&Lock<ThinVec<Diagnostic>>>,
         compute: impl FnOnce(Self) -> R,
     ) -> R {
-        // The `TyCtxt` stored in TLS has the same global interner lifetime
-        // as `self`, so we use `with_related_context` to relate the 'tcx lifetimes
-        // when accessing the `ImplicitCtxt`.
-        tls::with_related_context(*self, move |current_icx| {
-            // Update the `ImplicitCtxt` to point to our new query job.
-            let new_icx = ImplicitCtxt {
-                tcx: *self,
-                query: Some(token),
-                diagnostics,
-                layout_depth: current_icx.layout_depth,
-                task_deps: current_icx.task_deps,
-            };
-
-            // Use the `ImplicitCtxt` while we execute the query.
-            tls::enter_context(&new_icx, |_| {
-                rustc_data_structures::stack::ensure_sufficient_stack(|| compute(*self))
-            })
-        })
-    }
-}
-
-impl<'tcx> TyCtxt<'tcx> {
-    #[inline(never)]
-    #[cold]
-    pub(super) fn report_cycle(
-        self,
-        CycleError { usage, cycle: stack }: CycleError<Query<'tcx>>,
-    ) -> DiagnosticBuilder<'tcx> {
-        assert!(!stack.is_empty());
-
-        let fix_span = |span: Span, query: &Query<'tcx>| {
-            self.sess.source_map().guess_head_span(query.default_span(self, span))
-        };
-
-        // Disable naming impls with types in this path, since that
-        // sometimes cycles itself, leading to extra cycle errors.
-        // (And cycle errors around impls tend to occur during the
-        // collect/coherence phases anyhow.)
-        ty::print::with_forced_impl_filename_line(|| {
-            let span = fix_span(stack[1 % stack.len()].span, &stack[0].query);
-            let mut err = struct_span_err!(
-                self.sess,
-                span,
-                E0391,
-                "cycle detected when {}",
-                stack[0].query.describe(self)
-            );
-
-            for i in 1..stack.len() {
-                let query = &stack[i].query;
-                let span = fix_span(stack[(i + 1) % stack.len()].span, query);
-                err.span_note(span, &format!("...which requires {}...", query.describe(self)));
-            }
-
-            err.note(&format!(
-                "...which again requires {}, completing the cycle",
-                stack[0].query.describe(self)
-            ));
-
-            if let Some((span, query)) = usage {
-                err.span_note(
-                    fix_span(span, &query),
-                    &format!("cycle used when {}", query.describe(self)),
-                );
-            }
-
-            err
-        })
-    }
-
-    pub fn try_print_query_stack(handler: &Handler) {
-        eprintln!("query stack during panic:");
-
-        // Be careful reyling on global state here: this code is called from
-        // a panic hook, which means that the global `Handler` may be in a weird
-        // state if it was responsible for triggering the panic.
-        ty::tls::with_context_opt(|icx| {
-            if let Some(icx) = icx {
-                let query_map = icx.tcx.queries.try_collect_active_jobs();
-
-                let mut current_query = icx.query;
-                let mut i = 0;
-
-                while let Some(query) = current_query {
-                    let query_info =
-                        if let Some(info) = query_map.as_ref().and_then(|map| map.get(&query)) {
-                            info
-                        } else {
-                            break;
-                        };
-                    let mut diag = Diagnostic::new(
-                        Level::FailureNote,
-                        &format!(
-                            "#{} [{}] {}",
-                            i,
-                            query_info.info.query.name(),
-                            query_info.info.query.describe(icx.tcx)
-                        ),
-                    );
-                    diag.span =
-                        icx.tcx.sess.source_map().guess_head_span(query_info.info.span).into();
-                    handler.force_print_diagnostic(diag);
-
-                    current_query = query_info.job.parent;
-                    i += 1;
-                }
-            }
-        });
-
-        eprintln!("end of query stack");
+        TyCtxt::start_query(self, token, diagnostics, compute)
     }
 }
 
@@ -423,7 +313,7 @@ macro_rules! define_queries_struct {
                 }
             }
 
-            pub(crate) fn try_collect_active_jobs(
+            fn try_collect_active_jobs(
                 &self
             ) -> Option<FxHashMap<QueryJobId<crate::dep_graph::DepKind>, QueryJobInfo<TyCtxt<'tcx>>>> {
                 let mut jobs = FxHashMap::default();
@@ -438,34 +328,20 @@ macro_rules! define_queries_struct {
 
                 Some(jobs)
             }
-        }
 
-        impl TyCtxt<$tcx> {
-            /// All self-profiling events generated by the query engine use
-            /// virtual `StringId`s for their `event_id`. This method makes all
-            /// those virtual `StringId`s point to actual strings.
-            ///
-            /// If we are recording only summary data, the ids will point to
-            /// just the query names. If we are recording query keys too, we
-            /// allocate the corresponding strings here.
-            pub fn alloc_self_profile_query_strings(self) {
-                use crate::ty::query::profiling_support::{
-                    alloc_self_profile_query_strings_for_query_cache,
-                    QueryKeyStringCache,
-                };
-
-                if !self.prof.enabled() {
-                    return;
-                }
-
-                let mut string_cache = QueryKeyStringCache::new();
+            fn alloc_self_profile_query_strings(
+                &self,
+                tcx: TyCtxt<$tcx>,
+                string_cache: &mut QueryKeyStringCache,
+            ) {
+                use crate::ty::query::profiling_support::alloc_self_profile_query_strings_for_query_cache;
 
                 $({
                     alloc_self_profile_query_strings_for_query_cache(
-                        self,
+                        tcx,
                         stringify!($name),
-                        &self.queries.$name,
-                        &mut string_cache,
+                        &self.$name,
+                        string_cache,
                     );
                 })*
             }
