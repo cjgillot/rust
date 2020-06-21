@@ -119,13 +119,11 @@ pub fn print_stats(tcx: TyCtxt<'_>) {
 }
 
 macro_rules! print_stats {
-    (<$tcx:tt> $($category:tt {
-        $([$($modifiers:tt)*] fn $name:ident: $node:ident($K:ty) -> $V:ty,)*
-    },)*) => {
+    (<$tcx:tt> $([$($modifiers:tt)*] fn $name:ident: $node:ident($K:ty) -> $V:ty,)*) => {
         fn query_stats(tcx: TyCtxt<'_>) -> Vec<QueryStats> {
             let mut queries = Vec::new();
 
-            $($(
+            $(
                 queries.push(stats::<
                     TyCtxt<'_>,
                     <queries::$name<'_> as QueryAccessors<TyCtxt<'_>>>::Cache,
@@ -133,7 +131,7 @@ macro_rules! print_stats {
                     stringify!($name),
                     &tcx.queries.$name,
                 ));
-            )*)*
+            )*
 
             queries
         }

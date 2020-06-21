@@ -234,25 +234,13 @@ macro_rules! hash_result {
     };
 }
 
-macro_rules! define_queries {
-    (<$tcx:tt> $($category:tt {
-        $([$($modifiers:tt)*] fn $name:ident: $node:ident($($K:tt)*) -> $V:ty,)*
-    },)*) => {
-        define_queries_inner! { <$tcx>
-            $($(category<$category> [$($modifiers)*] fn $name: $node($($K)*) -> $V,)*)*
-        }
-    }
-}
-
 macro_rules! query_helper_param_ty {
     (DefId) => { impl IntoQueryParam<DefId> };
     ($K:ty) => { $K };
 }
 
-macro_rules! define_queries_inner {
-    (<$tcx:tt>
-     $(category<$category:tt>
-        [$($modifiers:tt)*] fn $name:ident: $node:ident($($K:tt)*) -> $V:ty,)*) => {
+macro_rules! define_queries {
+    (<$tcx:tt> $([$($modifiers:tt)*] fn $name:ident: $node:ident($($K:tt)*) -> $V:ty,)*) => {
 
         use std::mem;
         use crate::{

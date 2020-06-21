@@ -506,9 +506,9 @@ pub fn rustc_queries(input: TokenStream) -> TokenStream {
 
             add_query_description_impl(&query, modifiers, &mut query_description_stream);
         }
-        let name = &group.name;
+        let _name = &group.name;
         query_stream.extend(quote! {
-            #name { #group_stream },
+            #group_stream
         });
     }
 
