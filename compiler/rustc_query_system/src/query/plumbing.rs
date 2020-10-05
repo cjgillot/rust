@@ -389,6 +389,7 @@ fn try_execute_query<CTX, C>(
     span: Span,
     key: C::Key,
     lookup: QueryLookup<'_, CTX, C::Key, C::Sharded>,
+    caller: &QueryCaller<CTX::DepKind>,
     query: &QueryVtable<CTX, C::Key, C::Value>,
 ) -> C::Stored
 where
@@ -396,7 +397,24 @@ where
     C::Key: Eq + Clone + Debug + crate::dep_graph::DepNodeParams<CTX>,
     CTX: QueryContext,
 {
-    let job = match JobOwner::try_start(tcx, state, span, &key, lookup, query) {
+    let job = JobOwner::try_start(tcx, state, span, &key, lookup, query);
+
+    if let QueryCaller::Force(dep_node) = caller {
+        // We may be concurrently trying both execute and force a query.
+        // Ensure that only one of them runs the query.
+
+        let job = match job {
+            TryGetJob::NotYetStarted(job) => job,
+            TryGetJob::Cycle(result) => return result,
+            #[cfg(parallel_compiler)]
+            TryGetJob::JobCompleted((v, _)) => {
+                return v;
+            }
+        };
+        return force_query_with_job(tcx, key, job, *dep_node, query).0;
+    };
+
+    let job = match job {
         TryGetJob::NotYetStarted(job) => job,
         TryGetJob::Cycle(result) => return result,
         #[cfg(parallel_compiler)]
@@ -698,31 +716,7 @@ where
                 }
             }
         },
-        |key, lookup| {
-            match &caller {
-                QueryCaller::Ensure => {
-                    try_execute_query(tcx, state, span, key, lookup, query);
-                    None
-                }
-                QueryCaller::Get => {
-                    let value = try_execute_query(tcx, state, span, key, lookup, query);
-                    Some(value)
-                }
-                QueryCaller::Force(dep_node) => {
-                    // We may be concurrently trying both execute and force a query.
-                    // Ensure that only one of them runs the query.
-
-                    let job = match JobOwner::try_start(tcx, state, span, &key, lookup, query) {
-                        TryGetJob::NotYetStarted(job) => job,
-                        TryGetJob::Cycle(_) => return None,
-                        #[cfg(parallel_compiler)]
-                        TryGetJob::JobCompleted(_) => return None,
-                    };
-                    force_query_with_job(tcx, key, job, *dep_node, query);
-                    None
-                }
-            }
-        },
+        |key, lookup| Some(try_execute_query(tcx, state, span, key, lookup, &caller, query)),
     )
 }
 
