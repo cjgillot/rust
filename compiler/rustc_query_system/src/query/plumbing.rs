@@ -395,7 +395,6 @@ fn try_execute_query<CTX, C>(
 where
     C: QueryCache,
     C::Key: Eq + Clone + Debug + crate::dep_graph::DepNodeParams<CTX>,
-    C::Stored: Clone,
     CTX: QueryContext,
 {
     let job = match JobOwner::try_start(tcx, state, span, &key, lookup, query) {
