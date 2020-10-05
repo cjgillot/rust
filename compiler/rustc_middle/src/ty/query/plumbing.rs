@@ -394,6 +394,19 @@ macro_rules! define_queries_inner {
             ) -> Self::Value {
                 handle_cycle_error!([$($modifiers)*][tcx, error])
             }
+        }
+
+        impl queries::$name<$tcx> {
+            $(#[$attr])*
+            #[inline(always)]
+            pub fn query(
+                tcx: TyCtxt<$tcx>,
+                span: Span,
+                key: query_keys::$name<$tcx>,
+                caller: QueryCaller<DepKind>,
+            ) -> Option<<queries::$name<$tcx> as QueryConfig<TyCtxt<$tcx>>>::Stored> {
+                call_query::<queries::$name<'_>, _>(tcx, span, key, caller)
+            }
         })*
 
         #[derive(Copy, Clone)]
@@ -405,7 +418,12 @@ macro_rules! define_queries_inner {
             $($(#[$attr])*
             #[inline(always)]
             pub fn $name(self, key: query_helper_param_ty!($($K)*)) {
-                ensure_query::<queries::$name<'_>, _>(self.tcx, key.into_query_param())
+                queries::$name::query(
+                    self.tcx,
+                    DUMMY_SP,
+                    key.into_query_param(),
+                    QueryCaller::Ensure,
+                );
             })*
         }
 
@@ -488,7 +506,13 @@ macro_rules! define_queries_inner {
             pub fn $name(self, key: query_helper_param_ty!($($K)*))
                 -> <queries::$name<$tcx> as QueryConfig<TyCtxt<$tcx>>>::Stored
             {
-                get_query::<queries::$name<'_>, _>(self.tcx, self.span, key.into_query_param())
+                let ret = queries::$name::query(
+                    self.tcx,
+                    self.span,
+                    key.into_query_param(),
+                    QueryCaller::Get,
+                );
+                ret.unwrap()
             })*
         }
 
