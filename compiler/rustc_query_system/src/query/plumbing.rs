@@ -411,7 +411,8 @@ where
                 return v;
             }
         };
-        return force_query_with_job(tcx, key, job, *dep_node, query).0;
+        let (result, dep_node_index) = force_query_with_job(tcx, key, job.id, *dep_node, query);
+        return job.complete(result, dep_node_index);
     };
 
     let job = match job {
@@ -428,7 +429,8 @@ where
     // expensive for some `DepKind`s.
     if !tcx.dep_graph().is_fully_enabled() {
         let null_dep_node = DepNode::new_no_params(DepKind::NULL);
-        return force_query_with_job(tcx, key, job, null_dep_node, query).0;
+        let (result, dep_node_index) = force_query_with_job(tcx, key, job.id, null_dep_node, query);
+        return job.complete(result, dep_node_index);
     }
 
     if query.anon {
@@ -478,7 +480,8 @@ where
         }
     }
 
-    let (result, dep_node_index) = force_query_with_job(tcx, key, job, dep_node, query);
+    let (result, dep_node_index) = force_query_with_job(tcx, key, job.id, dep_node, query);
+    let result = job.complete(result, dep_node_index);
     tcx.dep_graph().read_index(dep_node_index);
     result
 }
@@ -572,17 +575,15 @@ fn incremental_verify_ich<CTX, K, V>(
 }
 
 #[inline(always)]
-fn force_query_with_job<C, CTX>(
+fn force_query_with_job<CTX, K, V>(
     tcx: CTX,
-    key: C::Key,
-    job: JobOwner<'_, CTX, C>,
+    key: K,
+    job_id: QueryJobId<CTX::DepKind>,
     dep_node: DepNode<CTX::DepKind>,
-    query: &QueryVtable<CTX, C::Key, C::Value>,
-) -> (C::Stored, DepNodeIndex)
+    query: &QueryVtable<CTX, K, V>,
+) -> (V, DepNodeIndex)
 where
-    C: QueryCache,
-    C::Key: Eq + Clone + Debug,
-    C::Stored: Clone,
+    K: Eq + Clone + Debug,
     CTX: QueryContext,
 {
     // If the following assertion triggers, it can have two reasons:
@@ -602,7 +603,7 @@ where
     let prof_timer = tcx.profiler().query_provider();
 
     let ((result, dep_node_index), diagnostics) = with_diagnostics(|diagnostics| {
-        tcx.start_query(job.id, diagnostics, |tcx| {
+        tcx.start_query(job_id, diagnostics, |tcx| {
             if query.eval_always {
                 tcx.dep_graph().with_eval_always_task(
                     dep_node,
@@ -624,8 +625,6 @@ where
             tcx.store_diagnostics(dep_node_index, diagnostics);
         }
     }
-
-    let result = job.complete(result, dep_node_index);
 
     (result, dep_node_index)
 }
