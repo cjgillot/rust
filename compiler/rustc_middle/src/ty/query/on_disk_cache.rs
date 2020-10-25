@@ -354,8 +354,17 @@ impl<'sess> OnDiskCache<'sess> {
         tcx: TyCtxt<'_>,
         dep_node_index: SerializedDepNodeIndex,
     ) -> Vec<Diagnostic> {
-        let diagnostics: Option<EncodedDiagnostics> =
-            self.load_indexed(tcx, dep_node_index, &self.prev_diagnostics_index, "diagnostics");
+        let mut diagnostics = None;
+        self.load_indexed(
+            tcx,
+            dep_node_index,
+            &self.prev_diagnostics_index,
+            "diagnostics",
+            |dec| {
+                diagnostics = Some(Decodable::decode(dec)?);
+                Ok(())
+            },
+        );
 
         diagnostics.unwrap_or_default()
     }
@@ -377,15 +386,13 @@ impl<'sess> OnDiskCache<'sess> {
 
     /// Returns the cached query result if there is something in the cache for
     /// the given `SerializedDepNodeIndex`; otherwise returns `None`.
-    crate fn try_load_query_result<'tcx, T>(
+    crate fn try_load_query_result<'tcx>(
         &self,
         tcx: TyCtxt<'tcx>,
         dep_node_index: SerializedDepNodeIndex,
-    ) -> Option<T>
-    where
-        T: for<'a> Decodable<CacheDecoder<'a, 'tcx>>,
-    {
-        self.load_indexed(tcx, dep_node_index, &self.query_result_index, "query result")
+        f: &mut dyn for<'a> FnMut(&mut CacheDecoder<'a, 'tcx>) -> Result<(), String>,
+    ) -> Option<()> {
+        self.load_indexed(tcx, dep_node_index, &self.query_result_index, "query result", f)
     }
 
     /// Stores a diagnostic emitted during computation of an anonymous query.
@@ -406,33 +413,28 @@ impl<'sess> OnDiskCache<'sess> {
         x.extend(Into::<Vec<_>>::into(diagnostics));
     }
 
-    fn load_indexed<'tcx, T>(
+    fn load_indexed<'tcx>(
         &self,
         tcx: TyCtxt<'tcx>,
         dep_node_index: SerializedDepNodeIndex,
         index: &FxHashMap<SerializedDepNodeIndex, AbsoluteBytePos>,
         debug_tag: &'static str,
-    ) -> Option<T>
-    where
-        T: for<'a> Decodable<CacheDecoder<'a, 'tcx>>,
-    {
+        f: impl FnOnce(&mut CacheDecoder<'_, 'tcx>) -> Result<(), String>,
+    ) -> Option<()> {
         let pos = index.get(&dep_node_index).cloned()?;
 
-        self.with_decoder(tcx, pos, |decoder| match decode_tagged(decoder, dep_node_index) {
-            Ok(v) => Some(v),
+        match self.with_decoder(tcx, pos, |decoder| decode_tagged_cb(decoder, dep_node_index, f)) {
+            Ok(()) => return Some(()),
             Err(e) => bug!("could not decode cached {}: {}", debug_tag, e),
-        })
+        }
     }
 
-    fn with_decoder<'a, 'tcx, T, F: FnOnce(&mut CacheDecoder<'sess, 'tcx>) -> T>(
+    fn with_decoder<'tcx, T>(
         &'sess self,
         tcx: TyCtxt<'tcx>,
         pos: AbsoluteBytePos,
-        f: F,
-    ) -> T
-    where
-        T: Decodable<CacheDecoder<'a, 'tcx>>,
-    {
+        f: impl FnOnce(&mut CacheDecoder<'sess, 'tcx>) -> T,
+    ) -> T {
         let cnum_map =
             self.cnum_map.get_or_init(|| Self::compute_cnum_map(tcx, &self.prev_cnums[..]));
 
@@ -448,6 +450,7 @@ impl<'sess> OnDiskCache<'sess> {
             expn_data: &self.expn_data,
             hygiene_context: &self.hygiene_context,
         };
+
         f(&mut decoder)
     }
 
@@ -548,17 +551,34 @@ where
     V: Decodable<D>,
     D: DecoderWithPosition,
 {
+    let mut value = None;
+    decode_tagged_cb(decoder, expected_tag, |dec| {
+        value = Some(V::decode(dec)?);
+        Ok(())
+    })?;
+    Ok(value.unwrap())
+}
+
+fn decode_tagged_cb<D, T>(
+    decoder: &mut D,
+    expected_tag: T,
+    f: impl FnOnce(&mut D) -> Result<(), D::Error>,
+) -> Result<(), D::Error>
+where
+    T: Decodable<D> + Eq + std::fmt::Debug,
+    D: DecoderWithPosition,
+{
     let start_pos = decoder.position();
 
     let actual_tag = T::decode(decoder)?;
     assert_eq!(actual_tag, expected_tag);
-    let value = V::decode(decoder)?;
+    f(decoder)?;
     let end_pos = decoder.position();
 
     let expected_len: u64 = Decodable::decode(decoder)?;
     assert_eq!((end_pos - start_pos) as u64, expected_len);
 
-    Ok(value)
+    Ok(())
 }
 
 impl<'a, 'tcx> TyDecoder<'tcx> for CacheDecoder<'a, 'tcx> {

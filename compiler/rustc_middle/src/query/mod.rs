@@ -129,11 +129,6 @@ rustc_queries! {
             desc { |tcx| "computing generics of `{}`", tcx.def_path_str(key) }
             storage(ArenaCacheSelector<'tcx>)
             cache_on_disk_if { key.is_local() }
-            load_cached(tcx, id) {
-                let generics: Option<ty::Generics> = tcx.queries.on_disk_cache
-                                                        .try_load_query_result(tcx, id);
-                generics
-            }
         }
 
         /// Maps from the `DefId` of an item (trait/struct/enum/fn) to the
@@ -687,9 +682,12 @@ rustc_queries! {
             desc { |tcx| "type-checking `{}`", tcx.def_path_str(key.to_def_id()) }
             cache_on_disk_if { true }
             load_cached(tcx, id) {
-                let typeck_results: Option<ty::TypeckResults<'tcx>> = tcx
-                    .queries.on_disk_cache
-                    .try_load_query_result(tcx, id);
+                let mut typeck_results = None;
+                tcx.queries.on_disk_cache
+                    .try_load_query_result(tcx, id, &mut |dec| {
+                        typeck_results = Some(rustc_serialize::Decodable::decode(dec)?);
+                        Ok(())
+                    })?;
 
                 typeck_results.map(|x| &*tcx.arena.alloc(x))
             }

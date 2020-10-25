@@ -353,7 +353,16 @@ fn add_query_description_impl(
                     tcx: TyCtxt<'tcx>,
                     id: SerializedDepNodeIndex
                 ) -> Option<Self::Value> {
-                    tcx.queries.on_disk_cache.try_load_query_result(tcx, id)
+                    let mut ret = None;
+                    tcx.queries.on_disk_cache.try_load_query_result(
+                        tcx,
+                        id,
+                        &mut |dec| {
+                            ret = Some(rustc_serialize::Decodable::decode(dec)?);
+                            Ok(())
+                        },
+                    )?;
+                    ret
                 }
             }
         };
