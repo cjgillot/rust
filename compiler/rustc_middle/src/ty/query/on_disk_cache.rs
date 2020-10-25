@@ -118,6 +118,41 @@ impl AbsoluteBytePos {
     }
 }
 
+pub trait CacheOnDisk {
+    fn serialize<'tcx>(&self, tcx: TyCtxt<'tcx>, encoder: &mut opaque::Encoder) -> Result<(), !>;
+
+    /// Loads a diagnostic emitted during the previous compilation session.
+    fn load_diagnostics(
+        &self,
+        tcx: TyCtxt<'_>,
+        dep_node_index: SerializedDepNodeIndex,
+    ) -> Vec<Diagnostic>;
+
+    /// Stores a diagnostic emitted during the current compilation session.
+    /// Anything stored like this will be available via `load_diagnostics` in
+    /// the next compilation session.
+    fn store_diagnostics(&self, dep_node_index: DepNodeIndex, diagnostics: ThinVec<Diagnostic>);
+
+    /// Returns the cached query result if there is something in the cache for
+    /// the given `SerializedDepNodeIndex`; otherwise returns `None`.
+    fn try_load_query_result<'tcx>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        dep_node_index: SerializedDepNodeIndex,
+        f: &mut dyn for<'a> FnMut(&mut CacheDecoder<'a, 'tcx>) -> Result<(), String>,
+    ) -> Option<()>;
+
+    /// Stores a diagnostic emitted during computation of an anonymous query.
+    /// Since many anonymous queries can share the same `DepNode`, we aggregate
+    /// them -- as opposed to regular queries where we assume that there is a
+    /// 1:1 relationship between query-key and `DepNode`.
+    fn store_diagnostics_for_anon_node(
+        &self,
+        dep_node_index: DepNodeIndex,
+        diagnostics: ThinVec<Diagnostic>,
+    );
+}
+
 impl<'sess> OnDiskCache<'sess> {
     /// Creates a new `OnDiskCache` instance from the serialized data in `data`.
     pub fn new(sess: &'sess Session, data: Vec<u8>, start_pos: usize) -> Self {
@@ -175,12 +210,10 @@ impl<'sess> OnDiskCache<'sess> {
             hygiene_context: Default::default(),
         }
     }
+}
 
-    crate fn serialize<'tcx>(
-        &self,
-        tcx: TyCtxt<'tcx>,
-        encoder: &mut opaque::Encoder,
-    ) -> Result<(), !> {
+impl CacheOnDisk for OnDiskCache<'_> {
+    fn serialize<'tcx>(&self, tcx: TyCtxt<'tcx>, encoder: &mut opaque::Encoder) -> Result<(), !> {
         // Serializing the `DepGraph` should not modify it.
         tcx.dep_graph.with_ignore(|| {
             // Allocate `SourceFileIndex`es.
@@ -349,7 +382,7 @@ impl<'sess> OnDiskCache<'sess> {
     }
 
     /// Loads a diagnostic emitted during the previous compilation session.
-    crate fn load_diagnostics(
+    fn load_diagnostics(
         &self,
         tcx: TyCtxt<'_>,
         dep_node_index: SerializedDepNodeIndex,
@@ -374,11 +407,7 @@ impl<'sess> OnDiskCache<'sess> {
     /// the next compilation session.
     #[inline(never)]
     #[cold]
-    crate fn store_diagnostics(
-        &self,
-        dep_node_index: DepNodeIndex,
-        diagnostics: ThinVec<Diagnostic>,
-    ) {
+    fn store_diagnostics(&self, dep_node_index: DepNodeIndex, diagnostics: ThinVec<Diagnostic>) {
         let mut current_diagnostics = self.current_diagnostics.borrow_mut();
         let prev = current_diagnostics.insert(dep_node_index, diagnostics.into());
         debug_assert!(prev.is_none());
@@ -386,7 +415,7 @@ impl<'sess> OnDiskCache<'sess> {
 
     /// Returns the cached query result if there is something in the cache for
     /// the given `SerializedDepNodeIndex`; otherwise returns `None`.
-    crate fn try_load_query_result<'tcx>(
+    fn try_load_query_result<'tcx>(
         &self,
         tcx: TyCtxt<'tcx>,
         dep_node_index: SerializedDepNodeIndex,
@@ -401,7 +430,7 @@ impl<'sess> OnDiskCache<'sess> {
     /// 1:1 relationship between query-key and `DepNode`.
     #[inline(never)]
     #[cold]
-    crate fn store_diagnostics_for_anon_node(
+    fn store_diagnostics_for_anon_node(
         &self,
         dep_node_index: DepNodeIndex,
         diagnostics: ThinVec<Diagnostic>,
@@ -412,7 +441,9 @@ impl<'sess> OnDiskCache<'sess> {
 
         x.extend(Into::<Vec<_>>::into(diagnostics));
     }
+}
 
+impl<'sess> OnDiskCache<'sess> {
     fn load_indexed<'tcx>(
         &self,
         tcx: TyCtxt<'tcx>,
@@ -492,7 +523,7 @@ impl<'sess> OnDiskCache<'sess> {
 /// A decoder that can read from the incr. comp. cache. It is similar to the one
 /// we use for crate metadata decoding in that it can rebase spans and eventually
 /// will also handle things that contain `Ty` instances.
-crate struct CacheDecoder<'a, 'tcx> {
+pub struct CacheDecoder<'a, 'tcx> {
     tcx: TyCtxt<'tcx>,
     opaque: opaque::Decoder<'a>,
     source_map: &'a SourceMap,

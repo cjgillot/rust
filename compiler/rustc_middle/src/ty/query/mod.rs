@@ -84,7 +84,7 @@ pub use rustc_query_system::query::QueryConfig;
 pub(crate) use rustc_query_system::query::QueryDescription;
 
 mod on_disk_cache;
-pub use self::on_disk_cache::OnDiskCache;
+pub use self::on_disk_cache::{CacheOnDisk, OnDiskCache};
 
 mod profiling_support;
 pub use self::profiling_support::{IntoSelfProfilingString, QueryKeyStringBuilder};
