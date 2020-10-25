@@ -6,7 +6,7 @@ use crate::traits::query::{
     CanonicalTypeOpAscribeUserTypeGoal, CanonicalTypeOpEqGoal, CanonicalTypeOpNormalizeGoal,
     CanonicalTypeOpProvePredicateGoal, CanonicalTypeOpSubtypeGoal,
 };
-use crate::ty::query::{queries, CacheOnDisk};
+use crate::ty::query::queries;
 use crate::ty::subst::{GenericArg, SubstsRef};
 use crate::ty::{self, ParamEnvAnd, Ty, TyCtxt};
 use rustc_hir::def_id::{CrateNum, DefId, LocalDefId};

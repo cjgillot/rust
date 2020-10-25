@@ -12,6 +12,7 @@ use rustc_incremental::DepGraphFuture;
 use rustc_lint::LintStore;
 use rustc_middle::arena::Arena;
 use rustc_middle::dep_graph::DepGraph;
+use rustc_middle::ty::query::OnDiskCache;
 use rustc_middle::ty::steal::Steal;
 use rustc_middle::ty::{GlobalCtxt, ResolverOutputs, TyCtxt};
 use rustc_serialize::json;
@@ -66,6 +67,7 @@ impl<T> Default for Query<T> {
 
 pub struct Queries<'tcx> {
     compiler: &'tcx Compiler,
+    on_disk_cache: OnceCell<OnDiskCache<'tcx>>,
     gcx: OnceCell<GlobalCtxt<'tcx>>,
 
     arena: WorkerLocal<Arena<'tcx>>,
@@ -87,6 +89,7 @@ impl<'tcx> Queries<'tcx> {
     pub fn new(compiler: &'tcx Compiler) -> Queries<'tcx> {
         Queries {
             compiler,
+            on_disk_cache: OnceCell::new(),
             gcx: OnceCell::new(),
             arena: WorkerLocal::new(|_| Arena::default()),
             hir_arena: WorkerLocal::new(|_| rustc_ast_lowering::Arena::default()),
@@ -263,6 +266,7 @@ impl<'tcx> Queries<'tcx> {
                 resolver_outputs.steal(),
                 outputs,
                 &crate_name,
+                &self.on_disk_cache,
                 &self.gcx,
                 &self.arena,
             ))

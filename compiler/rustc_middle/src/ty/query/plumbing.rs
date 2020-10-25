@@ -510,7 +510,7 @@ macro_rules! define_queries_struct {
             /// This provides access to the incrimental comilation on-disk cache for query results.
             /// Do not access this directly. It is only meant to be used by
             /// `DepGraph::try_mark_green()` and the query infrastructure.
-            pub(crate) on_disk_cache: OnDiskCache<'tcx>,
+            pub(crate) on_disk_cache: &'tcx dyn CacheOnDisk,
 
             providers: IndexVec<CrateNum, Providers>,
             fallback_extern_providers: Box<Providers>,
@@ -526,7 +526,7 @@ macro_rules! define_queries_struct {
             pub(crate) fn new(
                 providers: IndexVec<CrateNum, Providers>,
                 fallback_extern_providers: Providers,
-                on_disk_cache: OnDiskCache<'tcx>,
+                on_disk_cache: &'tcx dyn CacheOnDisk,
             ) -> Self {
                 Queries {
                     providers,

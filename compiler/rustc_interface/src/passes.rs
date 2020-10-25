@@ -20,7 +20,7 @@ use rustc_middle::arena::Arena;
 use rustc_middle::dep_graph::DepGraph;
 use rustc_middle::middle;
 use rustc_middle::middle::cstore::{CrateStore, MetadataLoader, MetadataLoaderDyn};
-use rustc_middle::ty::query::Providers;
+use rustc_middle::ty::query::{OnDiskCache, Providers};
 use rustc_middle::ty::steal::Steal;
 use rustc_middle::ty::{self, GlobalCtxt, ResolverOutputs, TyCtxt};
 use rustc_mir as mir;
@@ -825,6 +825,7 @@ pub fn create_global_ctxt<'tcx>(
     mut resolver_outputs: ResolverOutputs,
     outputs: OutputFilenames,
     crate_name: &str,
+    on_disk_cache: &'tcx OnceCell<OnDiskCache<'tcx>>,
     global_ctxt: &'tcx OnceCell<GlobalCtxt<'tcx>>,
     arena: &'tcx WorkerLocal<Arena<'tcx>>,
 ) -> QueryContext<'tcx> {
@@ -834,7 +835,9 @@ pub fn create_global_ctxt<'tcx>(
         Definitions::new(crate_name, sess.local_crate_disambiguator()),
     ));
 
-    let query_result_on_disk_cache = rustc_incremental::load_query_result_cache(sess);
+    let query_result_on_disk_cache = sess.time("setup_on_disk_cache", || {
+        on_disk_cache.get_or_init(|| rustc_incremental::load_query_result_cache(sess))
+    });
 
     let codegen_backend = compiler.codegen_backend();
     let mut local_providers = *DEFAULT_QUERY_PROVIDERS;
