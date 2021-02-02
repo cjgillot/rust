@@ -272,7 +272,7 @@ impl<K: DepKind> DepGraph<K> {
     ) -> (R, DepNodeIndex) {
         if let Some(ref data) = self.data {
             let task_deps = create_task(key).map(Lock::new);
-            let pending_index = data.current.reserve_node(&data.previous, &key);
+            let pending_index = data.current.reserve_node(&data.previous, key);
             let result = K::within_node(pending_index.index, || {
                 K::with_deps(task_deps.as_ref(), || task(cx, arg))
             });
@@ -298,13 +298,17 @@ impl<K: DepKind> DepGraph<K> {
 
     pub(crate) fn reserve_dep_node(&self, key: &DepNode<K>) -> PendingIndex {
         if let Some(ref data) = self.data {
-            data.current.reserve_node(&data.previous, key)
+            data.current.reserve_node(&data.previous, *key)
         } else {
             // Incremental compilation is turned off. We just execute the task
             // without tracking. We still provide a dep-node index that uniquely
             // identifies the task so that we have a cheap way of referring to
             // the query for self-profiling.
-            PendingIndex { index: self.next_virtual_depnode_index(), source: PendingIndexKind::New }
+            PendingIndex {
+                index: self.next_virtual_depnode_index(),
+                // This variant does not matter.
+                source: PendingIndexKind::Existing,
+            }
         }
     }
 
@@ -316,86 +320,30 @@ impl<K: DepKind> DepGraph<K> {
         edges: EdgesVec,
         current_fingerprint: Option<Fingerprint>,
     ) -> DepNodeIndex {
-        if let Some(ref data) = self.data {
-            let print_status = cfg!(debug_assertions) && cx.debug_dep_tasks();
+        let data = self.data.as_ref().unwrap();
+        let print_status = cfg!(debug_assertions) && cx.debug_dep_tasks();
 
-            // Intern the new `DepNode`.
-            let dep_node_index = if let Some(prev_index) = pending_index.prev_index() {
-                // Determine the color and index of the new `DepNode`.
-                let (color, dep_node_index) = if let Some(current_fingerprint) = current_fingerprint
-                {
-                    if current_fingerprint == data.previous.fingerprint_by_index(prev_index) {
-                        if print_status {
-                            eprintln!("[task::green] {:?}", key);
-                        }
+        let (color, dep_node_index) = data.current.intern_node(
+            &data.previous,
+            key,
+            pending_index,
+            edges,
+            current_fingerprint,
+            print_status,
+        );
 
-                        // This is a light green node: it existed in the previous compilation,
-                        // its query was re-executed, and it has the same result as before.
-                        let dep_node_index =
-                            data.current.intern_light_green_node(pending_index, edges);
+        if let Some((prev_index, color)) = color {
+            debug!(
+                "marking prev={:?} from {:?} to {:?}",
+                prev_index,
+                data.colors.get(prev_index),
+                color
+            );
 
-                        (DepNodeColor::Green(dep_node_index), dep_node_index)
-                    } else {
-                        if print_status {
-                            eprintln!("[task::red] {:?}", key);
-                        }
-
-                        // This is a red node: it existed in the previous compilation, its query
-                        // was re-executed, but it has a different result from before.
-                        let dep_node_index =
-                            data.current.intern_red_node(pending_index, edges, current_fingerprint);
-
-                        (DepNodeColor::Red, dep_node_index)
-                    }
-                } else {
-                    if print_status {
-                        eprintln!("[task::unknown] {:?}", key);
-                    }
-
-                    // This is a red node, effectively: it existed in the previous compilation
-                    // session, its query was re-executed, but it doesn't compute a result hash
-                    // (i.e. it represents a `no_hash` query), so we have no way of determining
-                    // whether or not the result was the same as before.
-                    let dep_node_index =
-                        data.current.intern_red_node(pending_index, edges, Fingerprint::ZERO);
-
-                    (DepNodeColor::Red, dep_node_index)
-                };
-
-                debug!(
-                    "marking prev={:?} from {:?} to {:?}",
-                    prev_index,
-                    data.colors.get(prev_index),
-                    color
-                );
-                //debug_assert!(
-                //    data.colors.get(prev_index).is_none(),
-                //    "DepGraph::with_task() - Duplicate DepNodeColor \
-                //            insertion for {:?}",
-                //    key
-                //);
-
-                data.colors.insert(prev_index, color);
-                dep_node_index
-            } else {
-                if print_status {
-                    eprintln!("[task::new] {:?}", key);
-                }
-
-                // This is a new node: it didn't exist in the previous compilation session.
-                data.current.intern_new_node(
-                    pending_index,
-                    &data.previous,
-                    key,
-                    edges,
-                    current_fingerprint.unwrap_or(Fingerprint::ZERO),
-                )
-            };
-
-            dep_node_index
-        } else {
-            pending_index.index
+            data.colors.insert(prev_index, color);
         }
+
+        dep_node_index
     }
 
     /// Executes something within an "anonymous" task, that is, a task the
@@ -1487,27 +1435,15 @@ pub(super) struct CurrentDepGraph<K> {
 
 #[derive(Debug)]
 pub(crate) struct PendingIndex {
-    index: DepNodeIndex,
+    pub(crate) index: DepNodeIndex,
     source: PendingIndexKind,
 }
 
 #[derive(Debug)]
 enum PendingIndexKind {
-    ReUse(SerializedDepNodeIndex),
-    ReFresh(SerializedDepNodeIndex),
+    ReUse { prev_index: SerializedDepNodeIndex, exists: bool },
     Existing,
-    New,
-}
-
-impl PendingIndex {
-    fn prev_index(&self) -> Option<SerializedDepNodeIndex> {
-        match self.source {
-            PendingIndexKind::ReUse(prev_index) | PendingIndexKind::ReFresh(prev_index) => {
-                Some(prev_index)
-            }
-            PendingIndexKind::Existing | PendingIndexKind::New => None,
-        }
-    }
+    New(NewDepNodeIndex),
 }
 
 impl<K: DepKind> CurrentDepGraph<K> {
@@ -1597,39 +1533,34 @@ impl<K: DepKind> CurrentDepGraph<K> {
         }
     }
 
-    fn reserve_node(
-        &self,
-        prev_graph: &PreviousDepGraph<K>,
-        dep_node: &DepNode<K>,
-    ) -> PendingIndex {
-        let mk_index = |this: &Self| {
-            // Only reserve the slot, to fill in later.
-            let data = &mut *this.data.lock();
-            data.hybrid_indices.push(CompressedHybridIndex::PLACEHOLDER)
-        };
-
-        let ret = if let Some(prev_index) = prev_graph.node_to_index_opt(dep_node) {
+    fn reserve_node(&self, prev_graph: &PreviousDepGraph<K>, dep_node: DepNode<K>) -> PendingIndex {
+        let ret = if let Some(prev_index) = prev_graph.node_to_index_opt(&dep_node) {
             self.debug_assert_not_in_new_nodes(prev_graph, prev_index);
 
             let index_opt = &mut self.prev_index_to_index.lock()[prev_index];
             if let Some(index) = *index_opt {
-                PendingIndex { index, source: PendingIndexKind::ReUse(prev_index) }
+                PendingIndex { index, source: PendingIndexKind::ReUse { prev_index, exists: true } }
             } else {
-                let index = mk_index(self);
+                let data = &mut *self.data.lock();
+                let index = data.hybrid_indices.push(CompressedHybridIndex::PLACEHOLDER);
                 *index_opt = Some(index);
-                PendingIndex { index, source: PendingIndexKind::ReFresh(prev_index) }
+                PendingIndex {
+                    index,
+                    source: PendingIndexKind::ReUse { prev_index, exists: false },
+                }
             }
         } else {
-            match self.new_node_to_index.get_shard_by_value(dep_node).lock().entry(dep_node.clone())
-            {
+            match self.new_node_to_index.get_shard_by_value(&dep_node).lock().entry(dep_node) {
                 Entry::Occupied(occupied) => {
                     PendingIndex { index: *occupied.get(), source: PendingIndexKind::Existing }
                 }
                 Entry::Vacant(vacant) => {
-                    let index = mk_index(self);
+                    let data = &mut *self.data.lock();
+                    let index = data.hybrid_indices.push(CompressedHybridIndex::PLACEHOLDER);
+                    let new_index = data.new.nodes.push(dep_node);
                     // Register the node to avoid overwriting it.
                     vacant.insert(index);
-                    PendingIndex { index, source: PendingIndexKind::New }
+                    PendingIndex { index, source: PendingIndexKind::New(new_index) }
                 }
             }
         };
@@ -1638,44 +1569,119 @@ impl<K: DepKind> CurrentDepGraph<K> {
         ret
     }
 
+    fn intern_node(
+        &self,
+        prev_graph: &PreviousDepGraph<K>,
+        key: DepNode<K>,
+        pending_index: PendingIndex,
+        edges: EdgesVec,
+        current_fingerprint: Option<Fingerprint>,
+        print_status: bool,
+    ) -> (Option<(SerializedDepNodeIndex, DepNodeColor)>, DepNodeIndex) {
+        let print_status = cfg!(debug_assertions) && print_status;
+
+        // Intern the new `DepNode`.
+        let color = match pending_index.source {
+            PendingIndexKind::Existing => {
+                if print_status {
+                    eprintln!("[task::new existing] {:?}", key);
+                }
+
+                None
+            }
+            PendingIndexKind::New(new_index) => {
+                if print_status {
+                    eprintln!("[task::new] {:?}", key);
+                }
+
+                // This is a new node: it didn't exist in the previous compilation session.
+                self.intern_new_node(
+                    pending_index.index,
+                    new_index,
+                    key,
+                    edges,
+                    current_fingerprint.unwrap_or(Fingerprint::ZERO),
+                );
+
+                None
+            }
+            PendingIndexKind::ReUse { prev_index, exists } => {
+                // Determine the color and index of the new `DepNode`.
+                let color = if let Some(current_fingerprint) = current_fingerprint {
+                    if current_fingerprint == prev_graph.fingerprint_by_index(prev_index) {
+                        if print_status {
+                            eprintln!("[task::green] {:?}", key);
+                        }
+
+                        // This is a light green node: it existed in the previous compilation,
+                        // its query was re-executed, and it has the same result as before.
+                        if !exists {
+                            self.intern_light_green_node(pending_index.index, prev_index, edges);
+                        }
+
+                        DepNodeColor::Green(pending_index.index)
+                    } else {
+                        if print_status {
+                            eprintln!("[task::red] {:?}", key);
+                        }
+
+                        // This is a red node: it existed in the previous compilation, its query
+                        // was re-executed, but it has a different result from before.
+                        if !exists {
+                            self.intern_red_node(
+                                pending_index.index,
+                                prev_index,
+                                edges,
+                                current_fingerprint,
+                            );
+                        }
+
+                        DepNodeColor::Red
+                    }
+                } else {
+                    if print_status {
+                        eprintln!("[task::unknown] {:?}", key);
+                    }
+
+                    // This is a red node, effectively: it existed in the previous compilation
+                    // session, its query was re-executed, but it doesn't compute a result hash
+                    // (i.e. it represents a `no_hash` query), so we have no way of determining
+                    // whether or not the result was the same as before.
+                    if !exists {
+                        self.intern_red_node(
+                            pending_index.index,
+                            prev_index,
+                            edges,
+                            Fingerprint::ZERO,
+                        );
+                    }
+
+                    DepNodeColor::Red
+                };
+
+                Some((prev_index, color))
+            }
+        };
+
+        (color, pending_index.index)
+    }
+
     fn intern_new_node(
         &self,
-        pending: PendingIndex,
-        prev_graph: &PreviousDepGraph<K>,
+        index: DepNodeIndex,
+        new_index: NewDepNodeIndex,
         dep_node: DepNode<K>,
         edges: EdgesVec,
         fingerprint: Fingerprint,
-    ) -> DepNodeIndex {
-        debug_assert!(
-            prev_graph.node_to_index_opt(&dep_node).is_none(),
-            "node in previous graph should be interned using one \
-            of `intern_red_node`, `intern_light_green_node`, etc."
+    ) {
+        let data = &mut *self.data.lock();
+        add_edges(&mut data.unshared_edges, &mut data.new.edges, edges);
+        data.new.fingerprints.push(fingerprint);
+        data.hybrid_indices[index] = new_index.into();
+        debug_assert_eq!(
+            self.new_node_to_index.get_shard_by_value(&dep_node).lock().get(&dep_node).copied(),
+            Some(index)
         );
-
-        match pending.source {
-            PendingIndexKind::ReUse(_) | PendingIndexKind::ReFresh(_) => {
-                debug_assert!(false);
-                unreachable!()
-            }
-            PendingIndexKind::Existing => {}
-            PendingIndexKind::New => {
-                let data = &mut *self.data.lock();
-                let new_index = data.new.nodes.push(dep_node);
-                add_edges(&mut data.unshared_edges, &mut data.new.edges, edges);
-                data.new.fingerprints.push(fingerprint);
-                data.hybrid_indices[pending.index] = new_index.into();
-                debug_assert_eq!(
-                    self.new_node_to_index
-                        .get_shard_by_value(&dep_node)
-                        .lock()
-                        .get(&dep_node)
-                        .copied(),
-                    Some(pending.index)
-                );
-            }
-        }
-
-        pending.index
     }
 
     fn intern_anon_node(
@@ -1707,46 +1713,30 @@ impl<K: DepKind> CurrentDepGraph<K> {
 
     fn intern_red_node(
         &self,
-        pending: PendingIndex,
+        index: DepNodeIndex,
+        prev_index: SerializedDepNodeIndex,
         edges: EdgesVec,
         fingerprint: Fingerprint,
-    ) -> DepNodeIndex {
-        match pending.source {
-            PendingIndexKind::Existing | PendingIndexKind::New => {
-                debug_assert!(false);
-                unreachable!()
-            }
-            PendingIndexKind::ReUse(_) => {}
-            PendingIndexKind::ReFresh(prev_index) => {
-                let data = &mut *self.data.lock();
-                let red_index = data.red.node_indices.push(prev_index);
-                add_edges(&mut data.unshared_edges, &mut data.red.edges, edges);
-                data.red.fingerprints.push(fingerprint);
-                data.hybrid_indices[pending.index] = red_index.into();
-                debug_assert_eq!(self.prev_index_to_index.lock()[prev_index], Some(pending.index));
-            }
-        }
-
-        pending.index
+    ) {
+        debug_assert_eq!(self.prev_index_to_index.lock()[prev_index], Some(index));
+        let data = &mut *self.data.lock();
+        let red_index = data.red.node_indices.push(prev_index);
+        add_edges(&mut data.unshared_edges, &mut data.red.edges, edges);
+        data.red.fingerprints.push(fingerprint);
+        data.hybrid_indices[index] = red_index.into();
     }
 
-    fn intern_light_green_node(&self, pending: PendingIndex, edges: EdgesVec) -> DepNodeIndex {
-        match pending.source {
-            PendingIndexKind::Existing | PendingIndexKind::New => {
-                debug_assert!(false);
-                unreachable!()
-            }
-            PendingIndexKind::ReUse(_) => {}
-            PendingIndexKind::ReFresh(prev_index) => {
-                let data = &mut *self.data.lock();
-                let light_green_index = data.light_green.node_indices.push(prev_index);
-                add_edges(&mut data.unshared_edges, &mut data.light_green.edges, edges);
-                data.hybrid_indices[pending.index] = light_green_index.into();
-                debug_assert_eq!(self.prev_index_to_index.lock()[prev_index], Some(pending.index));
-            }
-        }
-
-        pending.index
+    fn intern_light_green_node(
+        &self,
+        index: DepNodeIndex,
+        prev_index: SerializedDepNodeIndex,
+        edges: EdgesVec,
+    ) {
+        debug_assert_eq!(self.prev_index_to_index.lock()[prev_index], Some(index));
+        let data = &mut *self.data.lock();
+        let light_green_index = data.light_green.node_indices.push(prev_index);
+        add_edges(&mut data.unshared_edges, &mut data.light_green.edges, edges);
+        data.hybrid_indices[index] = light_green_index.into();
     }
 
     fn intern_dark_green_node(
