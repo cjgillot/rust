@@ -438,7 +438,10 @@ macro_rules! define_queries {
             /// allows to feed the query cache.
             #[inline(always)]
             pub fn feed(self) -> TyCtxtFeed<$tcx> {
-                TyCtxtFeed { tcx: self }
+                use rustc_query_system::dep_graph::DepKind;
+                let dep_node_index = dep_graph::DepKind::current_node()
+                        .expect("feed must be called from a query.");
+                TyCtxtFeed { tcx: self, dep_node_index }
             }
 
             $($(#[$attr])*
@@ -490,9 +493,9 @@ macro_rules! define_queries {
             })*
         }
 
-        #[derive(Copy, Clone)]
         pub struct TyCtxtFeed<'tcx> {
             pub tcx: TyCtxt<'tcx>,
+            dep_node_index: dep_graph::DepNodeIndex,
         }
 
         impl Deref for TyCtxtFeed<'tcx> {
@@ -506,10 +509,12 @@ macro_rules! define_queries {
         impl TyCtxtFeed<$tcx> {
             $($(#[$attr])*
             #[inline(always)]
-            pub fn $name(self, key: query_helper_param_ty!($($K)*), value: query_values::$name<$tcx>)
-                -> <queries::$name<$tcx> as QueryConfig>::Stored
-            {
-                feed_query::<queries::$name<'_>, _>(self.tcx, key.into_query_param(), value)
+            pub fn $name(
+                self,
+                key: query_helper_param_ty!($($K)*),
+                value: query_values::$name<$tcx>,
+            ) {
+                feed_query::<queries::$name<'_>, _>(self.tcx, self.dep_node_index, key.into_query_param(), value)
             })*
         }
 

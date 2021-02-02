@@ -728,58 +728,6 @@ fn force_query_impl<CTX, C>(
     );
 }
 
-#[inline(never)]
-fn feed_query_impl<CTX, C>(
-    tcx: CTX,
-    state: &QueryState<CTX::DepKind, CTX::Query, C>,
-    key: C::Key,
-    value: C::Value,
-    query: &QueryVtable<CTX, C::Key, C::Value>,
-) -> C::Stored
-where
-    C: QueryCache,
-    C::Key: crate::dep_graph::DepNodeParams<CTX>,
-    CTX: QueryContext,
-{
-    try_get_cached(
-        tcx,
-        state,
-        key,
-        |cached, _| {
-            // Cache hit, do nothing
-            cached.clone()
-        },
-        |key, mut lookup| {
-            let dep_node_index = if !tcx.dep_graph().is_fully_enabled() {
-                // Create a dummy DepNodeIndex
-                let ((), dep_node_index) = tcx.dep_graph().with_anon_task(DepKind::NULL, || ());
-                dep_node_index
-            } else {
-                let dep_node = query.to_dep_node(tcx, &key);
-                let pending_index = tcx.dep_graph().reserve_dep_node(&dep_node);
-                let edges = smallvec![
-                    <CTX::DepKind as DepKind>::current_node()
-                        .expect("feed_query must be called from another query.")
-                ];
-                let current_fingerprint = {
-                    let mut hcx = tcx.create_stable_hashing_context();
-                    query.hash_result(&mut hcx, &value)
-                };
-                tcx.dep_graph().create_dep_node(
-                    dep_node,
-                    tcx,
-                    pending_index,
-                    edges,
-                    current_fingerprint,
-                )
-            };
-
-            debug!("feed(key={:?}) @ dni={:?} => value={:?}", key, dep_node_index, value);
-            state.cache.complete(&mut lookup.lock.cache, key, value, dep_node_index)
-        },
-    )
-}
-
 #[inline(always)]
 pub fn get_query<Q, CTX>(tcx: CTX, span: Span, key: Q::Key) -> Q::Stored
 where
@@ -823,7 +771,7 @@ where
 }
 
 #[inline(always)]
-pub fn feed_query<Q, CTX>(tcx: CTX, key: Q::Key, value: Q::Value) -> Q::Stored
+pub fn feed_query<Q, CTX>(tcx: CTX, parent_index: DepNodeIndex, key: Q::Key, value: Q::Value)
 where
     Q: QueryDescription<CTX>,
     Q::Key: crate::dep_graph::DepNodeParams<CTX>,
@@ -835,5 +783,35 @@ where
     assert!(!Q::ANON);
 
     let state = Q::query_state(tcx);
-    feed_query_impl(tcx, state, key, value, &Q::VTABLE)
+    try_get_cached(
+        tcx,
+        state,
+        key,
+        |_, _| {},
+        |key, mut lookup| {
+            let dep_node_index = if !tcx.dep_graph().is_fully_enabled() {
+                // Create a dummy DepNodeIndex
+                let ((), dep_node_index) = tcx.dep_graph().with_anon_task(DepKind::NULL, || ());
+                dep_node_index
+            } else {
+                let dep_node = Q::to_dep_node(tcx, &key);
+                let edges = smallvec![parent_index];
+                let current_fingerprint = {
+                    let mut hcx = tcx.create_stable_hashing_context();
+                    Q::hash_result(&mut hcx, &value)
+                };
+                let pending_index = tcx.dep_graph().reserve_dep_node(&dep_node);
+                tcx.dep_graph().create_dep_node(
+                    dep_node,
+                    tcx,
+                    pending_index,
+                    edges,
+                    current_fingerprint,
+                )
+            };
+
+            debug!("feed(key={:?}) @ dni={:?} => value={:?}", key, dep_node_index, value);
+            state.cache.complete(&mut lookup.lock.cache, key, value, dep_node_index);
+        },
+    )
 }
