@@ -29,7 +29,7 @@ use crate::symbol::{kw, sym, Symbol};
 use crate::SESSION_GLOBALS;
 use crate::{BytePos, CachingSourceMapView, ExpnIdCache, SourceFile, Span, DUMMY_SP};
 
-use crate::def_id::{CrateNum, DefId, DefPathHash, CRATE_DEF_INDEX, LOCAL_CRATE};
+use crate::def_id::{CrateNum, DefId, DefPathHash, LocalDefId, CRATE_DEF_INDEX, LOCAL_CRATE};
 use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
@@ -1358,6 +1358,10 @@ fn update_disambiguator(expn_id: ExpnId) {
 
         fn hash_spans(&self) -> bool {
             true
+        }
+        #[inline]
+        fn def_span(&self, _: LocalDefId) -> Span {
+            DUMMY_SP
         }
         fn span_data_to_lines_and_cols(
             &mut self,
