@@ -164,7 +164,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
 
     pub(super) fn lower_mod(&mut self, items: &[P<Item>], inner: Span) -> hir::Mod<'hir> {
         hir::Mod {
-            inner,
+            inner: self.lower_span(inner),
             item_ids: self.arena.alloc_from_iter(items.iter().flat_map(|x| self.lower_item_id(x))),
         }
     }
@@ -228,7 +228,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     ident,
                     vis,
                     def_id: hir_id.expect_owner(),
-                    span: i.span,
+                    span: self.lower_span(i.span),
                     ast: MacroDef { body, macro_rules },
                 });
             } else {
@@ -243,7 +243,13 @@ impl<'hir> LoweringContext<'_, 'hir> {
         let hir_id = self.lower_node_id(i.id);
         let attrs = self.lower_attrs(hir_id, &i.attrs);
         let kind = self.lower_item_kind(i.span, i.id, hir_id, &mut ident, attrs, &mut vis, &i.kind);
-        Some(hir::Item { def_id: hir_id.expect_owner(), ident, kind, vis, span: i.span })
+        Some(hir::Item {
+            def_id: hir_id.expect_owner(),
+            ident,
+            kind,
+            vis,
+            span: self.lower_span(i.span),
+        })
     }
 
     fn lower_item_kind(
@@ -307,7 +313,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     let sig = hir::FnSig {
                         decl,
                         header: this.lower_fn_header(header, fn_sig_span, id),
-                        span: fn_sig_span,
+                        span: this.lower_span(fn_sig_span),
                     };
                     hir::ItemKind::Fn(sig, generics, body_id)
                 })
@@ -437,6 +443,10 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 // to not cause an assertion failure inside the `lower_defaultness` function.
                 let has_val = true;
                 let (defaultness, defaultness_span) = self.lower_defaultness(defaultness, has_val);
+                let polarity = match polarity {
+                    ImplPolarity::Positive => ImplPolarity::Positive,
+                    ImplPolarity::Negative(s) => ImplPolarity::Negative(self.lower_span(s)),
+                };
                 hir::ItemKind::Impl(hir::Impl {
                     unsafety: self.lower_unsafety(unsafety),
                     polarity,
@@ -563,7 +573,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                             ident,
                             kind,
                             vis,
-                            span,
+                            span: this.lower_span(span),
                         });
                     });
                 }
@@ -637,7 +647,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                             ident,
                             kind,
                             vis,
-                            span: use_tree.span,
+                            span: this.lower_span(use_tree.span),
                         });
                     });
                 }
@@ -656,7 +666,10 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     hir::VisibilityKind::Public
                     | hir::VisibilityKind::Crate(_)
                     | hir::VisibilityKind::Inherited => {
-                        *vis = respan(prefix.span.shrink_to_lo(), hir::VisibilityKind::Inherited);
+                        *vis = respan(
+                            self.lower_span(prefix.span.shrink_to_lo()),
+                            hir::VisibilityKind::Inherited,
+                        );
                     }
                     hir::VisibilityKind::Restricted { .. } => {
                         // Do nothing here, as described in the comment on the match.
@@ -684,7 +697,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 args: None,
                 infer_args: seg.infer_args,
             }));
-        self.arena.alloc(hir::Path { span: path.span, res: path.res, segments })
+        self.arena.alloc(hir::Path { span: self.lower_span(path.span), res: path.res, segments })
     }
 
     fn rebuild_vis(&mut self, vis: &hir::Visibility<'hir>) -> hir::Visibility<'hir> {
@@ -699,7 +712,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 }
             }
         };
-        respan(vis.span, vis_kind)
+        respan(self.lower_span(vis.span), vis_kind)
     }
 
     fn lower_foreign_item(&mut self, i: &ForeignItem) -> hir::ForeignItem<'hir> {
@@ -735,7 +748,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 ForeignItemKind::MacCall(_) => panic!("macro shouldn't exist here"),
             },
             vis: self.lower_visibility(&i.vis, None),
-            span: i.span,
+            span: self.lower_span(i.span),
         }
     }
 
@@ -743,7 +756,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         hir::ForeignItemRef {
             id: hir::ForeignItemId { def_id: self.lower_node_id(i.id).expect_owner() },
             ident: i.ident,
-            span: i.span,
+            span: self.lower_span(i.span),
             vis: self.lower_visibility(&i.vis, Some(i.id)),
         }
     }
@@ -756,7 +769,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
             data: self.lower_variant_data(id, &v.data),
             disr_expr: v.disr_expr.as_ref().map(|e| self.lower_anon_const(e)),
             ident: v.ident,
-            span: v.span,
+            span: self.lower_span(v.span),
         }
     }
 
@@ -808,12 +821,12 @@ impl<'hir> LoweringContext<'_, 'hir> {
         let hir_id = self.lower_node_id(f.id);
         self.lower_attrs(hir_id, &f.attrs);
         hir::FieldDef {
-            span: f.span,
+            span: self.lower_span(f.span),
             hir_id,
             ident: match f.ident {
                 Some(ident) => ident,
                 // FIXME(jseyfried): positional field hygiene.
-                None => Ident::new(sym::integer(index), f.span),
+                None => Ident::new(sym::integer(index), self.lower_span(f.span)),
             },
             vis: self.lower_visibility(&f.vis, None),
             ty,
@@ -864,7 +877,13 @@ impl<'hir> LoweringContext<'_, 'hir> {
         };
 
         self.lower_attrs(hir_id, &i.attrs);
-        hir::TraitItem { def_id: trait_item_def_id, ident: i.ident, generics, kind, span: i.span }
+        hir::TraitItem {
+            def_id: trait_item_def_id,
+            ident: i.ident,
+            generics,
+            kind,
+            span: self.lower_span(i.span),
+        }
     }
 
     fn lower_trait_item_ref(&mut self, i: &AssocItem) -> hir::TraitItemRef {
@@ -880,7 +899,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         };
         let id = hir::TraitItemId { def_id: self.lower_node_id(i.id).expect_owner() };
         let defaultness = hir::Defaultness::Default { has_value: has_default };
-        hir::TraitItemRef { id, ident: i.ident, span: i.span, defaultness, kind }
+        hir::TraitItemRef { id, ident: i.ident, span: self.lower_span(i.span), defaultness, kind }
     }
 
     /// Construct `ExprKind::Err` for the given `span`.
@@ -951,7 +970,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
             vis: self.lower_visibility(&i.vis, None),
             defaultness,
             kind,
-            span: i.span,
+            span: self.lower_span(i.span),
         }
     }
 
@@ -962,7 +981,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         hir::ImplItemRef {
             id: hir::ImplItemId { def_id: self.lower_node_id(i.id).expect_owner() },
             ident: i.ident,
-            span: i.span,
+            span: self.lower_span(i.span),
             vis: self.lower_visibility(&i.vis, Some(i.id)),
             defaultness,
             kind: match &i.kind {
@@ -1005,7 +1024,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
             }
             VisibilityKind::Inherited => hir::VisibilityKind::Inherited,
         };
-        respan(v.span, node)
+        respan(self.lower_span(v.span), node)
     }
 
     fn lower_defaultness(
@@ -1052,8 +1071,8 @@ impl<'hir> LoweringContext<'_, 'hir> {
         hir::Param {
             hir_id,
             pat: self.lower_pat(&param.pat),
-            ty_span: param.ty.span,
-            span: param.span,
+            ty_span: self.lower_span(param.ty.span),
+            span: self.lower_span(param.span),
         }
     }
 
@@ -1188,7 +1207,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     hir_id: parameter.hir_id,
                     pat: new_parameter_pat,
                     ty_span: parameter.ty_span,
-                    span: parameter.span,
+                    span: this.lower_span(parameter.span),
                 };
 
                 if is_simple_parameter {
@@ -1321,7 +1340,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 )
             },
         );
-        (generics, hir::FnSig { header, decl, span: sig.span })
+        (generics, hir::FnSig { header, decl, span: self.lower_span(sig.span) })
     }
 
     fn lower_fn_header(&mut self, h: FnHeader, span: Span, id: NodeId) -> hir::FnHeader {
@@ -1437,7 +1456,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         GenericsCtor {
             params: self.lower_generic_params_mut(&generics.params, &add_bounds, itctx).collect(),
             where_clause: self.lower_where_clause(&generics.where_clause),
-            span: generics.span,
+            span: self.lower_span(generics.span),
         }
     }
 
@@ -1456,7 +1475,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 predicates: this.arena.alloc_from_iter(
                     wc.predicates.iter().map(|predicate| this.lower_where_predicate(predicate)),
                 ),
-                span: wc.span,
+                span: this.lower_span(wc.span),
             }
         })
     }
@@ -1487,7 +1506,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                                 ),
                             }
                         })),
-                        span,
+                        span: this.lower_span(span),
                     })
                 })
             }
@@ -1496,7 +1515,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 ref bounds,
                 span,
             }) => hir::WherePredicate::RegionPredicate(hir::WhereRegionPredicate {
-                span,
+                span: self.lower_span(span),
                 lifetime: self.lower_lifetime(lifetime),
                 bounds: self.lower_param_bounds(bounds, ImplTraitContext::disallowed()),
             }),
@@ -1505,7 +1524,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     hir_id: self.lower_node_id(id),
                     lhs_ty: self.lower_ty(lhs_ty, ImplTraitContext::disallowed()),
                     rhs_ty: self.lower_ty(rhs_ty, ImplTraitContext::disallowed()),
-                    span,
+                    span: self.lower_span(span),
                 })
             }
         }

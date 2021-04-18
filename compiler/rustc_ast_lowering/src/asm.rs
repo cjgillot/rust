@@ -98,7 +98,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                         hir::InlineAsmOperand::Sym { expr: self.lower_expr_mut(expr) }
                     }
                 };
-                (op, *op_sp)
+                (op, self.lower_span(*op_sp))
             })
             .collect();
 
@@ -322,7 +322,8 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
 
         let operands = self.arena.alloc_from_iter(operands);
         let template = self.arena.alloc_from_iter(asm.template.iter().cloned());
-        let line_spans = self.arena.alloc_slice(&asm.line_spans[..]);
+        let line_spans =
+            self.arena.alloc_from_iter(asm.line_spans.iter().map(|s| self.lower_span(*s)));
         let hir_asm = hir::InlineAsm { template, operands, options: asm.options, line_spans };
         self.arena.alloc(hir_asm)
     }
