@@ -91,7 +91,7 @@ impl CognitiveComplexity {
                     });
 
                     if let Some((low, high)) = pos {
-                        Span::new(low, high, header_span.ctxt())
+                        Span::new(low, high, header_span.ctxt(), header_span.parent())
                     } else {
                         return;
                     }

@@ -704,11 +704,7 @@ fn compare_number_of_method_arguments<'tcx>(
                         Some(if pos == 0 {
                             arg.span
                         } else {
-                            Span::new(
-                                trait_m_sig.decl.inputs[0].span.lo(),
-                                arg.span.hi(),
-                                arg.span.ctxt(),
-                            )
+                            arg.span.with_lo(trait_m_sig.decl.inputs[0].span.lo())
                         })
                     } else {
                         trait_item_span
@@ -727,11 +723,7 @@ fn compare_number_of_method_arguments<'tcx>(
                     if pos == 0 {
                         arg.span
                     } else {
-                        Span::new(
-                            impl_m_sig.decl.inputs[0].span.lo(),
-                            arg.span.hi(),
-                            arg.span.ctxt(),
-                        )
+                        arg.span.with_lo(impl_m_sig.decl.inputs[0].span.lo())
                     }
                 } else {
                     impl_m_span
