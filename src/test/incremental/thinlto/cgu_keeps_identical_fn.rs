@@ -12,7 +12,7 @@
 
 #![rustc_expected_cgu_reuse(module="cgu_keeps_identical_fn-foo",
                             cfg="cfail2",
-                            kind="no")]
+                            kind="post-lto")]
 #![rustc_expected_cgu_reuse(module="cgu_keeps_identical_fn-foo",
                             cfg="cfail3",
                             kind="post-lto")]

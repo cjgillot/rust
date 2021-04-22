@@ -6,14 +6,20 @@
 // compile-flags: -C overflow-checks=on -Z query-dep-graph
 
 #![feature(rustc_attrs)]
+#![feature(bench_black_box)]
+#![rustc_partition_codegened(module = "spans_significant_w_panic", cfg = "rpass2")]
 
 #[cfg(rpass1)]
 pub fn main() {
-    let _ = 0u8 + 1;
+    if std::hint::black_box(false) {
+        panic!()
+    }
 }
 
 #[cfg(rpass2)]
-#[rustc_clean(except="hir_owner,hir_owner_nodes,optimized_mir", cfg="rpass2")]
+#[rustc_clean(except="hir_owner_nodes,optimized_mir", cfg="rpass2")]
 pub fn main() {
-    let _ = 0u8 + 1;
+    if std::hint::black_box(false) {
+        panic!()
+    }
 }
