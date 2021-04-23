@@ -7,7 +7,7 @@
 
 // build-pass (FIXME(62277): could be check-pass?)
 // revisions: cfail1 cfail2 cfail3
-// compile-flags: -Z query-dep-graph -Zincremental-ignore-spans
+// compile-flags: -Z query-dep-graph
 
 
 #![allow(warnings)]
@@ -20,6 +20,7 @@ pub fn add_arm(x: u32) -> u32 {
     match x {
         0 => 0,
         1 => 1,
+        /*---*/
         _ => 100,
     }
 }
@@ -68,7 +69,7 @@ pub fn change_order_of_arms(x: u32) -> u32 {
 pub fn add_guard_clause(x: u32, y: bool) -> u32 {
     match x {
         0 => 0,
-        1 => 1,
+        1      => 1,
         _ => 100,
     }
 }
@@ -92,7 +93,7 @@ pub fn add_guard_clause(x: u32, y: bool) -> u32 {
 pub fn change_guard_clause(x: u32, y: bool) -> u32 {
     match x {
         0 => 0,
-        1 if y => 1,
+        1 if  y => 1,
         _ => 100,
     }
 }
@@ -117,7 +118,7 @@ pub fn add_at_binding(x: u32) -> u32 {
     match x {
         0 => 0,
         1 => 1,
-        _ => x,
+            _ => x,
     }
 }
 
@@ -164,7 +165,7 @@ pub fn change_name_of_at_binding(x: u32) -> u32 {
 pub fn change_simple_name_to_pattern(x: u32) -> u32 {
     match (x, x & 1) {
         (0, 0) => 0,
-        a => 1,
+         a     => 1,
     }
 }
 
@@ -209,7 +210,7 @@ pub fn change_name_in_pattern(x: u32) -> u32 {
 #[cfg(cfail1)]
 pub fn change_mutability_of_binding_in_pattern(x: u32) -> u32 {
     match (x, x & 1) {
-        (a, 0) => 0,
+        (    a, 0) => 0,
         _ => 1,
     }
 }
@@ -231,7 +232,7 @@ pub fn change_mutability_of_binding_in_pattern(x: u32) -> u32 {
 #[cfg(cfail1)]
 pub fn add_ref_to_binding_in_pattern(x: u32) -> u32 {
     match (x, x & 1) {
-        (a, 0) => 0,
+        (    a, 0) => 0,
         _ => 1,
     }
 }
@@ -253,7 +254,7 @@ pub fn add_ref_to_binding_in_pattern(x: u32) -> u32 {
 #[cfg(cfail1)]
 pub fn add_amp_to_binding_in_pattern(x: u32) -> u32 {
     match (&x, x & 1) {
-        (a, 0) => 0,
+        ( a, 0) => 0,
         _ => 1,
     }
 }
@@ -299,7 +300,7 @@ pub fn change_rhs_of_arm(x: u32) -> u32 {
 #[cfg(cfail1)]
 pub fn add_alternative_to_arm(x: u32) -> u32 {
     match x {
-        0 => 0,
+        0     => 0,
         1 => 1,
         _ => 2,
     }

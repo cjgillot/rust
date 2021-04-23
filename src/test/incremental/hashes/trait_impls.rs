@@ -7,7 +7,7 @@
 
 // build-pass (FIXME(62277): could be check-pass?)
 // revisions: cfail1 cfail2 cfail3
-// compile-flags: -Z query-dep-graph -Zincremental-ignore-spans
+// compile-flags: -Z query-dep-graph
 
 
 #![allow(warnings)]
@@ -55,7 +55,11 @@ pub trait ChangeMethodBodyTrait {
 
 #[cfg(cfail1)]
 impl ChangeMethodBodyTrait for Foo {
-    fn method_name() { }
+    // ------------------------------------------------------------------------
+    // -------------------------
+    fn method_name() {
+        //
+    }
 }
 
 #[cfg(not(cfail1))]
@@ -79,8 +83,12 @@ pub trait ChangeMethodBodyTraitInlined {
 
 #[cfg(cfail1)]
 impl ChangeMethodBodyTraitInlined for Foo {
+    // ------------------------------------------------------------------------
+    // -------------------------
     #[inline]
-    fn method_name() { }
+    fn method_name() {
+        // -----
+    }
 }
 
 #[cfg(not(cfail1))]
@@ -164,7 +172,9 @@ pub trait ChangeMethodSelfmutnessTrait {
 
 #[cfg(cfail1)]
 impl ChangeMethodSelfmutnessTrait for Foo {
-    fn method_name(&self) { }
+    // -----------------------------------------------------------------------------------------
+    // -------------------------
+    fn method_name(&    self) {}
 }
 
 #[cfg(not(cfail1))]
@@ -293,14 +303,16 @@ pub trait AddDefaultTrait {
 
 #[cfg(cfail1)]
 impl AddDefaultTrait for Foo {
-    fn method_name() { }
+    // -------------------------------------------------------------------------------------------
+    // -------------------------
+            fn method_name() { }
 }
 
 #[cfg(not(cfail1))]
 #[rustc_clean(except="hir_owner", cfg="cfail2")]
 #[rustc_clean(cfg="cfail3")]
 impl AddDefaultTrait for Foo {
-    #[rustc_clean(except="hir_owner,hir_owner_nodes,associated_item", cfg="cfail2")]
+    #[rustc_clean(except="hir_owner,hir_owner_nodes,associated_item,optimized_mir", cfg="cfail2")]
     #[rustc_clean(cfg="cfail3")]
     default fn method_name() { }
 }
@@ -314,7 +326,9 @@ pub trait AddArgumentTrait {
 
 #[cfg(cfail1)]
 impl AddArgumentTrait for Foo {
-    fn method_name(&self) { }
+    // -----------------------------------------------------------------------------------------
+    // -------------------------
+    fn method_name(&self         ) { }
 }
 
 #[cfg(not(cfail1))]
@@ -340,7 +354,9 @@ pub trait ChangeArgumentTypeTrait {
 
 #[cfg(cfail1)]
 impl ChangeArgumentTypeTrait for Foo {
-    fn method_name(&self, _x: u32) { }
+    // -----------------------------------------------------------------------------------------
+    // -------------------------
+    fn method_name(&self, _x: u32 ) { }
 }
 
 #[cfg(not(cfail1))]
@@ -455,6 +471,9 @@ trait AddNoMangleToMethod {
 
 #[cfg(cfail1)]
 impl AddNoMangleToMethod for Foo {
+    // -------------------------
+    // -------------------------
+    // ---------
     fn add_no_mangle_to_method(&self) { }
 }
 
@@ -476,6 +495,9 @@ trait MakeMethodInline {
 
 #[cfg(cfail1)]
 impl MakeMethodInline for Foo {
+    // -------------------------
+    // -------------------------
+    // ------
     fn make_method_inline(&self) -> u8 { 0 }
 }
 

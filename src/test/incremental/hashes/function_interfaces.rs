@@ -7,7 +7,7 @@
 
 // build-pass (FIXME(62277): could be check-pass?)
 // revisions: cfail1 cfail2 cfail3
-// compile-flags: -Z query-dep-graph -Zincremental-ignore-spans
+// compile-flags: -Z query-dep-graph
 
 #![allow(warnings)]
 #![feature(linkage)]
@@ -30,10 +30,10 @@ pub fn add_parameter(p: i32) {}
 // Add Return Type -------------------------------------------------------------
 
 #[cfg(cfail1)]
-pub fn add_return_type() {}
+pub fn add_return_type()       {}
 
 #[cfg(not(cfail1))]
-#[rustc_clean(cfg = "cfail2", except = "hir_owner, hir_owner_nodes")]
+#[rustc_clean(cfg = "cfail2", except = "hir_owner, hir_owner_nodes, optimized_mir")]
 #[rustc_clean(cfg = "cfail3")]
 pub fn add_return_type() -> () {}
 
@@ -92,7 +92,7 @@ pub unsafe fn make_unsafe() {}
 // Extern ----------------------------------------------------------------------
 
 #[cfg(cfail1)]
-pub fn make_extern() {}
+pub            fn make_extern() {}
 
 #[cfg(not(cfail1))]
 #[rustc_clean(cfg = "cfail2", except = "hir_owner, hir_owner_nodes, typeck, fn_sig")]
@@ -102,7 +102,7 @@ pub extern "C" fn make_extern() {}
 // Type Parameter --------------------------------------------------------------
 
 #[cfg(cfail1)]
-pub fn type_parameter() {}
+pub fn type_parameter   () {}
 
 #[cfg(not(cfail1))]
 #[rustc_clean(
@@ -115,7 +115,7 @@ pub fn type_parameter<T>() {}
 // Lifetime Parameter ----------------------------------------------------------
 
 #[cfg(cfail1)]
-pub fn lifetime_parameter() {}
+pub fn lifetime_parameter    () {}
 
 #[cfg(not(cfail1))]
 #[rustc_clean(cfg = "cfail2", except = "hir_owner, hir_owner_nodes, generics_of,fn_sig")]
@@ -125,7 +125,7 @@ pub fn lifetime_parameter<'a>() {}
 // Trait Bound -----------------------------------------------------------------
 
 #[cfg(cfail1)]
-pub fn trait_bound<T>() {}
+pub fn trait_bound<T    >() {}
 
 #[cfg(not(cfail1))]
 #[rustc_clean(cfg = "cfail2", except = "hir_owner, hir_owner_nodes, predicates_of")]
@@ -135,7 +135,7 @@ pub fn trait_bound<T: Eq>() {}
 // Builtin Bound ---------------------------------------------------------------
 
 #[cfg(cfail1)]
-pub fn builtin_bound<T>() {}
+pub fn builtin_bound<T      >() {}
 
 #[cfg(not(cfail1))]
 #[rustc_clean(cfg = "cfail2", except = "hir_owner, hir_owner_nodes, predicates_of")]
@@ -150,7 +150,7 @@ pub fn lifetime_bound<'a, T>() {}
 #[cfg(not(cfail1))]
 #[rustc_clean(
     cfg = "cfail2",
-    except = "hir_owner, hir_owner_nodes, generics_of, type_of, predicates_of,fn_sig"
+    except = "hir_owner, hir_owner_nodes, generics_of, type_of, predicates_of,fn_sig,optimized_mir"
 )]
 #[rustc_clean(cfg = "cfail3")]
 pub fn lifetime_bound<'a, T: 'a>() {}
@@ -158,7 +158,7 @@ pub fn lifetime_bound<'a, T: 'a>() {}
 // Second Trait Bound ----------------------------------------------------------
 
 #[cfg(cfail1)]
-pub fn second_trait_bound<T: Eq>() {}
+pub fn second_trait_bound<T: Eq        >() {}
 
 #[cfg(not(cfail1))]
 #[rustc_clean(cfg = "cfail2", except = "hir_owner, hir_owner_nodes, predicates_of")]
@@ -168,7 +168,7 @@ pub fn second_trait_bound<T: Eq + Clone>() {}
 // Second Builtin Bound --------------------------------------------------------
 
 #[cfg(cfail1)]
-pub fn second_builtin_bound<T: Send>() {}
+pub fn second_builtin_bound<T: Send        >() {}
 
 #[cfg(not(cfail1))]
 #[rustc_clean(cfg = "cfail2", except = "hir_owner, hir_owner_nodes, predicates_of")]
@@ -178,7 +178,7 @@ pub fn second_builtin_bound<T: Send + Sized>() {}
 // Second Lifetime Bound -------------------------------------------------------
 
 #[cfg(cfail1)]
-pub fn second_lifetime_bound<'a, 'b, T: 'a>() {}
+pub fn second_lifetime_bound<'a, 'b, T: 'a     >() {}
 
 #[cfg(not(cfail1))]
 #[rustc_clean(
@@ -236,12 +236,12 @@ pub fn linkage() {}
 // Return Impl Trait -----------------------------------------------------------
 
 #[cfg(cfail1)]
-pub fn return_impl_trait() -> i32 {
+pub fn return_impl_trait() -> i32        {
     0
 }
 
 #[cfg(not(cfail1))]
-#[rustc_clean(cfg = "cfail2", except = "hir_owner, hir_owner_nodes, typeck, fn_sig")]
+#[rustc_clean(cfg = "cfail2", except = "hir_owner, hir_owner_nodes, typeck, fn_sig, optimized_mir")]
 #[rustc_clean(cfg = "cfail3")]
 pub fn return_impl_trait() -> impl Clone {
     0
@@ -257,7 +257,7 @@ pub fn change_return_impl_trait() -> impl Clone {
 #[cfg(not(cfail1))]
 #[rustc_clean(cfg = "cfail2")]
 #[rustc_clean(cfg = "cfail3")]
-pub fn change_return_impl_trait() -> impl Copy {
+pub fn change_return_impl_trait() -> impl  Copy {
     0u32
 }
 

@@ -7,7 +7,7 @@
 
 // build-pass (FIXME(62277): could be check-pass?)
 // revisions: cfail1 cfail2 cfail3
-// compile-flags: -Z query-dep-graph -Zincremental-ignore-spans -Zmir-opt-level=0
+// compile-flags: -Z query-dep-graph -Zmir-opt-level=0
 
 #![allow(warnings)]
 #![feature(rustc_attrs)]
@@ -57,7 +57,7 @@ pub fn change_field_order_struct_like() -> Enum {
 }
 
 #[cfg(not(cfail1))]
-#[rustc_clean(cfg="cfail2", except="hir_owner_nodes,typeck")]
+#[rustc_clean(cfg="cfail2", except="hir_owner_nodes,typeck,optimized_mir")]
 #[rustc_clean(cfg="cfail3")]
 // FIXME(michaelwoerister):Interesting. I would have thought that that changes the MIR. And it
 // would if it were not all constants
@@ -88,7 +88,7 @@ pub enum Enum2 {
 // Change constructor path (struct-like) ------------------------------------
 #[cfg(cfail1)]
 pub fn change_constructor_path_struct_like() {
-    let _ = Enum::Struct {
+    let _ = Enum ::Struct {
         x: 0,
         y: 1,
         z: 2,
@@ -111,7 +111,7 @@ pub fn change_constructor_path_struct_like() {
 // Change variant (regular struct) ------------------------------------
 #[cfg(cfail1)]
 pub fn change_constructor_variant_struct_like() {
-    let _ = Enum2::Struct {
+    let _ = Enum2::Struct  {
         x: 0,
         y: 1,
         z: 2,
@@ -191,7 +191,7 @@ pub fn change_field_value_tuple_like() -> Enum {
 // Change constructor path (tuple-like) --------------------------------------
 #[cfg(cfail1)]
 pub fn change_constructor_path_tuple_like() {
-    let _ = Enum::Tuple(0, 1, 2);
+    let _ = Enum ::Tuple(0, 1, 2);
 }
 
 #[cfg(not(cfail1))]
@@ -209,7 +209,7 @@ pub fn change_constructor_path_tuple_like() {
 // Change constructor variant (tuple-like) --------------------------------------
 #[cfg(cfail1)]
 pub fn change_constructor_variant_tuple_like() {
-    let _ = Enum2::Tuple(0, 1, 2);
+    let _ = Enum2::Tuple (0, 1, 2);
 }
 
 #[cfg(not(cfail1))]
@@ -274,7 +274,7 @@ pub enum Clike2 {
 // Change constructor path (C-like) --------------------------------------
 #[cfg(cfail1)]
 pub fn change_constructor_path_c_like() {
-    let _x = Clike::B;
+    let _x = Clike ::B;
 }
 
 #[cfg(not(cfail1))]

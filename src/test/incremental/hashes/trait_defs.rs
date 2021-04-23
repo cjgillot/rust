@@ -12,7 +12,7 @@
 
 // build-pass (FIXME(62277): could be check-pass?)
 // revisions: cfail1 cfail2 cfail3
-// compile-flags: -Z query-dep-graph -Zincremental-ignore-spans
+// compile-flags: -Z query-dep-graph
 
 #![allow(warnings)]
 #![feature(rustc_attrs)]
@@ -25,7 +25,7 @@
 trait TraitVisibility { }
 
 #[cfg(not(cfail1))]
-#[rustc_clean(except="hir_owner", cfg="cfail2")]
+#[rustc_clean(except="hir_owner,predicates_of", cfg="cfail2")]
 #[rustc_clean(cfg="cfail3")]
 pub trait TraitVisibility { }
 
@@ -36,7 +36,7 @@ pub trait TraitVisibility { }
 trait TraitUnsafety { }
 
 #[cfg(not(cfail1))]
-#[rustc_clean(except="hir_owner", cfg="cfail2")]
+#[rustc_clean(except="hir_owner,predicates_of", cfg="cfail2")]
 #[rustc_clean(cfg="cfail3")]
 unsafe trait TraitUnsafety { }
 
@@ -48,7 +48,7 @@ trait TraitAddMethod {
 }
 
 #[cfg(not(cfail1))]
-#[rustc_clean(except="hir_owner,associated_item_def_ids", cfg="cfail2")]
+#[rustc_clean(except="hir_owner,associated_item_def_ids,predicates_of", cfg="cfail2")]
 #[rustc_clean(cfg="cfail3")]
 pub trait TraitAddMethod {
     fn method();
@@ -74,7 +74,9 @@ trait TraitChangeMethodName {
 // Add return type to method
 #[cfg(cfail1)]
 trait TraitAddReturnType {
-    fn method();
+    //-----------------------------------------------------
+    //--------------------------
+    fn method()       ;
 }
 
 #[cfg(not(cfail1))]
@@ -91,6 +93,8 @@ trait TraitAddReturnType {
 // Change return type of method
 #[cfg(cfail1)]
 trait TraitChangeReturnType {
+    // --------------------------------------------------------------------
+    // -------------------------
     fn method() -> u32;
 }
 
@@ -108,7 +112,9 @@ trait TraitChangeReturnType {
 // Add parameter to method
 #[cfg(cfail1)]
 trait TraitAddParameterToMethod {
-    fn method();
+    // ----------------------------------------------------
+    // -------------------------
+    fn method(      );
 }
 
 #[cfg(not(cfail1))]
@@ -125,7 +131,13 @@ trait TraitAddParameterToMethod {
 // Change name of method parameter
 #[cfg(cfail1)]
 trait TraitChangeMethodParameterName {
+    // -----------------------------------------------------
+    // ---------------------------------------------
+    // -------------------------
     fn method(a: u32);
+
+    // -----------------------------------------------------------------
+    // -------------------------
     fn with_default(x: i32) {}
 }
 
@@ -148,6 +160,8 @@ trait TraitChangeMethodParameterName {
 // Change type of method parameter (i32 => i64)
 #[cfg(cfail1)]
 trait TraitChangeMethodParameterType {
+    // ----------------------------------------------------
+    // -------------------------
     fn method(a: i32);
 }
 
@@ -165,7 +179,9 @@ trait TraitChangeMethodParameterType {
 // Change type of method parameter (&i32 => &mut i32)
 #[cfg(cfail1)]
 trait TraitChangeMethodParameterTypeRef {
-    fn method(a: &i32);
+    // ----------------------------------------------------
+    // -------------------------
+    fn method(a: &    i32);
 }
 
 #[cfg(not(cfail1))]
@@ -182,6 +198,8 @@ trait TraitChangeMethodParameterTypeRef {
 // Change order of method parameters
 #[cfg(cfail1)]
 trait TraitChangeMethodParametersOrder {
+    // ----------------------------------------------------
+    // -------------------------
     fn method(a: i32, b: i64);
 }
 
@@ -233,7 +251,9 @@ trait TraitChangeOrderOfMethods {
 // Change mode of self parameter
 #[cfg(cfail1)]
 trait TraitChangeModeSelfRefToMut {
-    fn method(&self);
+    // ----------------------------------------------------
+    // -------------------------
+    fn method(&    self);
 }
 
 #[cfg(not(cfail1))]
@@ -249,7 +269,9 @@ trait TraitChangeModeSelfRefToMut {
 
 #[cfg(cfail1)]
 trait TraitChangeModeSelfOwnToMut: Sized {
-    fn method(self) {}
+    // ----------------------------------------------------------------------------------
+    // -------------------------
+    fn method(    self) {}
 }
 
 #[cfg(not(cfail1))]
@@ -265,7 +287,9 @@ trait TraitChangeModeSelfOwnToMut: Sized {
 
 #[cfg(cfail1)]
 trait TraitChangeModeSelfOwnToRef {
-    fn method(self);
+    // ----------------------------------------------------------------
+    // -------------------------
+    fn method( self);
 }
 
 #[cfg(not(cfail1))]
@@ -282,7 +306,9 @@ trait TraitChangeModeSelfOwnToRef {
 // Add unsafe modifier to method
 #[cfg(cfail1)]
 trait TraitAddUnsafeModifier {
-    fn method();
+    // ----------------------------------------------------
+    // -------------------------
+    fn method()       ;
 }
 
 #[cfg(not(cfail1))]
@@ -299,7 +325,9 @@ trait TraitAddUnsafeModifier {
 // Add extern modifier to method
 #[cfg(cfail1)]
 trait TraitAddExternModifier {
-    fn method();
+    // ----------------------------------------------------
+    // -------------------------
+    fn method()           ;
 }
 
 #[cfg(not(cfail1))]
@@ -316,7 +344,9 @@ trait TraitAddExternModifier {
 // Change extern "C" to extern "stdcall"
 #[cfg(cfail1)]
 trait TraitChangeExternCToRustIntrinsic {
-    extern "C" fn method();
+    // ----------------------------------------------------
+    // -------------------------
+    extern "C"       fn method();
 }
 
 #[cfg(not(cfail1))]
@@ -333,7 +363,9 @@ trait TraitChangeExternCToRustIntrinsic {
 // Add type parameter to method
 #[cfg(cfail1)]
 trait TraitAddTypeParameterToMethod {
-    fn method();
+    // -------------------------------------------------------------------------------
+    // -------------------------
+    fn method   ();
 }
 
 #[cfg(not(cfail1))]
@@ -350,7 +382,9 @@ trait TraitAddTypeParameterToMethod {
 // Add lifetime parameter to method
 #[cfg(cfail1)]
 trait TraitAddLifetimeParameterToMethod {
-    fn method();
+    // ----------------------------------------------------------------
+    // -------------------------
+    fn method    ();
 }
 
 #[cfg(not(cfail1))]
@@ -371,7 +405,9 @@ trait ReferencedTrait1 { }
 // Add trait bound to method type parameter
 #[cfg(cfail1)]
 trait TraitAddTraitBoundToMethodTypeParameter {
-    fn method<T>();
+    // ---------------------------------------------------------------------------
+    // -------------------------
+    fn method<T                  >();
 }
 
 #[cfg(not(cfail1))]
@@ -388,7 +424,9 @@ trait TraitAddTraitBoundToMethodTypeParameter {
 // Add builtin bound to method type parameter
 #[cfg(cfail1)]
 trait TraitAddBuiltinBoundToMethodTypeParameter {
-    fn method<T>();
+    // ---------------------------------------------------------------------------
+    // -------------------------
+    fn method<T       >();
 }
 
 #[cfg(not(cfail1))]
@@ -405,7 +443,12 @@ trait TraitAddBuiltinBoundToMethodTypeParameter {
 // Add lifetime bound to method lifetime parameter
 #[cfg(cfail1)]
 trait TraitAddLifetimeBoundToMethodLifetimeParameter {
-    fn method<'a, 'b>(a: &'a u32, b: &'b u32);
+    // -----------
+    // -----------------------------------------------------------------------------
+    // --------------
+    //
+    // -------------------------
+    fn method<'a, 'b    >(a: &'a u32, b: &'b u32);
 }
 
 #[cfg(not(cfail1))]
@@ -425,7 +468,9 @@ trait TraitAddLifetimeBoundToMethodLifetimeParameter {
 // Add second trait bound to method type parameter
 #[cfg(cfail1)]
 trait TraitAddSecondTraitBoundToMethodTypeParameter {
-    fn method<T: ReferencedTrait0>();
+    // ---------------------------------------------------------------------------
+    // -------------------------
+    fn method<T: ReferencedTrait0                   >();
 }
 
 #[cfg(not(cfail1))]
@@ -442,7 +487,9 @@ trait TraitAddSecondTraitBoundToMethodTypeParameter {
 // Add second builtin bound to method type parameter
 #[cfg(cfail1)]
 trait TraitAddSecondBuiltinBoundToMethodTypeParameter {
-    fn method<T: Sized>();
+    // ---------------------------------------------------------------------------
+    // -------------------------
+    fn method<T: Sized       >();
 }
 
 #[cfg(not(cfail1))]
@@ -459,7 +506,12 @@ trait TraitAddSecondBuiltinBoundToMethodTypeParameter {
 // Add second lifetime bound to method lifetime parameter
 #[cfg(cfail1)]
 trait TraitAddSecondLifetimeBoundToMethodLifetimeParameter {
-    fn method<'a, 'b, 'c: 'a>(a: &'a u32, b: &'b u32, c: &'c u32);
+    // -----------
+    // -----------------------------------------------------------------------------
+    // --------------
+    //
+    // -------------------------
+    fn method<'a, 'b, 'c: 'a     >(a: &'a u32, b: &'b u32, c: &'c u32);
 }
 
 #[cfg(not(cfail1))]
@@ -499,7 +551,9 @@ trait TraitAddAssociatedType {
 // Add trait bound to associated type
 #[cfg(cfail1)]
 trait TraitAddTraitBoundToAssociatedType {
-    type Associated;
+    // ---------------------------------------------
+    // -------------------------
+    type Associated                  ;
 
     fn method();
 }
@@ -523,7 +577,9 @@ trait TraitAddTraitBoundToAssociatedType {
 // Add lifetime bound to associated type
 #[cfg(cfail1)]
 trait TraitAddLifetimeBoundToAssociatedType<'a> {
-    type Associated;
+    // ---------------------------------------------
+    // -------------------------
+    type Associated    ;
 
     fn method();
 }
@@ -605,8 +661,12 @@ trait TraitAddInitializerToAssociatedConstant {
 // Change type of associated constant
 #[cfg(cfail1)]
 trait TraitChangeTypeOfAssociatedConstant {
+    // -----------------------------------------------------
+    // -------------------------
     const Value: u32;
 
+    // -------------------------
+    // -------------------------
     fn method();
 }
 

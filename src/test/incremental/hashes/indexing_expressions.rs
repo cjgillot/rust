@@ -7,7 +7,7 @@
 
 // build-pass (FIXME(62277): could be check-pass?)
 // revisions: cfail1 cfail2 cfail3
-// compile-flags: -Z query-dep-graph -Zincremental-ignore-spans
+// compile-flags: -Z query-dep-graph
 
 #![allow(warnings)]
 #![feature(rustc_attrs)]
@@ -61,7 +61,7 @@ fn change_upper_bound(slice: &[u32]) -> &[u32] {
 // Add lower bound
 #[cfg(cfail1)]
 fn add_lower_bound(slice: &[u32]) -> &[u32] {
-    &slice[..4]
+    &slice[ ..4]
 }
 
 #[cfg(not(cfail1))]
@@ -76,7 +76,7 @@ fn add_lower_bound(slice: &[u32]) -> &[u32] {
 // Add upper bound
 #[cfg(cfail1)]
 fn add_upper_bound(slice: &[u32]) -> &[u32] {
-    &slice[3..]
+    &slice[3.. ]
 }
 
 #[cfg(not(cfail1))]
@@ -98,7 +98,7 @@ fn change_mutability(slice: &mut [u32]) -> u32 {
 #[rustc_clean(except="hir_owner_nodes,typeck", cfg="cfail2")]
 #[rustc_clean(cfg="cfail3")]
 fn change_mutability(slice: &mut [u32]) -> u32 {
-    (&slice[3..5])[0]
+    (&    slice[3..5])[0]
 }
 
 
@@ -106,7 +106,7 @@ fn change_mutability(slice: &mut [u32]) -> u32 {
 // Exclusive to inclusive range
 #[cfg(cfail1)]
 fn exclusive_to_inclusive_range(slice: &[u32]) -> &[u32] {
-    &slice[3..7]
+    &slice[3.. 7]
 }
 
 #[cfg(not(cfail1))]

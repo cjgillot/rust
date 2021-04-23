@@ -7,7 +7,7 @@
 
 // build-pass (FIXME(62277): could be check-pass?)
 // revisions: cfail1 cfail2 cfail3
-// compile-flags: -Z query-dep-graph -Zincremental-ignore-spans
+// compile-flags: -Z query-dep-graph
 
 #![allow(warnings)]
 #![feature(rustc_attrs)]
@@ -24,7 +24,7 @@ pub fn const_negation() -> i32 {
 #[rustc_clean(except="hir_owner_nodes,optimized_mir", cfg="cfail2")]
 #[rustc_clean(cfg="cfail3")]
 pub fn const_negation() -> i32 {
-    -1
+     -1
 }
 
 
@@ -39,7 +39,7 @@ pub fn const_bitwise_not() -> i32 {
 #[rustc_clean(except="hir_owner_nodes,optimized_mir", cfg="cfail2")]
 #[rustc_clean(cfg="cfail3")]
 pub fn const_bitwise_not() -> i32 {
-    !99
+     !99
 }
 
 
@@ -257,7 +257,7 @@ pub fn bitwise_and_to_bitwise_xor(a: i32) -> i32 {
 // Change operator from & to << ------------------------------------------------
 #[cfg(cfail1)]
 pub fn bitwise_and_to_lshift(a: i32) -> i32 {
-    a & 1
+    a  & 1
 }
 
 #[cfg(not(cfail1))]
@@ -272,7 +272,7 @@ pub fn bitwise_and_to_lshift(a: i32) -> i32 {
 // Change operator from & to >> ------------------------------------------------
 #[cfg(cfail1)]
 pub fn bitwise_and_to_rshift(a: i32) -> i32 {
-    a & 1
+    a  & 1
 }
 
 #[cfg(not(cfail1))]
@@ -309,7 +309,7 @@ pub fn eq_to_lt(a: i32) -> bool {
 #[rustc_clean(except="hir_owner_nodes,optimized_mir", cfg="cfail2")]
 #[rustc_clean(cfg="cfail3")]
 pub fn eq_to_lt(a: i32) -> bool {
-    a < 1
+    a  < 1
 }
 
 
@@ -324,7 +324,7 @@ pub fn eq_to_gt(a: i32) -> bool {
 #[rustc_clean(except="hir_owner_nodes,optimized_mir", cfg="cfail2")]
 #[rustc_clean(cfg="cfail3")]
 pub fn eq_to_gt(a: i32) -> bool {
-    a > 1
+    a  > 1
 }
 
 

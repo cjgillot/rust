@@ -7,7 +7,7 @@
 
 // build-pass (FIXME(62277): could be check-pass?)
 // revisions: cfail1 cfail2 cfail3
-// compile-flags: -Z query-dep-graph -Zincremental-ignore-spans
+// compile-flags: -Z query-dep-graph
 
 
 #![allow(warnings)]
@@ -132,7 +132,7 @@ pub fn change_argument_method_ufcs() {
 #[rustc_clean(cfg="cfail3")]
 pub fn change_argument_method_ufcs() {
     let s = Struct;
-    Struct::method1(&s, 'x', false);
+    Struct::method1(&s, 'x',false);
 }
 
 
@@ -141,7 +141,7 @@ pub fn change_argument_method_ufcs() {
 #[cfg(cfail1)]
 pub fn change_to_ufcs() {
     let s = Struct;
-    s.method1('x', true);
+    s.method1('x', true); // ------
 }
 
 #[cfg(not(cfail1))]

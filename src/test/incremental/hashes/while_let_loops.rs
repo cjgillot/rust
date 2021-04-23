@@ -7,7 +7,7 @@
 
 // build-pass (FIXME(62277): could be check-pass?)
 // revisions: cfail1 cfail2 cfail3
-// compile-flags: -Z query-dep-graph -Zincremental-ignore-spans
+// compile-flags: -Z query-dep-graph
 
 #![allow(warnings)]
 #![feature(rustc_attrs)]
@@ -66,6 +66,7 @@ pub fn add_break() {
     let mut _x = 0;
     while let Some(0u32) = None {
         _x = 1;
+        // ---
     }
 }
 
@@ -86,14 +87,14 @@ pub fn add_break() {
 #[cfg(cfail1)]
 pub fn add_loop_label() {
     let mut _x = 0;
-    while let Some(0u32) = None {
+            while let Some(0u32) = None {
         _x = 1;
         break;
     }
 }
 
 #[cfg(not(cfail1))]
-#[rustc_clean(cfg="cfail2", except="hir_owner_nodes")]
+#[rustc_clean(cfg="cfail2", except="hir_owner_nodes, optimized_mir")]
 #[rustc_clean(cfg="cfail3")]
 pub fn add_loop_label() {
     let mut _x = 0;
@@ -111,7 +112,7 @@ pub fn add_loop_label_to_break() {
     let mut _x = 0;
     'label: while let Some(0u32) = None {
         _x = 1;
-        break;
+        break       ;
     }
 }
 
@@ -161,7 +162,7 @@ pub fn add_loop_label_to_continue() {
     let mut _x = 0;
     'label: while let Some(0u32) = None {
         _x = 1;
-        continue;
+        continue       ;
     }
 }
 
@@ -222,6 +223,6 @@ pub fn change_continue_to_break() {
     let mut _x = 0;
     while let Some(0u32) = None {
         _x = 1;
-        break;
+        break   ;
     }
 }

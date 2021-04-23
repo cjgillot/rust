@@ -7,7 +7,7 @@
 
 // build-pass (FIXME(62277): could be check-pass?)
 // revisions: cfail1 cfail2 cfail3
-// compile-flags: -Z query-dep-graph -Zincremental-ignore-spans
+// compile-flags: -Z query-dep-graph
 
 #![allow(warnings)]
 #![feature(rustc_attrs)]
@@ -64,14 +64,14 @@ pub fn change_iteration_variable_name() {
 #[cfg(cfail1)]
 pub fn change_iteration_variable_pattern() {
     let mut _x = 0;
-    for _i in &[0, 1, 2] {
+    for  _i in &[0, 1, 2] {
         _x = 1;
         break;
     }
 }
 
 #[cfg(not(cfail1))]
-#[rustc_clean(cfg="cfail2", except="hir_owner_nodes, optimized_mir, typeck")]
+#[rustc_clean(cfg="cfail2", except="hir_owner_nodes, optimized_mir, typeck, promoted_mir")]
 #[rustc_clean(cfg="cfail3")]
 pub fn change_iteration_variable_pattern() {
     let mut _x = 0;
@@ -94,7 +94,7 @@ pub fn change_iterable() {
 }
 
 #[cfg(not(cfail1))]
-#[rustc_clean(cfg="cfail2", except="hir_owner_nodes, promoted_mir")]
+#[rustc_clean(cfg="cfail2", except="hir_owner_nodes, promoted_mir, optimized_mir")]
 #[rustc_clean(cfg="cfail3")]
 pub fn change_iterable() {
     let mut _x = 0;
@@ -112,6 +112,7 @@ pub fn add_break() {
     let mut _x = 0;
     for _ in 0..1 {
         _x = 1;
+        // ---
     }
 }
 
@@ -132,14 +133,14 @@ pub fn add_break() {
 #[cfg(cfail1)]
 pub fn add_loop_label() {
     let mut _x = 0;
-    for _ in 0..1 {
+            for _ in 0..1 {
         _x = 1;
         break;
     }
 }
 
 #[cfg(not(cfail1))]
-#[rustc_clean(cfg="cfail2", except="hir_owner_nodes")]
+#[rustc_clean(cfg="cfail2", except="hir_owner_nodes, optimized_mir")]
 #[rustc_clean(cfg="cfail3")]
 pub fn add_loop_label() {
     let mut _x = 0;
@@ -157,12 +158,12 @@ pub fn add_loop_label_to_break() {
     let mut _x = 0;
     'label: for _ in 0..1 {
         _x = 1;
-        break;
+        break       ;
     }
 }
 
 #[cfg(not(cfail1))]
-#[rustc_clean(cfg="cfail2", except="hir_owner_nodes")]
+#[rustc_clean(cfg="cfail2", except="hir_owner_nodes, optimized_mir")]
 #[rustc_clean(cfg="cfail3")]
 pub fn add_loop_label_to_break() {
     let mut _x = 0;
@@ -207,12 +208,12 @@ pub fn add_loop_label_to_continue() {
     let mut _x = 0;
     'label: for _ in 0..1 {
         _x = 1;
-        continue;
+        continue       ;
     }
 }
 
 #[cfg(not(cfail1))]
-#[rustc_clean(cfg="cfail2", except="hir_owner_nodes")]
+#[rustc_clean(cfg="cfail2", except="hir_owner_nodes, optimized_mir")]
 #[rustc_clean(cfg="cfail3")]
 pub fn add_loop_label_to_continue() {
     let mut _x = 0;
@@ -268,6 +269,6 @@ pub fn change_continue_to_break() {
     let mut _x = 0;
     for _ in 0..1 {
         _x = 1;
-        break;
+        break   ;
     }
 }

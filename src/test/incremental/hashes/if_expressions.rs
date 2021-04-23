@@ -7,7 +7,7 @@
 
 // build-pass (FIXME(62277): could be check-pass?)
 // revisions: cfail1 cfail2 cfail3
-// compile-flags: -Z query-dep-graph -Zincremental-ignore-spans
+// compile-flags: -Z query-dep-graph
 
 
 #![allow(warnings)]
@@ -17,7 +17,7 @@
 // Change condition (if)
 #[cfg(cfail1)]
 pub fn change_condition(x: bool) -> u32 {
-    if x {
+    if  x {
         return 1
     }
 
@@ -88,6 +88,7 @@ pub fn add_else_branch(x: bool) -> u32 {
 
     if x {
         ret = 2;
+    /*----*/
     }
 
     ret
@@ -123,7 +124,7 @@ pub fn change_condition_if_let(x: Option<u32>) -> u32 {
 #[rustc_clean(cfg="cfail2", except="hir_owner_nodes,optimized_mir,typeck")]
 #[rustc_clean(cfg="cfail3")]
 pub fn change_condition_if_let(x: Option<u32>) -> u32 {
-    if let Some(_) = x {
+    if let Some(_ ) = x {
         return 1
     }
 
@@ -136,7 +137,7 @@ pub fn change_condition_if_let(x: Option<u32>) -> u32 {
 #[cfg(cfail1)]
 pub fn change_then_branch_if_let(x: Option<u32>) -> u32 {
     if let Some(x) = x {
-        return x
+        return x //-
     }
 
     0
@@ -185,13 +186,14 @@ pub fn add_else_branch_if_let(x: Option<u32>) -> u32 {
 
     if let Some(x) = x {
         ret = x;
+    /*----*/
     }
 
     ret
 }
 
 #[cfg(not(cfail1))]
-#[rustc_clean(cfg="cfail2", except="hir_owner_nodes")]
+#[rustc_clean(cfg="cfail2", except="hir_owner_nodes,optimized_mir")]
 #[rustc_clean(cfg="cfail3")]
 pub fn add_else_branch_if_let(x: Option<u32>) -> u32 {
     let mut ret = 1;

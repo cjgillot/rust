@@ -7,7 +7,7 @@
 
 // build-pass (FIXME(62277): could be check-pass?)
 // revisions: cfail1 cfail2 cfail3
-// compile-flags: -Z query-dep-graph -Zincremental-ignore-spans
+// compile-flags: -Z query-dep-graph
 
 #![allow(warnings)]
 #![feature(rustc_attrs)]
@@ -63,13 +63,13 @@ extern "C" {
 #[rustc_clean(cfg = "cfail2")]
 #[rustc_clean(cfg = "cfail3")]
 extern "C" {
-    pub fn change_return_type(c: i32) -> i8;
+    pub fn change_return_type(c: i32) -> i8 ;
 }
 
 // Add parameter ---------------------------------------------------------------
 #[cfg(cfail1)]
 extern "C" {
-    pub fn add_parameter(c: i32) -> i32;
+    pub fn add_parameter(c: i32        ) -> i32;
 }
 
 #[cfg(not(cfail1))]
@@ -82,7 +82,7 @@ extern "C" {
 // Add return type -------------------------------------------------------------
 #[cfg(cfail1)]
 extern "C" {
-    pub fn add_return_type(c: i32);
+    pub fn add_return_type(c: i32)       ;
 }
 
 #[cfg(not(cfail1))]
@@ -95,7 +95,7 @@ extern "C" {
 // Make function variadic ------------------------------------------------------
 #[cfg(cfail1)]
 extern "C" {
-    pub fn make_function_variadic(c: i32);
+    pub fn make_function_variadic(c: i32     );
 }
 
 #[cfg(not(cfail1))]

@@ -7,7 +7,7 @@
 
 // build-pass (FIXME(62277): could be check-pass?)
 // revisions: cfail1 cfail2 cfail3
-// compile-flags: -Z query-dep-graph -Zincremental-ignore-spans
+// compile-flags: -Z query-dep-graph
 
 #![allow(warnings)]
 #![feature(rustc_attrs)]
@@ -54,7 +54,7 @@ pub fn change_field_order_regular_struct() -> RegularStruct {
 }
 
 #[cfg(not(cfail1))]
-#[rustc_clean(cfg="cfail2", except="hir_owner_nodes,typeck")]
+#[rustc_clean(cfg="cfail2", except="hir_owner_nodes,typeck,optimized_mir")]
 #[rustc_clean(cfg="cfail3")]
 pub fn change_field_order_regular_struct() -> RegularStruct {
     RegularStruct {
@@ -77,6 +77,7 @@ pub fn add_field_regular_struct() -> RegularStruct {
 
     RegularStruct {
         x: 7,
+        // --
         .. struct1
     }
 }
@@ -144,7 +145,7 @@ pub struct RegularStruct2 {
 // Change constructor path (regular struct)
 #[cfg(cfail1)]
 pub fn change_constructor_path_regular_struct() {
-    let _ = RegularStruct {
+    let _ = RegularStruct  {
         x: 0,
         y: 1,
         z: 2,
@@ -209,7 +210,7 @@ pub struct TupleStruct2(u16, u16, u16);
 // Change constructor path (tuple struct)
 #[cfg(cfail1)]
 pub fn change_constructor_path_tuple_struct() {
-    let _ = TupleStruct(0, 1, 2);
+    let _ = TupleStruct (0, 1, 2);
 }
 
 #[cfg(not(cfail1))]

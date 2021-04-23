@@ -12,7 +12,7 @@
 
 // build-pass (FIXME(62277): could be check-pass?)
 // revisions: cfail1 cfail2 cfail3
-// compile-flags: -Z query-dep-graph -Zincremental-ignore-spans
+// compile-flags: -Z query-dep-graph
 
 #![allow(warnings)]
 #![feature(rustc_attrs)]
@@ -97,9 +97,7 @@ enum EnumChangeValueCStyleVariant0 {
 #[rustc_clean(cfg="cfail3")]
 enum EnumChangeValueCStyleVariant0 {
     Variant1,
-
-    Variant2 =
-        22,
+    Variant2 = 22,
 }
 
 #[cfg(cfail1)]

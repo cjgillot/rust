@@ -7,7 +7,7 @@
 
 // build-pass (FIXME(62277): could be check-pass?)
 // revisions: cfail1 cfail2 cfail3
-// compile-flags: -Z query-dep-graph -Zincremental-ignore-spans
+// compile-flags: -Z query-dep-graph
 
 
 #![allow(warnings)]
@@ -33,7 +33,7 @@ pub fn change_name() {
 // Add Type --------------------------------------------------------------------
 #[cfg(cfail1)]
 pub fn add_type() {
-    let _x = 2u32;
+    let _x      = 2u32;
 }
 
 #[cfg(not(cfail1))]
@@ -57,7 +57,7 @@ pub fn change_type() {
     except="hir_owner_nodes,typeck,optimized_mir")]
 #[rustc_clean(cfg="cfail3")]
 pub fn change_type() {
-    let _x: u8 = 2;
+    let _x: u8  = 2;
 }
 
 
@@ -65,7 +65,7 @@ pub fn change_type() {
 // Change Mutability of Reference Type -----------------------------------------
 #[cfg(cfail1)]
 pub fn change_mutability_of_reference_type() {
-    let _x: &u64;
+    let _x: &    u64;
 }
 
 #[cfg(not(cfail1))]
@@ -89,7 +89,7 @@ pub fn change_mutability_of_slot() {
     except="hir_owner_nodes,typeck,optimized_mir")]
 #[rustc_clean(cfg="cfail3")]
 pub fn change_mutability_of_slot() {
-    let _x: u64 = 0;
+    let     _x: u64 = 0;
 }
 
 
@@ -97,7 +97,7 @@ pub fn change_mutability_of_slot() {
 // Change Simple Binding to Pattern --------------------------------------------
 #[cfg(cfail1)]
 pub fn change_simple_binding_to_pattern() {
-    let _x = (0u8, 'x');
+    let  _x      = (0u8, 'x');
 }
 
 #[cfg(not(cfail1))]
@@ -129,7 +129,7 @@ pub fn change_name_in_pattern() {
 // Add `ref` in Pattern --------------------------------------------------------
 #[cfg(cfail1)]
 pub fn add_ref_in_pattern() {
-    let (_a, _b) = (1u8, 'y');
+    let (    _a, _b) = (1u8, 'y');
 }
 
 #[cfg(not(cfail1))]
@@ -145,7 +145,7 @@ pub fn add_ref_in_pattern() {
 // Add `&` in Pattern ----------------------------------------------------------
 #[cfg(cfail1)]
 pub fn add_amp_in_pattern() {
-    let (_a, _b) = (&1u8, 'y');
+    let ( _a, _b) = (&1u8, 'y');
 }
 
 #[cfg(not(cfail1))]
@@ -161,7 +161,7 @@ pub fn add_amp_in_pattern() {
 // Change Mutability of Binding in Pattern -------------------------------------
 #[cfg(cfail1)]
 pub fn change_mutability_of_binding_in_pattern() {
-    let (_a, _b) = (99u8, 'q');
+    let (    _a, _b) = (99u8, 'q');
 }
 
 #[cfg(not(cfail1))]
@@ -177,7 +177,7 @@ pub fn change_mutability_of_binding_in_pattern() {
 // Add Initializer -------------------------------------------------------------
 #[cfg(cfail1)]
 pub fn add_initializer() {
-    let _x: i16;
+    let _x: i16       ;
 }
 
 #[cfg(not(cfail1))]

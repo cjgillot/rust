@@ -7,7 +7,7 @@
 
 // build-pass (FIXME(62277): could be check-pass?)
 // revisions: cfail1 cfail2 cfail3
-// compile-flags: -Z query-dep-graph -Zincremental-ignore-spans -Zmir-opt-level=0
+// compile-flags: -Z query-dep-graph -Zmir-opt-level=0
 
 #![allow(warnings)]
 #![feature(rustc_attrs)]
@@ -33,7 +33,7 @@ pub fn change_closure_body() {
 #[cfg(cfail1)]
 pub fn add_parameter() {
     let x = 0u32;
-    let _ = || x + 1;
+    let _ = |      | x + 1;
 }
 
 #[cfg(not(cfail1))]
@@ -49,7 +49,7 @@ pub fn add_parameter() {
 // Change parameter pattern
 #[cfg(cfail1)]
 pub fn change_parameter_pattern() {
-    let _ = |x: (u32,)| x;
+    let _ = | x  : (u32,)| x;
 }
 
 #[cfg(not(cfail1))]
@@ -64,11 +64,11 @@ pub fn change_parameter_pattern() {
 // Add `move` to closure
 #[cfg(cfail1)]
 pub fn add_move() {
-    let _ = || 1;
+    let _ =      || 1;
 }
 
 #[cfg(not(cfail1))]
-#[rustc_clean(cfg="cfail2", except="hir_owner_nodes")]
+#[rustc_clean(cfg="cfail2", except="hir_owner_nodes, optimized_mir")]
 #[rustc_clean(cfg="cfail3")]
 pub fn add_move() {
     let _ = move || 1;
@@ -79,7 +79,7 @@ pub fn add_move() {
 // Add type ascription to parameter
 #[cfg(cfail1)]
 pub fn add_type_ascription_to_parameter() {
-    let closure = |x| x + 1u32;
+    let closure = |x     | x + 1u32;
     let _: u32 = closure(1);
 }
 

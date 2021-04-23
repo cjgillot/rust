@@ -7,7 +7,7 @@
 
 // build-pass (FIXME(62277): could be check-pass?)
 // revisions: cfail1 cfail2 cfail3
-// compile-flags: -Z query-dep-graph -Zincremental-ignore-spans
+// compile-flags: -Z query-dep-graph
 
 #![allow(warnings)]
 #![feature(rustc_attrs)]
@@ -167,7 +167,7 @@ pub fn change_clobber(_a: i32) -> i32 {
         llvm_asm!("add 1, $0"
                   : "=r"(_out)
                   : "0"(_a)
-                  :
+                  :/*--*/
                   :
                   );
     }
@@ -203,7 +203,7 @@ pub fn change_options(_a: i32) -> i32 {
                   : "=r"(_out)
                   : "0"(_a)
                   :
-                  :
+                  :/*-------*/
                   );
     }
     _out
