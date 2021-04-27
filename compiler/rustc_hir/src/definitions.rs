@@ -345,6 +345,8 @@ impl Definitions {
         assert_eq!(root.local_def_index, CRATE_DEF_INDEX);
 
         let mut def_id_to_span = IndexVec::new();
+        // A relative span's parent must be an absolute span.
+        debug_assert_eq!(crate_span.data_untracked().parent, None);
         assert_eq!(def_id_to_span.push(crate_span), root);
 
         Definitions {
@@ -393,6 +395,8 @@ impl Definitions {
             self.expansions_that_defined.insert(def_id, expn_id);
         }
 
+        // A relative span's parent must be an absolute span.
+        debug_assert_eq!(span.data_untracked().parent, None);
         assert_eq!(self.def_id_to_span.push(span), def_id);
 
         def_id
