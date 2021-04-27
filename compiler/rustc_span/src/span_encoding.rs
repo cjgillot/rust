@@ -6,8 +6,8 @@
 
 use crate::def_id::{DefIndex, LocalDefId};
 use crate::hygiene::SyntaxContext;
-use crate::SESSION_GLOBALS;
 use crate::{BytePos, SpanData};
+use crate::{SESSION_GLOBALS, SPAN_TRACK};
 
 use rustc_data_structures::fx::FxIndexSet;
 
@@ -61,6 +61,10 @@ use rustc_data_structures::fx::FxIndexSet;
 ///   `ctxt` values depend partly on the crate size and partly on the form of
 ///   the code. No crates in `rustc-perf` need more than 15 bits for `ctxt`,
 ///   but larger crates might need more than 16 bits.
+///
+/// In order to reliably use parented spans in incremental compilation,
+/// the dependency to the parent definition's span. This is performed
+/// using the callback `SPAN_TRACK` to access the query engine.
 ///
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Span {
@@ -116,6 +120,17 @@ impl Span {
 
     #[inline]
     pub fn data(self) -> SpanData {
+        let data = self.decode();
+        if let Some(parent) = data.parent {
+            (*SPAN_TRACK)(parent);
+        }
+        data
+    }
+
+    /// Internal function to translate between an encoded span and the expanded representation.
+    /// This function must not be used outside the incremental engine.
+    #[inline]
+    pub fn decode(self) -> SpanData {
         if self.len_or_tag != LEN_TAG {
             // Inline format.
             if self.len_or_tag & PARENT_MASK == 0 {
@@ -127,12 +142,13 @@ impl Span {
                 }
             } else {
                 let len = self.len_or_tag & !PARENT_MASK;
-                let parent = DefIndex::from_u32(self.ctxt_or_zero as u32);
+                let parent =
+                    LocalDefId { local_def_index: DefIndex::from_u32(self.ctxt_or_zero as u32) };
                 SpanData {
                     lo: BytePos(self.base_or_index),
                     hi: BytePos(self.base_or_index + len as u32),
                     ctxt: SyntaxContext::root(),
-                    parent: Some(LocalDefId { local_def_index: parent }),
+                    parent: Some(parent),
                 }
             }
         } else {

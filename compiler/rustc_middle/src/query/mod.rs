@@ -14,6 +14,15 @@ rustc_queries! {
         desc { "trigger a delay span bug" }
     }
 
+    /// Return the span for a definition.
+    /// Contrary to `def_span` below, this query returns the full absolute span of the definition.
+    /// This span is meant for dep-tracking rather than diagnostics. It should not be used outside
+    /// of rustc_middle::hir::source_map.
+    query source_span(key: LocalDefId) -> Span {
+        eval_always
+        desc { "get the source span" }
+    }
+
     /// Represents crate as a whole (as distinct from the top-level crate module).
     /// If you call `hir_crate` (e.g., indirectly by calling `tcx.hir().krate()`),
     /// we will have to assume that any change means that you need to be recompiled.

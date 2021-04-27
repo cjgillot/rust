@@ -1889,6 +1889,7 @@ pub struct FileLines {
 
 pub static SPAN_DEBUG: AtomicRef<fn(Span, &mut fmt::Formatter<'_>) -> fmt::Result> =
     AtomicRef::new(&(default_span_debug as fn(_, &mut fmt::Formatter<'_>) -> _));
+pub static SPAN_TRACK: AtomicRef<fn(LocalDefId)> = AtomicRef::new(&((|_| {}) as fn(_)));
 
 // _____________________________________________________________________________
 // SpanLinesError, SpanSnippetError, DistinctSources, MalformedSourceMapPositions
@@ -1988,7 +1989,7 @@ where
             return;
         }
 
-        let span = self.data();
+        let span = self.decode();
         span.ctxt.hash_stable(ctx, hasher);
         span.parent.hash_stable(ctx, hasher);
 
@@ -1998,7 +1999,7 @@ where
         }
 
         if let Some(parent) = span.parent {
-            let def_span = ctx.def_span(parent).data();
+            let def_span = ctx.def_span(parent).decode();
             if def_span.contains(span) {
                 // This span is enclosed in a definition: only hash the relative position.
                 Hash::hash(&TAG_RELATIVE_SPAN, hasher);
