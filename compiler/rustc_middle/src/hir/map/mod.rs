@@ -952,21 +952,11 @@ pub(super) fn crate_hash(tcx: TyCtxt<'_>, crate_num: CrateNum) -> Svh {
         .iter_enumerated()
         .filter_map(|(def_id, hod)| {
             let def_path_hash = tcx.definitions.def_path_hash(def_id);
-            let mut hasher = StableHasher::new();
-            hod.as_ref()?.hash_stable(&mut hcx, &mut hasher);
-            AttributeMap { map: &tcx.untracked_crate.attrs, prefix: def_id }
-                .hash_stable(&mut hcx, &mut hasher);
-            Some((def_path_hash, hasher.finish()))
+            let hash = hod.as_ref()?.hash;
+            Some((def_path_hash, hash, def_id))
         })
         .collect();
     hir_body_nodes.sort_unstable_by_key(|bn| bn.0);
-
-    let node_hashes = hir_body_nodes.iter().fold(
-        Fingerprint::ZERO,
-        |combined_fingerprint, &(def_path_hash, fingerprint)| {
-            combined_fingerprint.combine(def_path_hash.0.combine(fingerprint))
-        },
-    );
 
     let upstream_crates = upstream_crates(&*tcx.cstore);
 
@@ -987,7 +977,15 @@ pub(super) fn crate_hash(tcx: TyCtxt<'_>, crate_num: CrateNum) -> Svh {
     source_file_names.sort_unstable();
 
     let mut stable_hasher = StableHasher::new();
-    node_hashes.hash_stable(&mut hcx, &mut stable_hasher);
+    for (def_path_hash, fingerprint, def_id) in hir_body_nodes.iter() {
+        def_path_hash.0.hash_stable(&mut hcx, &mut stable_hasher);
+        fingerprint.hash_stable(&mut hcx, &mut stable_hasher);
+        AttributeMap { map: &tcx.untracked_crate.attrs, prefix: *def_id }
+            .hash_stable(&mut hcx, &mut stable_hasher);
+        let span = tcx.definitions.def_span(*def_id);
+        debug_assert_eq!(span.parent(), None);
+        span.hash_stable(&mut hcx, &mut stable_hasher);
+    }
     upstream_crates.hash_stable(&mut hcx, &mut stable_hasher);
     source_file_names.hash_stable(&mut hcx, &mut stable_hasher);
     tcx.sess.opts.dep_tracking_hash(true).hash_stable(&mut hcx, &mut stable_hasher);
