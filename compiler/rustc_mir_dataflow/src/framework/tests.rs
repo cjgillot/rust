@@ -41,6 +41,7 @@ fn mock_body() -> mir::Body<'static> {
             cleanup: None,
             from_hir_call: false,
             fn_span: DUMMY_SP,
+            erased: false,
         },
     );
     block(3, mir::TerminatorKind::Return);
@@ -54,6 +55,7 @@ fn mock_body() -> mir::Body<'static> {
             cleanup: None,
             from_hir_call: false,
             fn_span: DUMMY_SP,
+            erased: false,
         },
     );
 

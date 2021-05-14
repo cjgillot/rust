@@ -154,6 +154,7 @@ impl<'tcx> MockBlocks<'tcx> {
                 cleanup: None,
                 from_hir_call: false,
                 fn_span: DUMMY_SP,
+                erased: false,
             },
         )
     }

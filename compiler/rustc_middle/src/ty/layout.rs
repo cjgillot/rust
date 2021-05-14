@@ -2585,18 +2585,26 @@ impl<'tcx> ty::Instance<'tcx> {
         // FIXME(davidtwco,eddyb): A `ParamEnv` should be passed through to this function.
         let ty = self.ty(tcx, ty::ParamEnv::reveal_all());
         match *ty.kind() {
-            ty::FnDef(..) => {
+            ty::FnDef(def_id, substs) => {
                 // HACK(davidtwco,eddyb): This is a workaround for polymorphization considering
                 // parameters unused if they show up in the signature, but not in the `mir::Body`
                 // (i.e. due to being inside a projection that got normalized, see
                 // `src/test/ui/polymorphization/normalized_sig_types.rs`), and codegen not keeping
                 // track of a polymorphization `ParamEnv` to allow normalizing later.
-                let mut sig = match *ty.kind() {
-                    ty::FnDef(def_id, substs) => tcx
-                        .normalize_erasing_regions(tcx.param_env(def_id), tcx.fn_sig(def_id))
-                        .subst(tcx, substs),
-                    _ => unreachable!(),
-                };
+                let mut sig = tcx.fn_sig(def_id);
+                if let ty::InstanceDef::ErasedShim(..) = self.def {
+                    let mir = tcx.optimized_mir(def_id);
+                    let inner_mir = &mir.dyn_erased_body.as_ref().unwrap();
+                    sig = sig.map_bound(|mut sig| {
+                        let mut inputs_and_output: Vec<_> =
+                            inner_mir.args_iter().map(|l| inner_mir.local_decls[l].ty).collect();
+                        inputs_and_output.push(inner_mir.return_ty());
+                        sig.inputs_and_output = tcx.intern_type_list(&inputs_and_output[..]);
+                        sig
+                    });
+                }
+                let mut sig =
+                    tcx.normalize_erasing_regions(tcx.param_env(def_id), sig).subst(tcx, substs);
 
                 if let ty::InstanceDef::VtableShim(..) = self.def {
                     // Modify `fn(self, ...)` to `fn(self: *mut Self, ...)`.
@@ -2966,6 +2974,16 @@ fn fn_abi_of_instance<'tcx>(
     let (param_env, (instance, extra_args)) = query.into_parts();
 
     let sig = instance.fn_sig_for_fn_abi(tcx);
+
+    let extra_args = if let ty::InstanceDef::ErasedShim(def_id) = instance.def {
+        // Remove extra arguments between Item and ErasedShim.
+        let raw_sig = tcx.fn_sig(def_id);
+        let additions = sig.inputs().skip_binder().len() - raw_sig.inputs().skip_binder().len();
+        let additions = std::cmp::min(additions, extra_args.len());
+        &extra_args[additions..]
+    } else {
+        extra_args
+    };
 
     let caller_location = if instance.def.requires_caller_location(tcx) {
         Some(tcx.caller_location_ty())

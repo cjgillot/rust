@@ -762,6 +762,7 @@ impl<'cx, 'tcx> rustc_mir_dataflow::ResultsVisitor<'cx, 'tcx> for MirBorrowckCtx
                 cleanup: _,
                 from_hir_call: _,
                 fn_span: _,
+                erased: _,
             } => {
                 self.consume_operand(loc, (func, span), flow_state);
                 for arg in args {

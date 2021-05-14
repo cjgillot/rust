@@ -310,6 +310,7 @@ pub(crate) fn codegen_terminator_call<'tcx>(
     func: &Operand<'tcx>,
     args: &[Operand<'tcx>],
     mir_dest: Option<(Place<'tcx>, BasicBlock)>,
+    erased: bool,
 ) {
     let fn_ty = fx.monomorphize(func.ty(fx.mir, fx.tcx));
     let fn_sig =
@@ -318,7 +319,13 @@ pub(crate) fn codegen_terminator_call<'tcx>(
     let destination = mir_dest.map(|(place, bb)| (codegen_place(fx, place), bb));
 
     // Handle special calls like instrinsics and empty drop glue.
-    let instance = if let ty::FnDef(def_id, substs) = *fn_ty.kind() {
+    let instance = if erased {
+        if let ty::FnDef(def_id, substs) = *fn_ty.kind() {
+            Some(ty::Instance::resolve_erased(fx.tcx, def_id, substs))
+        } else {
+            bug!()
+        }
+    } else if let ty::FnDef(def_id, substs) = *fn_ty.kind() {
         let instance = ty::Instance::resolve(fx.tcx, ty::ParamEnv::reveal_all(), def_id, substs)
             .unwrap()
             .unwrap()

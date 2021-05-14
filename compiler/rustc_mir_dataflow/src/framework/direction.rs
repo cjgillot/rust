@@ -482,7 +482,15 @@ impl Direction for Forward {
                 propagate(target, exit_state);
             }
 
-            Call { cleanup, destination, func: _, args: _, from_hir_call: _, fn_span: _ } => {
+            Call {
+                cleanup,
+                destination,
+                func: _,
+                args: _,
+                from_hir_call: _,
+                fn_span: _,
+                erased: _,
+            } => {
                 if let Some(unwind) = cleanup {
                     if dead_unwinds.map_or(true, |dead| !dead.contains(bb)) {
                         propagate(unwind, exit_state);

@@ -134,6 +134,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                         cleanup: None,
                         from_hir_call: false,
                         fn_span: expr_span,
+                        erased: false,
                     },
                 );
                 this.diverge_from(block);

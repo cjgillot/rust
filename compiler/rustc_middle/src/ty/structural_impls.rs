@@ -638,6 +638,7 @@ impl<'a, 'tcx> Lift<'tcx> for ty::InstanceDef<'a> {
             ty::InstanceDef::Item(def_id) => Some(ty::InstanceDef::Item(def_id)),
             ty::InstanceDef::VtableShim(def_id) => Some(ty::InstanceDef::VtableShim(def_id)),
             ty::InstanceDef::ReifyShim(def_id) => Some(ty::InstanceDef::ReifyShim(def_id)),
+            ty::InstanceDef::ErasedShim(def_id) => Some(ty::InstanceDef::ErasedShim(def_id)),
             ty::InstanceDef::Intrinsic(def_id) => Some(ty::InstanceDef::Intrinsic(def_id)),
             ty::InstanceDef::FnPtrShim(def_id, ty) => {
                 Some(ty::InstanceDef::FnPtrShim(def_id, tcx.lift(ty)?))
@@ -869,6 +870,7 @@ impl<'tcx> TypeFoldable<'tcx> for ty::instance::Instance<'tcx> {
                 Item(def) => Item(def.try_fold_with(folder)?),
                 VtableShim(did) => VtableShim(did.try_fold_with(folder)?),
                 ReifyShim(did) => ReifyShim(did.try_fold_with(folder)?),
+                ErasedShim(did) => ErasedShim(did.try_fold_with(folder)?),
                 Intrinsic(did) => Intrinsic(did.try_fold_with(folder)?),
                 FnPtrShim(did, ty) => {
                     FnPtrShim(did.try_fold_with(folder)?, ty.try_fold_with(folder)?)
@@ -892,9 +894,11 @@ impl<'tcx> TypeFoldable<'tcx> for ty::instance::Instance<'tcx> {
         self.substs.visit_with(visitor)?;
         match self.def {
             Item(def) => def.visit_with(visitor),
-            VtableShim(did) | ReifyShim(did) | Intrinsic(did) | Virtual(did, _) => {
-                did.visit_with(visitor)
-            }
+            VtableShim(did)
+            | ReifyShim(did)
+            | ErasedShim(did)
+            | Intrinsic(did)
+            | Virtual(did, _) => did.visit_with(visitor),
             FnPtrShim(did, ty) | CloneShim(did, ty) => {
                 did.visit_with(visitor)?;
                 ty.visit_with(visitor)
