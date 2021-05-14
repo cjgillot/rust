@@ -53,6 +53,7 @@ mod deaggregator;
 mod deduplicate_blocks;
 mod dest_prop;
 pub mod dump_mir;
+mod dyn_erased;
 mod early_otherwise_branch;
 mod elaborate_drops;
 mod function_item_references;
@@ -499,6 +500,7 @@ fn run_optimization_passes<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
             // Some cleanup necessary at least for LLVM and potentially other codegen backends.
             &add_call_guards::CriticalCallEdges,
             &marker::PhaseChange(MirPhase::Optimization),
+            &dyn_erased::DynErased,
             // Dump the end result for testing and debugging purposes.
             &dump_mir::Marker("PreCodegen"),
         ],
