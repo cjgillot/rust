@@ -14,6 +14,7 @@ extern crate rustc_data_structures;
 extern crate rustc_macros;
 
 pub mod cache;
+pub mod cyclic;
 pub mod dep_graph;
 pub mod ich;
 pub mod query;

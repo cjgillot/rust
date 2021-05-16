@@ -287,6 +287,20 @@ impl<K: DepKind> DepGraph<K> {
         hash_result: Option<fn(&mut StableHashingContext<'_>, &R) -> Fingerprint>,
     ) -> (R, DepNodeIndex) {
         if self.is_fully_enabled() {
+            // If the following assertion triggers, it can have two reasons:
+            // 1. Something is wrong with DepNode creation, either here or
+            //    in `DepGraph::try_mark_green()`.
+            // 2. Two distinct query keys get mapped to the same `DepNode`
+            //    (see for example #48923).
+            assert!(
+                !self.dep_node_exists(&key),
+                "forcing query with already existing `DepNode`\n\
+                 - query-key: {:?}\n\
+                 - dep-node: {:?}",
+                arg,
+                key
+            );
+
             self.with_task_impl(key, cx, arg, task, hash_result)
         } else {
             // Incremental compilation is turned off. We just execute the task
@@ -297,7 +311,7 @@ impl<K: DepKind> DepGraph<K> {
         }
     }
 
-    fn with_task_impl<Ctxt: HasDepContext<DepKind = K>, A: Debug, R>(
+    fn with_task_impl<Ctxt: HasDepContext<DepKind = K>, A, R>(
         &self,
         key: DepNode<K>,
         cx: Ctxt,
@@ -306,22 +320,6 @@ impl<K: DepKind> DepGraph<K> {
         hash_result: Option<fn(&mut StableHashingContext<'_>, &R) -> Fingerprint>,
     ) -> (R, DepNodeIndex) {
         // This function is only called when the graph is enabled.
-        let data = self.data.as_ref().unwrap();
-
-        // If the following assertion triggers, it can have two reasons:
-        // 1. Something is wrong with DepNode creation, either here or
-        //    in `DepGraph::try_mark_green()`.
-        // 2. Two distinct query keys get mapped to the same `DepNode`
-        //    (see for example #48923).
-        assert!(
-            !self.dep_node_exists(&key),
-            "forcing query with already existing `DepNode`\n\
-                 - query-key: {:?}\n\
-                 - dep-node: {:?}",
-            arg,
-            key
-        );
-
         let task_deps = if cx.dep_context().is_eval_always(key.kind) {
             None
         } else {
@@ -341,6 +339,19 @@ impl<K: DepKind> DepGraph<K> {
 
         let result = K::with_deps(task_deps_ref, || task(cx, arg));
         let edges = task_deps.map_or_else(|| smallvec![], |lock| lock.into_inner().reads);
+        self.register_node_from_edges(key, cx, result, edges, hash_result)
+    }
+
+    pub(crate) fn register_node_from_edges<Ctxt: HasDepContext<DepKind = K>, R>(
+        &self,
+        key: DepNode<K>,
+        cx: Ctxt,
+        result: R,
+        edges: EdgesVec,
+        hash_result: Option<fn(&mut StableHashingContext<'_>, &R) -> Fingerprint>,
+    ) -> (R, DepNodeIndex) {
+        // This function is only called when the graph is enabled.
+        let data = self.data.as_ref().unwrap();
 
         let dcx = cx.dep_context();
         let hashing_timer = dcx.profiler().incr_result_hashing();
@@ -1233,7 +1244,7 @@ pub enum TaskDepsRef<'a, K: DepKind> {
 pub struct TaskDeps<K: DepKind> {
     #[cfg(debug_assertions)]
     node: Option<DepNode<K>>,
-    reads: EdgesVec,
+    pub(crate) reads: EdgesVec,
     read_set: FxHashSet<DepNodeIndex>,
     phantom_data: PhantomData<DepNode<K>>,
 }
