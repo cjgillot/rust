@@ -75,8 +75,7 @@ impl<'a> StableHashingContext<'a> {
         cstore: &'a dyn CrateStore,
         always_ignore_spans: bool,
     ) -> Self {
-        let hash_spans_initial =
-            !always_ignore_spans && !sess.opts.debugging_opts.incremental_ignore_spans;
+        let hash_spans_initial = !always_ignore_spans;
 
         StableHashingContext {
             sess,
