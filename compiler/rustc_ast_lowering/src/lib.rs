@@ -709,7 +709,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
 
     /// Mark a span as relative to the current owning item.
     fn lower_span(&self, span: Span) -> Span {
-        if self.sess.opts.debugging_opts.incremental_relative_spans {
+        if self.sess.opts.incremental.is_some() {
             span.with_parent(Some(self.current_hir_id_owner.0))
         } else {
             // Do not make spans relative when not using incremental compilation.
