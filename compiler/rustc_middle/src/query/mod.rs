@@ -137,7 +137,7 @@ rustc_queries! {
         desc { "getting the resolver for lowering" }
     }
 
-    query index_ast(_: ()) -> &'tcx Steal<IndexVec<LocalDefId, ast::AstOwner<'tcx>>> {
+    query index_ast(_: ()) -> &'tcx IndexVec<LocalDefId, ast::AstOwner<'tcx>> {
         eval_always
         no_hash
         desc { "getting the AST for lowering" }
@@ -151,6 +151,11 @@ rustc_queries! {
         // Accesses untracked data
         eval_always
         desc { "getting the source span" }
+    }
+
+    query lower_to_hir(key: LocalDefId) -> hir::MaybeOwner<'tcx> {
+        eval_always
+        desc { |tcx| "lower HIR for `{}`", tcx.def_path_str(key.to_def_id()) }
     }
 
     /// Represents crate as a whole (as distinct from the top-level crate module).

@@ -31,10 +31,11 @@ macro_rules! arena_types {
             [decode] borrowck_result: rustc_middle::mir::BorrowCheckResult<'tcx>,
             [] resolver: (
                 rustc_middle::ty::ResolverAstLowering,
-                rustc_data_structures::steal::Steal<rustc_ast::Crate>
+                rustc_ast::Crate
             ),
-            [] index_ast: rustc_data_structures::steal::Steal<
-                rustc_index::IndexVec<rustc_span::def_id::LocalDefId, rustc_ast::AstOwner<'tcx>>
+            [] index_ast: rustc_index::IndexVec<
+                rustc_span::def_id::LocalDefId,
+                rustc_ast::AstOwner<'tcx>
             >,
             [] crate_for_resolver: rustc_data_structures::steal::Steal<(rustc_ast::Crate, rustc_ast::AttrVec)>,
             [] resolutions: rustc_middle::ty::ResolverGlobalCtxt,

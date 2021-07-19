@@ -7,7 +7,7 @@ use rustc_ast::{self as ast, visit};
 use rustc_codegen_ssa::traits::CodegenBackend;
 use rustc_data_structures::parallel;
 use rustc_data_structures::steal::Steal;
-use rustc_data_structures::sync::{AppendOnlyIndexVec, FreezeLock, Lrc, OnceLock, WorkerLocal};
+use rustc_data_structures::sync::{AppendOnlyIndexVec, FreezeLock, OnceLock, WorkerLocal};
 use rustc_expand::base::{ExtCtxt, LintStoreExpand};
 use rustc_feature::Features;
 use rustc_fs_util::try_canonicalize;
@@ -543,7 +543,7 @@ fn write_out_deps(tcx: TyCtxt<'_>, outputs: &OutputFilenames, out_filenames: &[P
 fn resolver_for_lowering_raw<'tcx>(
     tcx: TyCtxt<'tcx>,
     (): (),
-) -> (&'tcx (ty::ResolverAstLowering, Steal<ast::Crate>), &'tcx ty::ResolverGlobalCtxt) {
+) -> (&'tcx (ty::ResolverAstLowering, ast::Crate), &'tcx ty::ResolverGlobalCtxt) {
     let arenas = Resolver::arenas();
     let _ = tcx.registered_tools(()); // Uses `crate_for_resolver`.
     let (krate, pre_configured_attrs) = tcx.crate_for_resolver(()).steal();
@@ -559,7 +559,7 @@ fn resolver_for_lowering_raw<'tcx>(
     } = resolver.into_outputs();
 
     let resolutions = tcx.arena.alloc(untracked_resolutions);
-    (tcx.arena.alloc((untracked_resolver_for_lowering, Steal::new(krate))), resolutions)
+    (tcx.arena.alloc((untracked_resolver_for_lowering, krate)), resolutions)
 }
 
 pub fn write_dep_info(tcx: TyCtxt<'_>) {
@@ -615,7 +615,8 @@ pub static DEFAULT_QUERY_PROVIDERS: LazyLock<Providers> = LazyLock::new(|| {
     let providers = &mut Providers::default();
     providers.analysis = analysis;
     providers.index_ast = rustc_ast_lowering::index_ast;
-    providers.hir_crate = rustc_ast_lowering::lower_to_hir;
+    providers.lower_to_hir = rustc_ast_lowering::lower_to_hir;
+    providers.hir_crate = rustc_ast_lowering::hir_crate;
     providers.resolver_for_lowering_raw = resolver_for_lowering_raw;
     providers.stripped_cfg_items =
         |tcx, _| tcx.arena.alloc_from_iter(tcx.resolutions(()).stripped_cfg_items.steal());
@@ -741,6 +742,8 @@ pub(crate) fn create_global_ctxt<'tcx>(
 /// Runs all analyses that we guarantee to run, even if errors were reported in earlier analyses.
 /// This function never fails.
 fn run_required_analyses(tcx: TyCtxt<'_>) {
+    tcx.ensure().early_lint_checks(());
+
     if tcx.sess.opts.unstable_opts.hir_stats {
         rustc_passes::hir_stats::print_hir_stats(tcx);
     }
