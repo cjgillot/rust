@@ -291,6 +291,12 @@ pub fn write_mir_pretty<'tcx>(
                 writeln!(w)?;
                 write_mir_fn(tcx, body, &mut |_, _| Ok(()), w)?;
             }
+
+            if let Some(erased) = &body.dyn_erased_body {
+                writeln!(w, "// ERASED")?;
+                write_mir_fn(tcx, erased, &mut |_, _| Ok(()), w)?;
+            }
+
             Ok(())
         };
 
