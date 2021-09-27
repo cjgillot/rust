@@ -26,15 +26,15 @@ impl MirPass<'_> for DynErased {
         assert!(body.dyn_erased_body.is_none());
         let def_id = body.source.def_id();
 
-        if !tcx.has_attr(def_id, sym::rustc_dyn) {
-            return;
-        }
+        //if !tcx.has_attr(def_id, sym::rustc_dyn) {
+        //    return;
+        //}
 
         let mut erased_mir = match dyn_erased(tcx, body) {
             Ok(erased_mir) => erased_mir,
             Err(msg) => {
-                let span = tcx.def_span(def_id);
-                tcx.sess.span_err(span, &msg);
+                //let span = tcx.def_span(def_id);
+                //tcx.sess.span_err(span, &msg);
                 return;
             }
         };
@@ -137,7 +137,8 @@ fn gather_types(
             }
 
             let ptr_ty = mk_fn_ptr(tcx, param_env, *def_id, substs);
-            let new_ty = ptr_ty.fold_with(&mut eraser);
+            let new_ty = tcx.normalize_erasing_regions(param_env, ptr_ty);
+            let new_ty = new_ty.fold_with(&mut eraser);
             type_map.insert(ty, new_ty);
             type_map.insert(ptr_ty, new_ty);
 
@@ -146,7 +147,8 @@ fn gather_types(
             }
         }
 
-        let new_ty = ty.fold_with(&mut eraser);
+        let ptr_ty = tcx.normalize_erasing_regions(param_env, ty);
+        let new_ty = ptr_ty.fold_with(&mut eraser);
         debug_assert!(!new_ty.potentially_has_param_types_or_consts());
         type_map.insert(ty, new_ty);
     }
@@ -513,7 +515,7 @@ fn mk_fn_ptr(
     let substs = tcx.normalize_erasing_regions(param_env, substs);
     let fn_sig = tcx.fn_sig(def_id).subst(tcx, substs);
     let fn_sig = tcx.mk_fn_ptr(fn_sig);
-    let fn_sig = tcx.erase_regions(fn_sig);
+    let fn_sig = tcx.normalize_erasing_regions(param_env, fn_sig);
     fn_sig
 }
 
@@ -577,7 +579,7 @@ impl<'tcx> MutVisitor<'tcx> for BodyEraser<'tcx, '_> {
     fn process_projection_elem(
         &mut self,
         elem: PlaceElem<'tcx>,
-        _: Location,
+        location: Location,
     ) -> Option<PlaceElem<'tcx>> {
         match elem {
             PlaceElem::Field(field, ty) => {
@@ -588,8 +590,17 @@ impl<'tcx> MutVisitor<'tcx> for BodyEraser<'tcx, '_> {
                     None
                 }
             }
-            PlaceElem::Index(..)
-            | PlaceElem::Deref
+            PlaceElem::Index(local) => {
+                let mut new_local = local;
+                self.visit_local(
+                    &mut new_local,
+                    PlaceContext::NonMutatingUse(NonMutatingUseContext::Copy),
+                    location,
+                );
+
+                if new_local == local { None } else { Some(PlaceElem::Index(new_local)) }
+            }
+            PlaceElem::Deref
             | PlaceElem::ConstantIndex { .. }
             | PlaceElem::Subslice { .. }
             | PlaceElem::Downcast(..) => None,
