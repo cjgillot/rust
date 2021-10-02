@@ -88,6 +88,9 @@ mod item;
 mod lifetime_collector;
 mod pat;
 mod path;
+mod query;
+
+pub use query::provide;
 
 rustc_fluent_macro::fluent_messages! { "../messages.ftl" }
 
@@ -357,7 +360,7 @@ enum FnDeclKind {
     Impl,
 }
 
-pub fn index_ast<'tcx>(tcx: TyCtxt<'tcx>, (): ()) -> &'tcx IndexVec<LocalDefId, Steal<AstOwner>> {
+fn index_ast<'tcx>(tcx: TyCtxt<'tcx>, (): ()) -> &'tcx IndexVec<LocalDefId, Steal<AstOwner>> {
     // Queries that borrow `resolver_for_lowering`.
     tcx.ensure_with_value().output_filenames(());
     tcx.ensure_with_value().early_lint_checks(());
@@ -438,7 +441,7 @@ pub fn index_ast<'tcx>(tcx: TyCtxt<'tcx>, (): ()) -> &'tcx IndexVec<LocalDefId, 
     }
 }
 
-pub fn lower_to_hir(tcx: TyCtxt<'_>, def_id: LocalDefId) -> hir::MaybeOwner<'_> {
+fn lower_to_hir(tcx: TyCtxt<'_>, def_id: LocalDefId) -> hir::MaybeOwner<'_> {
     let (resolver, _) = tcx.resolver_for_lowering();
     let ast_index = tcx.index_ast(());
     let node = ast_index.get(def_id).map(Steal::steal);
@@ -476,7 +479,7 @@ pub fn lower_to_hir(tcx: TyCtxt<'_>, def_id: LocalDefId) -> hir::MaybeOwner<'_> 
     })
 }
 
-pub fn hir_crate<'tcx>(tcx: TyCtxt<'tcx>, (): ()) -> rustc_hir::Crate<'tcx> {
+fn hir_crate<'tcx>(tcx: TyCtxt<'tcx>, (): ()) -> rustc_hir::Crate<'tcx> {
     let mut owners: IndexVec<LocalDefId, _> = IndexVec::new();
     while owners.next_index().index() < tcx.definitions_untracked().def_index_count() {
         let next = owners.next_index();
