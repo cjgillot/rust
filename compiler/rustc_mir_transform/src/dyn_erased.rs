@@ -112,7 +112,7 @@ fn gather_types(
     let TypeGatherer { types, .. } = calls;
 
     let mut type_map = FxHashMap::default();
-    let mut eraser = TypeEraser { tcx };
+    //let mut eraser = TypeEraser { tcx };
 
     let mut types: Vec<_> = types.into_iter().collect();
     while let Some(ty) = types.pop() {
@@ -138,7 +138,7 @@ fn gather_types(
 
             let ptr_ty = mk_fn_ptr(tcx, param_env, *def_id, substs);
             let new_ty = tcx.normalize_erasing_regions(param_env, ptr_ty);
-            let new_ty = new_ty.fold_with(&mut eraser);
+            //let new_ty = new_ty.fold_with(&mut eraser);
             type_map.insert(ty, new_ty);
             type_map.insert(ptr_ty, new_ty);
 
@@ -147,9 +147,9 @@ fn gather_types(
             }
         }
 
-        let ptr_ty = tcx.normalize_erasing_regions(param_env, ty);
-        let new_ty = ptr_ty.fold_with(&mut eraser);
-        debug_assert!(!new_ty.potentially_has_param_types_or_consts());
+        let new_ty = tcx.normalize_erasing_regions(param_env, ty);
+        //let new_ty = new_ty.fold_with(&mut eraser);
+        //debug_assert!(!new_ty.potentially_has_param_types_or_consts());
         type_map.insert(ty, new_ty);
     }
 
@@ -390,8 +390,13 @@ fn type_erase_body(
     eraser.visit_body(body);
     body.required_consts.retain(|c| !c.potentially_has_param_types_or_consts());
 
-    body.is_polymorphic = body.potentially_has_param_types_or_consts();
-    debug_assert!(!body.is_polymorphic, "{:#?}", body);
+    //body.is_polymorphic = body.potentially_has_param_types_or_consts();
+    //debug_assert!(!body.is_polymorphic, "{:#?}", body);
+
+    let param_env = tcx.param_env_reveal_all_normalized(body.source.def_id());
+    for l in body.local_decls.iter() {
+        debug_assert!(tcx.layout_of(param_env.and(l.ty)).is_ok());
+    }
 
     // Reorder locals to have parameters first.
     body.arg_count += num_new_locals;
@@ -566,15 +571,15 @@ impl<'tcx> MutVisitor<'tcx> for BodyEraser<'tcx, '_> {
         self.super_ty(ty);
         if let Some(new_ty) = self.types.get(&*ty) {
             *ty = new_ty;
-        } else {
-            debug_assert!(!ty.potentially_has_param_types_or_consts());
+            //} else {
+            //debug_assert!(!ty.potentially_has_param_types_or_consts());
         }
     }
 
-    fn visit_source_scope_data(&mut self, scope_data: &mut SourceScopeData<'tcx>) {
-        self.super_source_scope_data(scope_data);
-        *scope_data = scope_data.clone().fold_with(&mut TypeEraser { tcx: self.tcx })
-    }
+    //fn visit_source_scope_data(&mut self, scope_data: &mut SourceScopeData<'tcx>) {
+    //    self.super_source_scope_data(scope_data);
+    //    *scope_data = scope_data.clone().fold_with(&mut TypeEraser { tcx: self.tcx })
+    //}
 
     fn process_projection_elem(
         &mut self,
@@ -621,7 +626,7 @@ impl<'tcx> MutVisitor<'tcx> for BodyEraser<'tcx, '_> {
             }
         }
         self.super_rvalue(rvalue, location);
-        debug_assert!(!rvalue.potentially_has_param_types_or_consts());
+        //debug_assert!(!rvalue.potentially_has_param_types_or_consts());
     }
 
     fn visit_local(&mut self, local: &mut Local, _: PlaceContext, _: Location) {
