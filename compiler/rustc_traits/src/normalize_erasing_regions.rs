@@ -59,7 +59,9 @@ fn normalize_after_erasing_regions<'tcx, T: TypeFoldable<'tcx> + PartialEq + Cop
                 debug_assert!(!erased.needs_infer(), "{:?}", erased);
                 erased
             }
-            Err(NoSolution) => bug!("could not fully normalize `{:?}`", value),
+            Err(NoSolution) => {
+                bug!("could not fully normalize `{:?}` with param_env={:?}", value, param_env)
+            }
         }
     })
 }

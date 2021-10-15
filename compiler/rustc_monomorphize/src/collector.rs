@@ -618,7 +618,9 @@ impl<'a, 'tcx> MirNeighborCollector<'a, 'tcx> {
         debug!("monomorphize: self.instance={:?}", self.instance);
         self.instance.subst_mir_and_normalize_erasing_regions(
             self.tcx,
-            ty::ParamEnv::reveal_all(),
+            //ty::ParamEnv::reveal_all(),
+            //self.tcx.param_env_reveal_all_normalized(self.instance.def_id()),
+            self.tcx.param_env_reveal_all_normalized(self.body.source.def_id()),
             value,
         )
     }
