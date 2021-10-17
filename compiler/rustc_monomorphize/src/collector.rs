@@ -666,7 +666,7 @@ impl<'a, 'tcx> MirVisitor<'tcx> for MirNeighborCollector<'a, 'tcx> {
             ) => {
                 let fn_ty = operand.ty(self.body, self.tcx);
                 let fn_ty = self.monomorphize(fn_ty);
-                visit_fn_use(self.tcx, fn_ty, false, false, span, &mut self.output);
+                visit_fn_use(self.tcx, fn_ty, false, span, &mut self.output);
             }
             mir::Rvalue::Cast(
                 mir::CastKind::Pointer(PointerCast::ClosureFnPointer(_)),
@@ -779,10 +779,18 @@ impl<'a, 'tcx> MirVisitor<'tcx> for MirNeighborCollector<'a, 'tcx> {
 
         let tcx = self.tcx;
         match terminator.kind {
-            mir::TerminatorKind::Call { ref func, erased, .. } => {
+            mir::TerminatorKind::Call { ref func, erased: false, .. } => {
                 let callee_ty = func.ty(self.body, tcx);
                 let callee_ty = self.monomorphize(callee_ty);
-                visit_fn_use(self.tcx, callee_ty, true, erased, source, &mut self.output);
+                visit_fn_use(self.tcx, callee_ty, true, source, &mut self.output);
+            }
+            mir::TerminatorKind::Call { ref func, erased: true, .. } => {
+                let callee_ty = func.ty(self.body, tcx);
+                //let callee_ty = self.monomorphize(callee_ty);
+                if let ty::FnDef(def_id, substs) = *callee_ty.kind() {
+                    let instance = ty::Instance::resolve_erased(tcx, def_id, substs);
+                    visit_instance_use(tcx, instance, true, source, &mut self.output);
+                }
             }
             mir::TerminatorKind::Drop { ref place, .. }
             | mir::TerminatorKind::DropAndReplace { ref place, .. } => {
@@ -795,7 +803,7 @@ impl<'a, 'tcx> MirVisitor<'tcx> for MirNeighborCollector<'a, 'tcx> {
                     match *op {
                         mir::InlineAsmOperand::SymFn { ref value } => {
                             let fn_ty = self.monomorphize(value.literal.ty());
-                            visit_fn_use(self.tcx, fn_ty, false, false, source, &mut self.output);
+                            visit_fn_use(self.tcx, fn_ty, false, source, &mut self.output);
                         }
                         mir::InlineAsmOperand::SymStatic { def_id } => {
                             let instance = Instance::mono(self.tcx, def_id);
@@ -898,15 +906,11 @@ fn visit_fn_use<'tcx>(
     tcx: TyCtxt<'tcx>,
     ty: Ty<'tcx>,
     is_direct_call: bool,
-    erased: bool,
     source: Span,
     output: &mut Vec<Spanned<MonoItem<'tcx>>>,
 ) {
     if let ty::FnDef(def_id, substs) = *ty.kind() {
-        let instance = if erased {
-            debug_assert!(is_direct_call);
-            ty::Instance::resolve_erased(tcx, def_id, substs)
-        } else if is_direct_call {
+        let instance = if is_direct_call {
             ty::Instance::resolve(tcx, ty::ParamEnv::reveal_all(), def_id, substs).unwrap().unwrap()
         } else {
             ty::Instance::resolve_for_fn_ptr(tcx, ty::ParamEnv::reveal_all(), def_id, substs)
