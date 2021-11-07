@@ -517,18 +517,15 @@ impl<'tcx> Instance<'tcx> {
         Instance::resolve(tcx, ty::ParamEnv::reveal_all(), def_id, substs).unwrap().unwrap()
     }
 
-    pub fn resolve_erased(
-        tcx: TyCtxt<'tcx>,
-        def_id: DefId,
-        _substs: SubstsRef<'tcx>,
-    ) -> Instance<'tcx> {
-        let substs = InternalSubsts::for_item(tcx, def_id, |param, _| match param.kind {
-            ty::GenericParamDefKind::Lifetime => tcx.lifetimes.re_erased.into(),
-            ty::GenericParamDefKind::Type { .. } => tcx.types.u8.into(),
-            ty::GenericParamDefKind::Const { .. } => {
-                panic!("Unsupported type-erased const params")
-            }
-        });
+    pub fn resolve_erased(tcx: TyCtxt<'tcx>, def_id: DefId) -> Instance<'tcx> {
+        let substs = InternalSubsts::identity_for_item(tcx, def_id);
+        //let substs = InternalSubsts::for_item(tcx, def_id, |param, _| match param.kind {
+        //    ty::GenericParamDefKind::Lifetime => tcx.lifetimes.re_erased.into(),
+        //    ty::GenericParamDefKind::Type { .. } => tcx.types.u8.into(),
+        //    ty::GenericParamDefKind::Const { .. } => {
+        //        panic!("Unsupported type-erased const params")
+        //    }
+        //});
         let def = ty::InstanceDef::ErasedShim(def_id);
         ty::Instance { def, substs }
     }

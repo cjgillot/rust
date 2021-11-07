@@ -619,8 +619,8 @@ impl<'a, 'tcx> MirNeighborCollector<'a, 'tcx> {
         self.instance.subst_mir_and_normalize_erasing_regions(
             self.tcx,
             //ty::ParamEnv::reveal_all(),
-            //self.tcx.param_env_reveal_all_normalized(self.instance.def_id()),
-            self.tcx.param_env_reveal_all_normalized(self.body.source.def_id()),
+            self.tcx.param_env_reveal_all_normalized(self.instance.def_id()),
+            //self.tcx.param_env_reveal_all_normalized(self.body.source.def_id()),
             value,
         )
     }
@@ -787,8 +787,8 @@ impl<'a, 'tcx> MirVisitor<'tcx> for MirNeighborCollector<'a, 'tcx> {
             mir::TerminatorKind::Call { ref func, erased: true, .. } => {
                 let callee_ty = func.ty(self.body, tcx);
                 //let callee_ty = self.monomorphize(callee_ty);
-                if let ty::FnDef(def_id, substs) = *callee_ty.kind() {
-                    let instance = ty::Instance::resolve_erased(tcx, def_id, substs);
+                if let ty::FnDef(def_id, _substs) = *callee_ty.kind() {
+                    let instance = ty::Instance::resolve_erased(tcx, def_id);
                     visit_instance_use(tcx, instance, true, source, &mut self.output);
                 }
             }
@@ -1407,6 +1407,7 @@ fn collect_neighbours<'tcx>(
 ) {
     debug!("collect_neighbours: {:?}", instance.def_id());
     let body = tcx.instance_mir(instance.def);
+    debug!("visit_body: {:#?}", body);
 
     MirNeighborCollector { tcx, body: &body, output, instance }.visit_body(&body);
 }

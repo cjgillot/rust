@@ -583,18 +583,19 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         let callee = self.codegen_operand(&mut bx, func);
 
         let (instance, mut llfn) = match *callee.layout.ty.kind() {
-            ty::FnDef(def_id, substs) => {
-                let instance = if erased {
-                    ty::Instance::resolve_erased(bx.tcx(), def_id, substs)
-                } else {
-                    ty::Instance::resolve(bx.tcx(), ty::ParamEnv::reveal_all(), def_id, substs)
-                        .unwrap()
-                        .unwrap()
-                        .polymorphize(bx.tcx())
-                };
+            ty::FnDef(def_id, _) if erased => {
+                let instance = ty::Instance::resolve_erased(bx.tcx(), def_id);
                 (Some(instance), None)
             }
             _ if erased => bug!("{} is not erasable", callee.layout.ty),
+            ty::FnDef(def_id, substs) => {
+                let instance =
+                    ty::Instance::resolve(bx.tcx(), ty::ParamEnv::reveal_all(), def_id, substs)
+                        .unwrap()
+                        .unwrap()
+                        .polymorphize(bx.tcx());
+                (Some(instance), None)
+            }
             ty::FnPtr(_) => (None, Some(callee.immediate())),
             _ => bug!("{} is not callable", callee.layout.ty),
         };
