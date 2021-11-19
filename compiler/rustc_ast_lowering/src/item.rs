@@ -64,7 +64,8 @@ impl<'a> Visitor<'a> for ItemLowerer<'a, '_, '_> {
 
     fn visit_fn(&mut self, fk: FnKind<'a>, sp: Span, _: NodeId) {
         match fk {
-            FnKind::Fn(FnCtxt::Foreign, _, sig, _, _) => {
+            FnKind::Fn(FnCtxt::Foreign, _, sig, _, generics, _) => {
+                self.visit_generics(generics);
                 self.visit_fn_header(&sig.header);
                 visit::walk_fn_decl(self, &sig.decl);
                 // Don't visit the foreign function body even if it has one, since lowering the

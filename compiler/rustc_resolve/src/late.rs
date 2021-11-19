@@ -537,6 +537,10 @@ impl<'a: 'ast, 'ast> Visitor<'ast> for LateResolutionVisitor<'a, '_, 'ast> {
         self.with_rib(ValueNS, rib_kind, |this| {
             // Create a label rib for the function.
             this.with_label_rib(rib_kind, |this| {
+                if let FnKind::Fn(_, _, _, _, generics, _) = fn_kind {
+                    this.visit_generics(generics);
+                }
+
                 // Add each argument to the rib.
                 this.resolve_params(&declaration.inputs);
 
