@@ -229,7 +229,7 @@ enum ImplTraitContext<'b, 'a> {
     ReturnPositionOpaqueTy {
         /// `DefId` for the parent function, used to look up necessary
         /// information later.
-        fn_def_id: DefId,
+        fn_def_id: LocalDefId,
         /// Origin: Either OpaqueTyOrigin::FnReturn or OpaqueTyOrigin::AsyncFn,
         origin: hir::OpaqueTyOrigin,
     },
@@ -1378,7 +1378,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
     fn lower_opaque_impl_trait(
         &mut self,
         span: Span,
-        fn_def_id: Option<DefId>,
+        fn_def_id: Option<LocalDefId>,
         origin: hir::OpaqueTyOrigin,
         opaque_ty_node_id: NodeId,
         capturable_lifetimes: Option<&FxHashSet<hir::LifetimeName>>,
@@ -1450,7 +1450,6 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                     span: lctx.lower_span(span),
                 },
                 bounds: hir_bounds,
-                impl_trait_fn: fn_def_id,
                 origin,
             };
 
@@ -1520,7 +1519,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
     fn lower_fn_decl(
         &mut self,
         decl: &FnDecl,
-        mut in_band_ty_params: Option<(DefId, &mut Vec<hir::GenericParam<'hir>>)>,
+        mut in_band_ty_params: Option<(LocalDefId, &mut Vec<hir::GenericParam<'hir>>)>,
         impl_trait_return_allow: bool,
         make_ret_async: Option<NodeId>,
     ) -> &'hir hir::FnDecl<'hir> {
@@ -1578,7 +1577,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                         Some((def_id, _)) if impl_trait_return_allow => {
                             ImplTraitContext::ReturnPositionOpaqueTy {
                                 fn_def_id: def_id,
-                                origin: hir::OpaqueTyOrigin::FnReturn,
+                                origin: hir::OpaqueTyOrigin::FnReturn(def_id),
                             }
                         }
                         _ => ImplTraitContext::disallowed(),
@@ -1633,7 +1632,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
     fn lower_async_fn_ret_ty(
         &mut self,
         output: &FnRetTy,
-        fn_def_id: DefId,
+        fn_def_id: LocalDefId,
         opaque_ty_node_id: NodeId,
     ) -> hir::FnRetTy<'hir> {
         debug!(
@@ -1748,8 +1747,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                     span: this.lower_span(span),
                 },
                 bounds: arena_vec![this; future_bound],
-                impl_trait_fn: Some(fn_def_id),
-                origin: hir::OpaqueTyOrigin::AsyncFn,
+                origin: hir::OpaqueTyOrigin::AsyncFn(fn_def_id),
             };
 
             trace!("exist ty from async fn def id: {:#?}", opaque_ty_def_id);
@@ -1795,7 +1793,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
     fn lower_async_fn_output_type_to_future_bound(
         &mut self,
         output: &FnRetTy,
-        fn_def_id: DefId,
+        fn_def_id: LocalDefId,
         span: Span,
     ) -> hir::GenericBound<'hir> {
         // Compute the `T` in `Future<Output = T>` from the return type.
@@ -1806,7 +1804,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                 // generates.
                 let context = ImplTraitContext::ReturnPositionOpaqueTy {
                     fn_def_id,
-                    origin: hir::OpaqueTyOrigin::FnReturn,
+                    origin: hir::OpaqueTyOrigin::FnReturn(fn_def_id),
                 };
                 self.lower_ty(ty, context)
             }
@@ -2443,17 +2441,12 @@ impl<'hir> GenericArgsCtor<'hir> {
     }
 }
 
+#[tracing::instrument(level = "debug")]
 fn lifetimes_from_impl_trait_bounds(
     opaque_ty_id: NodeId,
     bounds: hir::GenericBounds<'_>,
     lifetimes_to_include: Option<&FxHashSet<hir::LifetimeName>>,
 ) -> Vec<(hir::LifetimeName, Span)> {
-    debug!(
-        "lifetimes_from_impl_trait_bounds(opaque_ty_id={:?}, \
-             bounds={:#?})",
-        opaque_ty_id, bounds,
-    );
-
     // This visitor walks over `impl Trait` bounds and creates defs for all lifetimes that
     // appear in the bounds, excluding lifetimes that are created within the bounds.
     // E.g., `'a`, `'b`, but not `'c` in `impl for<'c> SomeTrait<'a, 'b, 'c>`.

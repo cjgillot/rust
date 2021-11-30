@@ -2241,7 +2241,6 @@ pub struct BareFnTy<'hir> {
 pub struct OpaqueTy<'hir> {
     pub generics: Generics<'hir>,
     pub bounds: GenericBounds<'hir>,
-    pub impl_trait_fn: Option<DefId>,
     pub origin: OpaqueTyOrigin,
 }
 
@@ -2249,9 +2248,9 @@ pub struct OpaqueTy<'hir> {
 #[derive(Copy, Clone, PartialEq, Eq, Encodable, Decodable, Debug, HashStable_Generic)]
 pub enum OpaqueTyOrigin {
     /// `-> impl Trait`
-    FnReturn,
+    FnReturn(LocalDefId),
     /// `async fn`
-    AsyncFn,
+    AsyncFn(LocalDefId),
     /// type aliases: `type Foo = impl Trait;`
     TyAlias,
 }
@@ -2802,7 +2801,9 @@ impl ItemKind<'_> {
         Some(match *self {
             ItemKind::Fn(_, ref generics, _)
             | ItemKind::TyAlias(_, ref generics)
-            | ItemKind::OpaqueTy(OpaqueTy { ref generics, impl_trait_fn: None, .. })
+            | ItemKind::OpaqueTy(OpaqueTy {
+                ref generics, origin: OpaqueTyOrigin::TyAlias, ..
+            })
             | ItemKind::Enum(_, ref generics)
             | ItemKind::Struct(_, ref generics)
             | ItemKind::Union(_, ref generics)
