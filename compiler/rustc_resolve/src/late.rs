@@ -222,6 +222,11 @@ enum LifetimeRibKind {
     /// We passed through a function definition. Disallow in-band definitions.
     FnBody,
 
+    /// FIXME(const_generics): This patches over an ICE caused by non-'static lifetimes in const
+    /// generics. We are disallowing this until we can decide on how we want to handle non-'static
+    /// lifetimes in const generics. See issue #74052 for discussion.
+    ConstGeneric,
+
     /// For **Modern** cases, create a new anonymous region parameter
     /// and reference that.
     ///
@@ -1095,16 +1100,18 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
 
                         this.ribs[TypeNS].push(Rib::new(ConstParamTyRibKind));
                         this.ribs[ValueNS].push(Rib::new(ConstParamTyRibKind));
-                        this.visit_ty(ty);
+                        this.with_lifetime_rib(LifetimeRibKind::ConstGeneric, |this| {
+                            this.visit_ty(ty)
+                        });
                         this.ribs[TypeNS].pop().unwrap();
                         this.ribs[ValueNS].pop().unwrap();
 
                         if let Some(ref expr) = default {
                             this.ribs[TypeNS].push(forward_ty_ban_rib);
                             this.ribs[ValueNS].push(forward_const_ban_rib);
-                            this.lifetime_ribs.push(forward_lifetime_ban_rib);
-                            this.visit_anon_const(expr);
-                            forward_lifetime_ban_rib = this.lifetime_ribs.pop().unwrap();
+                            this.with_lifetime_rib(LifetimeRibKind::ConstGeneric, |this| {
+                                this.visit_anon_const(expr)
+                            });
                             forward_const_ban_rib = this.ribs[ValueNS].pop().unwrap();
                             forward_ty_ban_rib = this.ribs[TypeNS].pop().unwrap();
                         }
@@ -1179,6 +1186,11 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
                 LifetimeRibKind::FnBody => {
                     // Hijack `in_band_rib_index` to ensure we do not crate an in-band definition.
                     in_band_rib_index.get_or_insert((i, ident.span));
+                }
+                LifetimeRibKind::ConstGeneric => {
+                    self.emit_non_static_lt_in_const_generic_error(lifetime);
+                    self.r.lifetimes_res_map.insert(lifetime.id, LifetimeRes::Error);
+                    return;
                 }
                 _ => {}
             }

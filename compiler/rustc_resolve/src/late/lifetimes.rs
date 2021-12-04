@@ -171,8 +171,6 @@ crate struct LifetimeContext<'a, 'tcx> {
     /// Used to disallow the use of in-band lifetimes in `fn` or `Fn` syntax.
     is_in_fn_syntax: bool,
 
-    is_in_const_generic: bool,
-
     /// Indicates that we only care about the definition of a trait. This should
     /// be false if the `Item` we are resolving lifetimes for is not a trait or
     /// we eventually need lifetimes resolve for trait items.
@@ -454,7 +452,6 @@ fn do_resolve(
         map: &mut named_region_map,
         scope: ROOT_SCOPE,
         is_in_fn_syntax: false,
-        is_in_const_generic: false,
         trait_definition_only,
         xcrate_object_lifetime_defaults: Default::default(),
         lifetime_uses: &mut Default::default(),
@@ -1277,10 +1274,6 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
             self.insert_lifetime(lifetime_ref, Region::Static);
             return;
         }
-        if self.is_in_const_generic && lifetime_ref.name != LifetimeName::Error {
-            self.emit_non_static_lt_in_const_generic_error(lifetime_ref);
-            return;
-        }
         self.resolve_lifetime_ref(lifetime_ref);
     }
 
@@ -1355,11 +1348,8 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
                         }
                     }
                     GenericParamKind::Const { ref ty, .. } => {
-                        let was_in_const_generic = this.is_in_const_generic;
-                        this.is_in_const_generic = true;
                         walk_list!(this, visit_param_bound, param.bounds);
                         this.visit_ty(&ty);
-                        this.is_in_const_generic = was_in_const_generic;
                     }
                 }
             }
@@ -1696,7 +1686,6 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
             map,
             scope: &wrap_scope,
             is_in_fn_syntax: self.is_in_fn_syntax,
-            is_in_const_generic: self.is_in_const_generic,
             trait_definition_only: self.trait_definition_only,
             xcrate_object_lifetime_defaults,
             lifetime_uses,
