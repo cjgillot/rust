@@ -199,8 +199,6 @@ pub enum LifetimeRes {
     Static,
     /// Resolution failure.
     Error,
-    /// HACK: This is used to recover the NodeId of an elided lifetime.
-    ElidedAnchor { start: NodeId, end: NodeId },
 }
 
 pub trait ResolverAstLowering {
@@ -1156,18 +1154,19 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
             TyKind::Slice(ref ty) => hir::TyKind::Slice(self.lower_ty(ty, itctx)),
             TyKind::Ptr(ref mt) => hir::TyKind::Ptr(self.lower_mt(mt, itctx)),
             TyKind::Rptr(ref region, ref mt) => {
-                let region = region.unwrap_or_else(|| {
-                    let Some(LifetimeRes::ElidedAnchor { start, end }) = self.resolver.get_lifetime_res(t.id) else {
-                        panic!()
-                    };
-                    debug_assert_eq!(start, end);
+                let lifetime = if let Some(ref region) = region {
+                    self.lower_lifetime(region)
+                } else {
                     let span = self.sess.source_map().next_point(t.span.shrink_to_lo());
-                    Lifetime {
-                        ident: Ident::new(kw::UnderscoreLifetime, span),
-                        id: start,
-                    }
-                });
-                let lifetime = self.lower_lifetime(&region);
+                    let span = self.lower_span(span);
+                    let id = self.resolver.next_node_id();
+                    self.new_named_lifetime_with_res(
+                        id,
+                        span,
+                        Ident::new(kw::UnderscoreLifetime, span),
+                        LifetimeRes::Anonymous { binder: id, elided: false },
+                    )
+                };
                 hir::TyKind::Rptr(lifetime, self.lower_mt(mt, itctx))
             }
             TyKind::BareFn(ref f) => {
@@ -1880,7 +1879,6 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
             }
             LifetimeRes::Static => (None, hir::LifetimeName::Static),
             LifetimeRes::Error => (None, hir::LifetimeName::Error),
-            res => panic!("Unexpected lifetime resolution {:?} for {:?} at {:?}", res, ident, span),
         };
         debug!(?self.captured_lifetimes);
         debug!(?region);

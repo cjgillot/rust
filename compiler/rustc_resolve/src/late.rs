@@ -27,7 +27,6 @@ use rustc_hir::def_id::{DefId, CRATE_DEF_INDEX};
 use rustc_hir::definitions::DefPathData;
 use rustc_hir::{PrimTy, TraitCandidate};
 use rustc_index::vec::Idx;
-use rustc_middle::ty::DefIdTree;
 use rustc_middle::{bug, span_bug};
 use rustc_session::lint;
 use rustc_span::symbol::{kw, sym, Ident, Symbol};
@@ -1328,10 +1327,6 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
     #[tracing::instrument(level = "debug", skip(self))]
     fn resolve_elided_lifetime(&mut self, anchor_id: NodeId, span: Span) {
         let id = self.r.next_node_id();
-        self.r
-            .lifetimes_res_map
-            .insert(anchor_id, LifetimeRes::ElidedAnchor { start: id, end: id });
-
         let lt = Lifetime { id, ident: Ident::new(kw::UnderscoreLifetime, span) };
         self.resolve_anonymous_lifetime(&lt, true);
     }
@@ -1357,78 +1352,6 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
 
         let fresh = if ident.name == kw::UnderscoreLifetime { Some(def_id.index()) } else { None };
         LifetimeRes::Param { param: def_node_id, binder: item_node_id, in_band: true, fresh }
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    fn resolve_elided_lifetimes_in_path(
-        &mut self,
-        path_id: NodeId,
-        partial_res: PartialRes,
-        segments: &[Segment],
-    ) {
-        let proj_start = segments.len() - partial_res.unresolved_segments();
-        for (i, segment) in segments.iter().enumerate() {
-            let Some(segment_id) = segment.id else { continue };
-
-            // Figure out if this is a type/trait segment,
-            // which may need lifetime elision performed.
-            let type_def_id = match partial_res.base_res() {
-                Res::Def(DefKind::AssocTy, def_id) if i + 2 == proj_start => {
-                    self.r.parent(def_id).unwrap()
-                }
-                Res::Def(DefKind::Variant, def_id) if i + 1 == proj_start => {
-                    self.r.parent(def_id).unwrap()
-                }
-                Res::Def(DefKind::Struct, def_id)
-                | Res::Def(DefKind::Union, def_id)
-                | Res::Def(DefKind::Enum, def_id)
-                | Res::Def(DefKind::TyAlias, def_id)
-                | Res::Def(DefKind::Trait, def_id)
-                    if i + 1 == proj_start =>
-                {
-                    def_id
-                }
-                _ => continue,
-            };
-
-            let expected_lifetimes = self.r.item_generics_num_lifetimes(type_def_id);
-            if expected_lifetimes == 0 {
-                continue;
-            }
-            let node_ids = self.r.next_node_ids(expected_lifetimes);
-            self.r.lifetimes_res_map.insert(
-                segment_id,
-                LifetimeRes::ElidedAnchor { start: *node_ids.start(), end: *node_ids.end() },
-            );
-
-            let mut res = LifetimeRes::Anonymous {
-                binder: segment.id.unwrap_or(DUMMY_NODE_ID),
-                elided: true,
-            };
-            for rib in self.lifetime_ribs.iter().rev() {
-                match rib.kind {
-                    LifetimeRibKind::AnonymousCreateParameter(_) => {
-                        // We should have emitted E0726 when processing this path above
-                        res = LifetimeRes::Error;
-                        break;
-                    }
-                    // `PassThrough` is the normal case.
-                    // `new_error_lifetime`, which would usually be used in the case of `ReportError`,
-                    // is unsuitable here, as these can occur from missing lifetime parameters in a
-                    // `PathSegment`, for which there is no associated `'_` or `&T` with no explicit
-                    // lifetime. Instead, we simply create an implicit lifetime, which will be checked
-                    // later, at which point a suitable error will be emitted.
-                    LifetimeRibKind::AnonymousPassThrough(..)
-                    | LifetimeRibKind::AnonymousReportError => break,
-                    _ => {}
-                }
-            }
-
-            for i in 0..expected_lifetimes {
-                let id = node_ids.start().plus(i);
-                self.r.lifetimes_res_map.insert(id, res);
-            }
-        }
     }
 
     /// Searches the current set of local scopes for labels. Returns the `NodeId` of the resolved
@@ -2802,7 +2725,6 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
             self.r.record_partial_res(id, partial_res);
         }
 
-        self.resolve_elided_lifetimes_in_path(id, partial_res, path);
         partial_res
     }
 
