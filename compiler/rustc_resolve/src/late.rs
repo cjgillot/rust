@@ -199,6 +199,9 @@ enum LifetimeRibKind {
     /// before said generic parameter. Also see the `visit_generics` override.
     ForwardGenericParamBan,
 
+    /// We passed through a function definition. Disallow in-band definitions.
+    FnBody,
+
     /// For **Modern** cases, create a new anonymous region parameter
     /// and reference that.
     ///
@@ -740,10 +743,10 @@ impl<'a: 'ast, 'ast> Visitor<'ast> for LateResolutionVisitor<'a, '_, 'ast> {
                 let previous_state = replace(&mut this.in_func_body, true);
                 // Resolve the function body, potentially inside the body of an async closure
                 this.with_lifetime_rib(LifetimeRibKind::AnonymousPassThrough(fn_id), |this| {
-                    match fn_kind {
+                    this.with_lifetime_rib(LifetimeRibKind::FnBody, |this| match fn_kind {
                         FnKind::Fn(.., body) => walk_list!(this, visit_block, body),
                         FnKind::Closure(_, body) => this.visit_expr(body),
-                    }
+                    })
                 });
 
                 debug!("(resolving function) leaving function");
@@ -1151,6 +1154,10 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
                 LifetimeRibKind::Generics { kind, .. } if !kind.transparent_in_band() => {
                     // Remember the innermost in-band lifetime rib and the marked span at this
                     // point.
+                    in_band_rib_index.get_or_insert((i, ident.span));
+                }
+                LifetimeRibKind::FnBody => {
+                    // Hijack `in_band_rib_index` to ensure we do not crate an in-band definition.
                     in_band_rib_index.get_or_insert((i, ident.span));
                 }
                 _ => {}
