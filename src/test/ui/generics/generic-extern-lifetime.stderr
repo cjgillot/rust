@@ -2,7 +2,11 @@ error[E0261]: use of undeclared lifetime name `'a`
   --> $DIR/generic-extern-lifetime.rs:6:26
    |
 LL |     pub fn life2<'b>(x: &'a i32, y: &'b i32);
-   |                          ^^ undeclared lifetime
+   |                  -       ^^ undeclared lifetime
+   |                  |
+   |                  help: consider introducing lifetime `'a` here: `'a,`
+   |
+   = help: if you want to experiment with in-band lifetime bindings, add `#![feature(in_band_lifetimes)]` to the crate attributes
 
 error[E0261]: use of undeclared lifetime name `'a`
   --> $DIR/generic-extern-lifetime.rs:8:37
@@ -11,10 +15,14 @@ LL |     pub fn life4<'b>(x: for<'c> fn(&'a i32));
    |                                     ^^ undeclared lifetime
    |
    = note: for more information on higher-ranked polymorphism, visit https://doc.rust-lang.org/nomicon/hrtb.html
+help: consider introducing lifetime `'a` here
+   |
+LL |     pub fn life4<'a, 'b>(x: for<'c> fn(&'a i32));
+   |                  +++
 help: consider making the type lifetime-generic with a new `'a` lifetime
    |
-LL |     pub fn life4<'b>(x: for<'c, 'a> fn(&'a i32));
-   |                               ++++
+LL |     pub fn life4<'b>(x: for<'c'a, > fn(&'a i32));
+   |                               +++
 
 error[E0261]: use of undeclared lifetime name `'a`
   --> $DIR/generic-extern-lifetime.rs:11:39
@@ -23,10 +31,14 @@ LL |     pub fn life7<'b>() -> for<'c> fn(&'a i32);
    |                                       ^^ undeclared lifetime
    |
    = note: for more information on higher-ranked polymorphism, visit https://doc.rust-lang.org/nomicon/hrtb.html
+help: consider introducing lifetime `'a` here
+   |
+LL |     pub fn life7<'a, 'b>() -> for<'c> fn(&'a i32);
+   |                  +++
 help: consider making the type lifetime-generic with a new `'a` lifetime
    |
-LL |     pub fn life7<'b>() -> for<'c, 'a> fn(&'a i32);
-   |                                 ++++
+LL |     pub fn life7<'b>() -> for<'c'a, > fn(&'a i32);
+   |                                 +++
 
 error: aborting due to 3 previous errors
 

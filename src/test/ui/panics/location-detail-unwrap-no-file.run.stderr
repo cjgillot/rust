@@ -1,2 +1,57 @@
 thread 'main' panicked at 'called `Option::unwrap()` on a `None` value', <redacted>:7:9
-note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+stack backtrace:
+   0:     0x7f7fc1812a37 - std::backtrace_rs::backtrace::libunwind::trace::hc13f57558ccbe1c0
+                               at $SRC_DIR/std/src/../../backtrace/src/backtrace/libunwind.rs:LL:COL
+   1:     0x7f7fc1812a37 - std::backtrace_rs::backtrace::trace_unsynchronized::h0ba7c9fd2d8df1a7
+                               at $SRC_DIR/std/src/../../backtrace/src/backtrace/mod.rs:LL:COL
+   2:     0x7f7fc184a38a - std::sys_common::backtrace::_print_fmt::hfd0b34fa09501b14
+                               at $SRC_DIR/std/src/sys_common/backtrace.rs:LL:COL
+   3:     0x7f7fc184a38a - <std::sys_common::backtrace::_print::DisplayBacktrace as core::fmt::Display>::fmt::h16d79d304baa5bf5
+                               at $SRC_DIR/std/src/sys_common/backtrace.rs:LL:COL
+   4:     0x7f7fc18c495a - core::fmt::write::hdc6538b0659603cd
+                               at $SRC_DIR/core/src/fmt/mod.rs:LL:COL
+   5:     0x7f7fc1857492 - std::io::Write::write_fmt::h178c096e1e554155
+                               at $SRC_DIR/std/src/io/mod.rs:LL:COL
+   6:     0x7f7fc184bb7c - std::sys_common::backtrace::_print::hf53c91d94be1940a
+                               at $SRC_DIR/std/src/sys_common/backtrace.rs:LL:COL
+   7:     0x7f7fc184bb7c - std::sys_common::backtrace::print::h24b2a0fff734f579
+                               at $SRC_DIR/std/src/sys_common/backtrace.rs:LL:COL
+   8:     0x7f7fc184bb7c - std::panicking::default_hook::{{closure}}::h21047dc7f75070bc
+                               at $SRC_DIR/std/src/panicking.rs:LL:COL
+   9:     0x7f7fc184b823 - std::panicking::default_hook::h1e63bdbfa5e08794
+                               at $SRC_DIR/std/src/panicking.rs:LL:COL
+  10:     0x7f7fc184c0c5 - std::panicking::rust_panic_with_hook::h6b2517373d106b14
+                               at $SRC_DIR/std/src/panicking.rs:LL:COL
+  11:     0x7f7fc18437cd - std::panicking::begin_panic_handler::{{closure}}::he3187d78b52d47dc
+                               at $SRC_DIR/std/src/panicking.rs:LL:COL
+  12:     0x7f7fc1843734 - std::sys_common::backtrace::__rust_end_short_backtrace::h22b1f01f203d8785
+                               at $SRC_DIR/std/src/sys_common/backtrace.rs:LL:COL
+  13:     0x7f7fc184bcb2 - rust_begin_unwind
+                               at $SRC_DIR/std/src/panicking.rs:LL:COL
+  14:     0x7f7fc18c43cb - core::panicking::panic_fmt::h4e9086903f62cbbb
+                               at $SRC_DIR/core/src/panicking.rs:LL:COL
+  15:     0x7f7fc18c425d - core::panicking::panic::h15c9aab8a3d2e545
+                               at $SRC_DIR/core/src/panicking.rs:LL:COL
+  16:     0x556ac89969ca - location_detail_unwrap_no_file::main::h6509d9167e171e53
+  17:     0x556ac8996973 - std::sys_common::backtrace::__rust_begin_short_backtrace::h31b673d7f0ef8c6a
+  18:     0x556ac8996989 - std::rt::lang_start::{{closure}}::h3519a9a2496cd93d
+  19:     0x7f7fc1812285 - std::panicking::try::do_call::hd06046c6ef182bc2
+                               at $SRC_DIR/std/src/panicking.rs:LL:COL
+  20:     0x7f7fc1812285 - std::panicking::try::h0f31985a464394df
+                               at $SRC_DIR/std/src/panicking.rs:LL:COL
+  21:     0x7f7fc1812285 - std::panic::catch_unwind::h8b78424877c919fa
+                               at $SRC_DIR/std/src/panic.rs:LL:COL
+  22:     0x7f7fc1812285 - std::rt::lang_start_internal::{{closure}}::h1357335e8f30db71
+                               at $SRC_DIR/std/src/rt.rs:LL:COL
+  23:     0x7f7fc1812285 - std::panicking::try::do_call::h8f8f209ec21cb601
+                               at $SRC_DIR/std/src/panicking.rs:LL:COL
+  24:     0x7f7fc1812285 - std::panicking::try::h2a224e3f86719b13
+                               at $SRC_DIR/std/src/panicking.rs:LL:COL
+  25:     0x7f7fc1812285 - std::panic::catch_unwind::ha3afd6710f9ae126
+                               at $SRC_DIR/std/src/panic.rs:LL:COL
+  26:     0x7f7fc1827c4b - std::rt::lang_start_internal::hf422800097c0f41b
+                               at $SRC_DIR/std/src/rt.rs:LL:COL
+  27:     0x556ac89969f2 - main
+  28:     0x7f7fc156db25 - __libc_start_main
+  29:     0x556ac899689e - _start
+  30:                0x0 - <unknown>

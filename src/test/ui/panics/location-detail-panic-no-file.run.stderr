@@ -1,2 +1,50 @@
 thread 'main' panicked at 'file-redacted', <redacted>:6:5
-note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+stack backtrace:
+   0:     0x7f4340995a37 - std::backtrace_rs::backtrace::libunwind::trace::hc13f57558ccbe1c0
+                               at $SRC_DIR/std/src/../../backtrace/src/backtrace/libunwind.rs:LL:COL
+   1:     0x7f4340995a37 - std::backtrace_rs::backtrace::trace_unsynchronized::h0ba7c9fd2d8df1a7
+                               at $SRC_DIR/std/src/../../backtrace/src/backtrace/mod.rs:LL:COL
+   2:     0x7f43409cd38a - std::sys_common::backtrace::_print_fmt::hfd0b34fa09501b14
+                               at $SRC_DIR/std/src/sys_common/backtrace.rs:LL:COL
+   3:     0x7f43409cd38a - <std::sys_common::backtrace::_print::DisplayBacktrace as core::fmt::Display>::fmt::h16d79d304baa5bf5
+                               at $SRC_DIR/std/src/sys_common/backtrace.rs:LL:COL
+   4:     0x7f4340a4795a - core::fmt::write::hdc6538b0659603cd
+                               at $SRC_DIR/core/src/fmt/mod.rs:LL:COL
+   5:     0x7f43409da492 - std::io::Write::write_fmt::h178c096e1e554155
+                               at $SRC_DIR/std/src/io/mod.rs:LL:COL
+   6:     0x7f43409ceb7c - std::sys_common::backtrace::_print::hf53c91d94be1940a
+                               at $SRC_DIR/std/src/sys_common/backtrace.rs:LL:COL
+   7:     0x7f43409ceb7c - std::sys_common::backtrace::print::h24b2a0fff734f579
+                               at $SRC_DIR/std/src/sys_common/backtrace.rs:LL:COL
+   8:     0x7f43409ceb7c - std::panicking::default_hook::{{closure}}::h21047dc7f75070bc
+                               at $SRC_DIR/std/src/panicking.rs:LL:COL
+   9:     0x7f43409ce823 - std::panicking::default_hook::h1e63bdbfa5e08794
+                               at $SRC_DIR/std/src/panicking.rs:LL:COL
+  10:     0x7f43409cf0c5 - std::panicking::rust_panic_with_hook::h6b2517373d106b14
+                               at $SRC_DIR/std/src/panicking.rs:LL:COL
+  11:     0x55d75d061ce4 - std::panicking::begin_panic::{{closure}}::h0079e56bea5de335
+  12:     0x55d75d061c5c - std::sys_common::backtrace::__rust_end_short_backtrace::h887357ffacd6fc32
+  13:     0x55d75d061cb2 - std::panicking::begin_panic::had5d621a3516066f
+  14:     0x55d75d061d96 - location_detail_panic_no_file::main::hd8d5b6195cb2ac54
+  15:     0x55d75d061c63 - std::sys_common::backtrace::__rust_begin_short_backtrace::hd85dfae043b14d7f
+  16:     0x55d75d061c79 - std::rt::lang_start::{{closure}}::hacebf79939489295
+  17:     0x7f4340995285 - std::panicking::try::do_call::hd06046c6ef182bc2
+                               at $SRC_DIR/std/src/panicking.rs:LL:COL
+  18:     0x7f4340995285 - std::panicking::try::h0f31985a464394df
+                               at $SRC_DIR/std/src/panicking.rs:LL:COL
+  19:     0x7f4340995285 - std::panic::catch_unwind::h8b78424877c919fa
+                               at $SRC_DIR/std/src/panic.rs:LL:COL
+  20:     0x7f4340995285 - std::rt::lang_start_internal::{{closure}}::h1357335e8f30db71
+                               at $SRC_DIR/std/src/rt.rs:LL:COL
+  21:     0x7f4340995285 - std::panicking::try::do_call::h8f8f209ec21cb601
+                               at $SRC_DIR/std/src/panicking.rs:LL:COL
+  22:     0x7f4340995285 - std::panicking::try::h2a224e3f86719b13
+                               at $SRC_DIR/std/src/panicking.rs:LL:COL
+  23:     0x7f4340995285 - std::panic::catch_unwind::ha3afd6710f9ae126
+                               at $SRC_DIR/std/src/panic.rs:LL:COL
+  24:     0x7f43409aac4b - std::rt::lang_start_internal::hf422800097c0f41b
+                               at $SRC_DIR/std/src/rt.rs:LL:COL
+  25:     0x55d75d061dc2 - main
+  26:     0x7f43406f0b25 - __libc_start_main
+  27:     0x55d75d061b5e - _start
+  28:                0x0 - <unknown>

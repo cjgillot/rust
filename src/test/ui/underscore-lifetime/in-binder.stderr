@@ -11,29 +11,54 @@ LL | struct Struct<'_> {
    |               ^^ `'_` is a reserved lifetime name
 
 error[E0637]: `'_` cannot be used here
-  --> $DIR/in-binder.rs:17:11
+  --> $DIR/in-binder.rs:18:11
    |
 LL | enum Enum<'_> {
    |           ^^ `'_` is a reserved lifetime name
 
 error[E0637]: `'_` cannot be used here
-  --> $DIR/in-binder.rs:22:13
+  --> $DIR/in-binder.rs:24:13
    |
 LL | union Union<'_> {
    |             ^^ `'_` is a reserved lifetime name
 
 error[E0637]: `'_` cannot be used here
-  --> $DIR/in-binder.rs:27:13
+  --> $DIR/in-binder.rs:30:13
    |
 LL | trait Trait<'_> {
    |             ^^ `'_` is a reserved lifetime name
 
 error[E0637]: `'_` cannot be used here
-  --> $DIR/in-binder.rs:31:8
+  --> $DIR/in-binder.rs:34:8
    |
 LL | fn foo<'_>() {
    |        ^^ `'_` is a reserved lifetime name
 
-error: aborting due to 6 previous errors
+error[E0392]: parameter `'_` is never used
+  --> $DIR/in-binder.rs:12:15
+   |
+LL | struct Struct<'_> {
+   |               ^^ unused parameter
+   |
+   = help: consider removing `'_`, referring to it in a field, or using a marker such as `PhantomData`
 
-For more information about this error, try `rustc --explain E0637`.
+error[E0392]: parameter `'_` is never used
+  --> $DIR/in-binder.rs:18:11
+   |
+LL | enum Enum<'_> {
+   |           ^^ unused parameter
+   |
+   = help: consider removing `'_`, referring to it in a field, or using a marker such as `PhantomData`
+
+error[E0392]: parameter `'_` is never used
+  --> $DIR/in-binder.rs:24:13
+   |
+LL | union Union<'_> {
+   |             ^^ unused parameter
+   |
+   = help: consider removing `'_`, referring to it in a field, or using a marker such as `PhantomData`
+
+error: aborting due to 9 previous errors
+
+Some errors have detailed explanations: E0392, E0637.
+For more information about an error, try `rustc --explain E0392`.

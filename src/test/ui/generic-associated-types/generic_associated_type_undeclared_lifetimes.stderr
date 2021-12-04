@@ -4,7 +4,7 @@ error[E0261]: use of undeclared lifetime name `'b`
 LL |         + Deref<Target = Self::Item<'b>>;
    |                                     ^^ undeclared lifetime
    |
-   = help: if you want to experiment with in-band lifetime bindings, add `#![feature(in_band_lifetimes)]` to the crate attributes
+   = note: for more information on higher-ranked polymorphism, visit https://doc.rust-lang.org/nomicon/hrtb.html
 help: consider introducing lifetime `'b` here
    |
 LL | trait Iterable<'b> {
@@ -13,6 +13,10 @@ help: consider introducing lifetime `'b` here
    |
 LL |     type Iter<'b, 'a>: Iterator<Item = Self::Item<'a>>
    |               +++
+help: consider making the bound lifetime-generic with a new `'b` lifetime
+   |
+LL |         + for<'b> Deref<Target = Self::Item<'b>>;
+   |           +++++++
 
 error[E0261]: use of undeclared lifetime name `'undeclared`
   --> $DIR/generic_associated_type_undeclared_lifetimes.rs:11:41

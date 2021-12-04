@@ -16,7 +16,11 @@ impl<T> WithAssoc<T> for () {
 
 type Return<A> = impl WithAssoc<A, AssocType = impl SomeTrait + 'a>;
 //~^ ERROR use of undeclared lifetime name `'a`
+//~| ERROR could not find defining uses
+//~| ERROR could not find defining uses
 
 fn my_fun() -> Return<()> {}
+//~^ ERROR non-defining opaque type use in defining scope
+//~| ERROR non-defining opaque type use in defining scope
 
 fn main() {}

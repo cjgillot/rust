@@ -6,22 +6,13 @@ LL | fn foo(x: &u32) {
 LL |     let y: &'test u32 = x;
    |             ^^^^^ undeclared lifetime
 
-error[E0261]: use of undeclared lifetime name `'test`
+error[E0687]: lifetimes used in `fn` or `Fn` syntax must be explicitly declared using `<...>` binders
   --> $DIR/no_introducing_in_band_in_locals.rs:10:16
    |
 LL |     let y: fn(&'test u32) = foo2;
-   |                ^^^^^ undeclared lifetime
-   |
-   = note: for more information on higher-ranked polymorphism, visit https://doc.rust-lang.org/nomicon/hrtb.html
-help: consider introducing lifetime `'test` here
-   |
-LL | fn bar<'test>() {
-   |       +++++++
-help: consider making the type lifetime-generic with a new `'test` lifetime
-   |
-LL |     let y: for<'test> fn(&'test u32) = foo2;
-   |            ++++++++++
+   |                ^^^^^ in-band lifetime definition
 
 error: aborting due to 2 previous errors
 
-For more information about this error, try `rustc --explain E0261`.
+Some errors have detailed explanations: E0261, E0687.
+For more information about an error, try `rustc --explain E0261`.
