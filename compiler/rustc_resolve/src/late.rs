@@ -1162,6 +1162,24 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
                     return;
                 }
                 LifetimeRibKind::AnonymousReportError => {
+                    let (msg, note) = if elided {
+                        (
+                            "`&` without an explicit lifetime name cannot be used here",
+                            "explicit lifetime name needed here",
+                        )
+                    } else {
+                        ("`'_` cannot be used here", "`'_` is a reserved lifetime name")
+                    };
+                    rustc_errors::struct_span_err!(
+                        self.r.session,
+                        lifetime.ident.span,
+                        E0637,
+                        "{}",
+                        msg,
+                    )
+                    .span_label(lifetime.ident.span, note)
+                    .emit();
+
                     self.r.lifetimes_res_map.insert(lifetime.id, LifetimeRes::Error);
                     return;
                 }
@@ -1649,8 +1667,28 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
                 }
             }
 
-            if param.ident.name == kw::UnderscoreLifetime || param.ident.name == kw::StaticLifetime
-            {
+            if param.ident.name == kw::UnderscoreLifetime {
+                rustc_errors::struct_span_err!(
+                    self.r.session,
+                    param.ident.span,
+                    E0637,
+                    "`'_` cannot be used here"
+                )
+                .span_label(param.ident.span, "`'_` is a reserved lifetime name")
+                .emit();
+                continue;
+            }
+
+            if param.ident.name == kw::StaticLifetime {
+                rustc_errors::struct_span_err!(
+                    self.r.session,
+                    param.ident.span,
+                    E0262,
+                    "invalid lifetime parameter name: `{}`",
+                    param.ident,
+                )
+                .span_label(param.ident.span, format!("'static is a reserved lifetime name"))
+                .emit();
                 continue;
             }
 

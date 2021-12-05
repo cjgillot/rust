@@ -3595,6 +3595,7 @@ dependencies = [
 name = "rustc_ast_lowering"
 version = "0.0.0"
 dependencies = [
+ "indexmap",
  "rustc_arena",
  "rustc_ast",
  "rustc_ast_pretty",

@@ -8,6 +8,7 @@ doctest = false
 
 [dependencies]
 rustc_arena = { path = "../rustc_arena" }
+indexmap = "1.5.1"
 tracing = "0.1"
 rustc_ast_pretty = { path = "../rustc_ast_pretty" }
 rustc_hir = { path = "../rustc_hir" }

@@ -1,15 +1,14 @@
 use super::{AnonymousLifetimeMode, ImplTraitContext, LoweringContext, ParamMode};
-use super::{GenericArgsCtor, ParenthesizedGenericArgs};
+use super::{GenericArgsCtor, LifetimeRes, ParenthesizedGenericArgs};
 
 use rustc_ast::{self as ast, *};
 use rustc_errors::{struct_span_err, Applicability};
 use rustc_hir as hir;
 use rustc_hir::def::{DefKind, PartialRes, Res};
-use rustc_hir::def_id::DefId;
 use rustc_hir::GenericArg;
 use rustc_session::lint::builtin::ELIDED_LIFETIMES_IN_PATHS;
 use rustc_session::lint::BuiltinLintDiagnostics;
-use rustc_span::symbol::Ident;
+use rustc_span::symbol::{kw, Ident};
 use rustc_span::{BytePos, Span, DUMMY_SP};
 
 use smallvec::smallvec;
@@ -47,30 +46,6 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                         _ => param_mode,
                     };
 
-                    // Figure out if this is a type/trait segment,
-                    // which may need lifetime elision performed.
-                    let parent_def_id = |this: &mut Self, def_id: DefId| DefId {
-                        krate: def_id.krate,
-                        index: this.resolver.def_key(def_id).parent.expect("missing parent"),
-                    };
-                    let type_def_id = match partial_res.base_res() {
-                        Res::Def(DefKind::AssocTy, def_id) if i + 2 == proj_start => {
-                            Some(parent_def_id(self, def_id))
-                        }
-                        Res::Def(DefKind::Variant, def_id) if i + 1 == proj_start => {
-                            Some(parent_def_id(self, def_id))
-                        }
-                        Res::Def(DefKind::Struct, def_id)
-                        | Res::Def(DefKind::Union, def_id)
-                        | Res::Def(DefKind::Enum, def_id)
-                        | Res::Def(DefKind::TyAlias, def_id)
-                        | Res::Def(DefKind::Trait, def_id)
-                            if i + 1 == proj_start =>
-                        {
-                            Some(def_id)
-                        }
-                        _ => None,
-                    };
                     let parenthesized_generic_args = match partial_res.base_res() {
                         // `a::b::Trait(Args)`
                         Res::Def(DefKind::Trait, _) if i + 1 == proj_start => {
@@ -90,13 +65,10 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                         _ => ParenthesizedGenericArgs::Err,
                     };
 
-                    let num_lifetimes = type_def_id
-                        .map_or(0, |def_id| self.resolver.item_generics_num_lifetimes(def_id));
                     self.lower_path_segment(
                         p.span,
                         segment,
                         param_mode,
-                        num_lifetimes,
                         parenthesized_generic_args,
                         itctx.reborrow(),
                     )
@@ -143,7 +115,6 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                 p.span,
                 segment,
                 param_mode,
-                0,
                 ParenthesizedGenericArgs::Err,
                 itctx.reborrow(),
             ));
@@ -184,7 +155,6 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                     p.span,
                     segment,
                     param_mode,
-                    0,
                     ParenthesizedGenericArgs::Err,
                     ImplTraitContext::disallowed(),
                 )
@@ -209,14 +179,10 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
         path_span: Span,
         segment: &PathSegment,
         param_mode: ParamMode,
-        expected_lifetimes: usize,
         parenthesized_generic_args: ParenthesizedGenericArgs,
         itctx: ImplTraitContext<'_, 'hir>,
     ) -> hir::PathSegment<'hir> {
-        debug!(
-            "path_span: {:?}, lower_path_segment(segment: {:?}, expected_lifetimes: {:?})",
-            path_span, segment, expected_lifetimes
-        );
+        debug!("path_span: {:?}, lower_path_segment(segment: {:?})", path_span, segment,);
         let (mut generic_args, infer_args) = if let Some(ref generic_args) = segment.args {
             let msg = "parenthesized type parameters may only be used with a `Fn` trait";
             match **generic_args {
@@ -224,7 +190,9 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                     self.lower_angle_bracketed_parameter_data(data, param_mode, itctx)
                 }
                 GenericArgs::Parenthesized(ref data) => match parenthesized_generic_args {
-                    ParenthesizedGenericArgs::Ok => self.lower_parenthesized_parameter_data(data),
+                    ParenthesizedGenericArgs::Ok => {
+                        self.lower_parenthesized_parameter_data(segment.id, data)
+                    }
                     ParenthesizedGenericArgs::Err => {
                         let mut err = struct_span_err!(self.sess, data.span, E0214, "{}", msg);
                         err.span_label(data.span, "only `Fn` traits may use parentheses");
@@ -283,11 +251,25 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                 // Else use an empty span right after the opening bracket.
                 generic_args.span.with_lo(generic_args.span.lo() + BytePos(1)).shrink_to_lo()
             };
-            generic_args.args = self
-                .elided_path_lifetimes(elided_lifetime_span, expected_lifetimes)
-                .map(GenericArg::Lifetime)
-                .chain(generic_args.args.into_iter())
-                .collect();
+            let expected_lifetimes = match self.resolver.get_lifetime_res(segment.id) {
+                Some(LifetimeRes::ElidedAnchor { start, end }) => {
+                    generic_args.args.insert_many(
+                        0,
+                        (start.as_usize()..=end.as_usize()).map(|i| {
+                            let id = NodeId::from_usize(i);
+                            let l = self.lower_lifetime(&Lifetime {
+                                id,
+                                ident: Ident::new(kw::UnderscoreLifetime, elided_lifetime_span),
+                            });
+                            GenericArg::Lifetime(l)
+                        }),
+                    );
+                    end.as_usize() - start.as_usize() + 1
+                }
+                None => 0,
+                Some(_) => panic!(),
+            };
+            debug!(?expected_lifetimes);
             if expected_lifetimes > 0 && param_mode == ParamMode::Explicit {
                 let anon_lt_suggestion = vec!["'_"; expected_lifetimes].join(", ");
                 let no_non_lt_args = generic_args.args.len() == expected_lifetimes;
@@ -399,6 +381,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
 
     fn lower_parenthesized_parameter_data(
         &mut self,
+        id: NodeId,
         data: &ParenthesizedArgs,
     ) -> (GenericArgsCtor<'hir>, bool) {
         // Switch to `PassThrough` mode for anonymous lifetimes; this
@@ -407,6 +390,9 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
         // compatibility, even in contexts like an impl header where
         // we generally don't permit such things (see #51008).
         self.with_anonymous_lifetime_mode(AnonymousLifetimeMode::PassThrough, |this| {
+            if let Some((_, binders)) = &mut this.captured_lifetimes {
+                binders.insert(id);
+            }
             let ParenthesizedArgs { span, inputs, inputs_span, output } = data;
             let inputs = this.arena.alloc_from_iter(
                 inputs.iter().map(|ty| this.lower_ty_direct(ty, ImplTraitContext::disallowed())),
@@ -417,6 +403,9 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
             };
             let args = smallvec![GenericArg::Type(this.ty_tup(*inputs_span, inputs))];
             let binding = this.output_ty_binding(output_ty.span, output_ty);
+            if let Some((_, binders)) = &mut this.captured_lifetimes {
+                binders.remove(&id);
+            }
             (
                 GenericArgsCtor {
                     args,
