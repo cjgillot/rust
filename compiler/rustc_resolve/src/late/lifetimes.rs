@@ -16,7 +16,7 @@ use rustc_hir::def_id::{DefIdMap, LocalDefId};
 use rustc_hir::hir_id::ItemLocalId;
 use rustc_hir::intravisit::{self, NestedVisitorMap, Visitor};
 use rustc_hir::{GenericArg, GenericParam, LifetimeName, Node, ParamName, QPath};
-use rustc_hir::{GenericParamKind, HirIdMap, HirIdSet, LifetimeParamKind};
+use rustc_hir::{GenericParamKind, HirIdMap, HirIdSet};
 use rustc_middle::hir::map::Map;
 use rustc_middle::middle::resolve_lifetime::*;
 use rustc_middle::ty::{self, DefIdTree, GenericParamDefKind, TyCtxt};
@@ -1326,9 +1326,6 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
     }
 
     fn visit_generics(&mut self, generics: &'tcx hir::Generics<'tcx>) {
-        if !self.trait_definition_only {
-            check_mixed_explicit_and_in_band_defs(self.tcx, &generics.params);
-        }
         let scope = Scope::TraitRefBoundary { s: self.scope };
         self.with(scope, |this| {
             for param in generics.params {
@@ -1494,30 +1491,6 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
         if should_pop_missing_lt {
             self.missing_named_lifetime_spots.pop();
         }
-    }
-}
-
-fn check_mixed_explicit_and_in_band_defs(tcx: TyCtxt<'_>, params: &[hir::GenericParam<'_>]) {
-    let lifetime_params: Vec<_> = params
-        .iter()
-        .filter_map(|param| match param.kind {
-            GenericParamKind::Lifetime { kind, .. } => Some((kind, param.span)),
-            _ => None,
-        })
-        .collect();
-    let explicit = lifetime_params.iter().find(|(kind, _)| *kind == LifetimeParamKind::Explicit);
-    let in_band = lifetime_params.iter().find(|(kind, _)| *kind == LifetimeParamKind::InBand);
-
-    if let (Some((_, explicit_span)), Some((_, in_band_span))) = (explicit, in_band) {
-        struct_span_err!(
-            tcx.sess,
-            *in_band_span,
-            E0688,
-            "cannot mix in-band and explicit lifetime definitions"
-        )
-        .span_label(*in_band_span, "in-band lifetime definition here")
-        .span_label(*explicit_span, "explicit lifetime definition here")
-        .emit();
     }
 }
 

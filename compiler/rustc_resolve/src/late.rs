@@ -1144,7 +1144,28 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
     ) -> T {
         self.lifetime_ribs.push(LifetimeRib::new(kind));
         let ret = work(self);
-        self.lifetime_ribs.pop();
+        let rib = self.lifetime_ribs.pop().unwrap();
+        if matches!(rib.kind, LifetimeRibKind::Generics { kind, .. } if kind.allow_in_band()) {
+            let in_band = rib
+                .bindings
+                .iter()
+                .find(|(_, region)| matches!(region, LifetimeRes::Param { in_band: false, .. }));
+            let explicit = rib.bindings.iter().find(|(_, region)| {
+                matches!(region, LifetimeRes::Param { in_band: true, fresh: None, .. })
+            });
+
+            if let (Some((explicit, _)), Some((in_band, _))) = (explicit, in_band) {
+                rustc_errors::struct_span_err!(
+                    self.r.session,
+                    in_band.span,
+                    E0688,
+                    "cannot mix in-band and explicit lifetime definitions"
+                )
+                .span_label(in_band.span, "in-band lifetime definition here")
+                .span_label(explicit.span, "explicit lifetime definition here")
+                .emit();
+            }
+        }
         ret
     }
 
