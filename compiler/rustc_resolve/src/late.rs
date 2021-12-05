@@ -189,7 +189,7 @@ impl<'a, R> Rib<'a, R> {
 #[derive(Copy, Clone, Debug)]
 enum LifetimeRibKind {
     /// This rib declares generic parameters.
-    Generics { parent: NodeId, kind: LifetimeBinderKind },
+    Generics { parent: NodeId, span: Span, kind: LifetimeBinderKind },
 
     /// We passed through a `macro_rules!` statement
     MacroDefinition(DefId),
@@ -228,6 +228,18 @@ enum LifetimeBinderKind {
 }
 
 impl LifetimeBinderKind {
+    fn descr(self) -> &'static str {
+        use LifetimeBinderKind::*;
+        match self {
+            BareFnType => "type",
+            PolyTrait => "bound",
+            WhereBound => "bound",
+            Item => "item",
+            ImplBlock => "impl block",
+            Function => "function",
+        }
+    }
+
     fn allow_in_band(self) -> bool {
         use LifetimeBinderKind::*;
         match self {
@@ -570,12 +582,18 @@ impl<'a: 'ast, 'ast> Visitor<'ast> for LateResolutionVisitor<'a, '_, 'ast> {
                 self.diagnostic_metadata.current_trait_object = Some(&bounds[..]);
             }
             TyKind::BareFn(ref bare_fn) => {
+                let span = if let Some(param) = bare_fn.generic_params.first() {
+                    param.ident.span
+                } else {
+                    ty.span.shrink_to_lo()
+                };
                 self.with_generic_param_rib(
                     &bare_fn.generic_params,
                     NormalRibKind,
                     LifetimeRibKind::Generics {
                         parent: ty.id,
                         kind: LifetimeBinderKind::BareFnType,
+                        span,
                     },
                     |this| {
                         this.with_lifetime_rib(
@@ -596,12 +614,15 @@ impl<'a: 'ast, 'ast> Visitor<'ast> for LateResolutionVisitor<'a, '_, 'ast> {
         self.diagnostic_metadata.current_trait_object = prev;
     }
     fn visit_poly_trait_ref(&mut self, tref: &'ast PolyTraitRef, _: &'ast TraitBoundModifier) {
+        let span =
+            if tref.bound_generic_params.is_empty() { tref.span.shrink_to_lo() } else { tref.span };
         self.with_generic_param_rib(
             &tref.bound_generic_params,
             NormalRibKind,
             LifetimeRibKind::Generics {
                 parent: tref.trait_ref.ref_id,
                 kind: LifetimeBinderKind::PolyTrait,
+                span,
             },
             |this| {
                 this.visit_generic_param_vec(&tref.bound_generic_params, false);
@@ -625,6 +646,7 @@ impl<'a: 'ast, 'ast> Visitor<'ast> for LateResolutionVisitor<'a, '_, 'ast> {
                         LifetimeRibKind::Generics {
                             parent: foreign_item.id,
                             kind: LifetimeBinderKind::Item,
+                            span: generics.span,
                         },
                         |this| {
                             visit::walk_foreign_item(this, foreign_item);
@@ -640,6 +662,7 @@ impl<'a: 'ast, 'ast> Visitor<'ast> for LateResolutionVisitor<'a, '_, 'ast> {
                         LifetimeRibKind::Generics {
                             parent: foreign_item.id,
                             kind: LifetimeBinderKind::Function,
+                            span: generics.span,
                         },
                         |this| {
                             visit::walk_foreign_item(this, foreign_item);
@@ -822,15 +845,26 @@ impl<'a: 'ast, 'ast> Visitor<'ast> for LateResolutionVisitor<'a, '_, 'ast> {
                 ref bounded_ty,
                 ref bounds,
                 ref bound_generic_params,
+                span: predicate_span,
                 ..
             }) = p
             {
+                let span = if let Some(span) =
+                    bound_generic_params.iter().rev().find_map(|param| match param.kind {
+                        GenericParamKind::Lifetime => Some(param.ident.span),
+                        _ => None,
+                    }) {
+                    span.shrink_to_hi()
+                } else {
+                    predicate_span.shrink_to_lo()
+                };
                 this.with_generic_param_rib(
                     &bound_generic_params,
                     NormalRibKind,
                     LifetimeRibKind::Generics {
                         parent: bounded_ty.id,
                         kind: LifetimeBinderKind::WhereBound,
+                        span,
                     },
                     |this| {
                         this.visit_generic_param_vec(&bound_generic_params, false);
@@ -1145,6 +1179,7 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
             }
         }
 
+        self.emit_undeclared_lifetime_error(lifetime);
         self.r.lifetimes_res_map.insert(lifetime.id, LifetimeRes::Error);
     }
 
@@ -1385,7 +1420,11 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
             this.with_generic_param_rib(
                 &generics.params,
                 ItemRibKind(HasGenericParams::Yes),
-                LifetimeRibKind::Generics { parent: item.id, kind: LifetimeBinderKind::Item },
+                LifetimeRibKind::Generics {
+                    parent: item.id,
+                    kind: LifetimeBinderKind::Item,
+                    span: generics.span,
+                },
                 |this| {
                     let item_def_id = this.r.local_def_id(item.id).to_def_id();
                     this.with_self_rib(Res::SelfTy(None, Some((item_def_id, false))), |this| {
@@ -1451,7 +1490,11 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
                 self.with_generic_param_rib(
                     &generics.params,
                     ItemRibKind(HasGenericParams::Yes),
-                    LifetimeRibKind::Generics { parent: item.id, kind: LifetimeBinderKind::Item },
+                    LifetimeRibKind::Generics {
+                        parent: item.id,
+                        kind: LifetimeBinderKind::Item,
+                        span: generics.span,
+                    },
                     |this| visit::walk_item(this, item),
                 );
             }
@@ -1463,6 +1506,7 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
                     LifetimeRibKind::Generics {
                         parent: item.id,
                         kind: LifetimeBinderKind::Function,
+                        span: generics.span,
                     },
                     |this| visit::walk_item(this, item),
                 );
@@ -1487,7 +1531,11 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
                 self.with_generic_param_rib(
                     &generics.params,
                     ItemRibKind(HasGenericParams::Yes),
-                    LifetimeRibKind::Generics { parent: item.id, kind: LifetimeBinderKind::Item },
+                    LifetimeRibKind::Generics {
+                        parent: item.id,
+                        kind: LifetimeBinderKind::Item,
+                        span: generics.span,
+                    },
                     |this| {
                         let local_def_id = this.r.local_def_id(item.id).to_def_id();
                         this.with_self_rib(Res::SelfTy(Some(local_def_id), None), |this| {
@@ -1502,7 +1550,11 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
                                     this.with_generic_param_rib(
                                         &generics.params,
                                         AssocItemRibKind,
-                                        LifetimeRibKind::Generics { parent: item.id, kind },
+                                        LifetimeRibKind::Generics {
+                                            parent: item.id,
+                                            span: generics.span,
+                                            kind,
+                                        },
                                         |this| visit::walk_assoc_item(this, item, AssocCtxt::Trait),
                                     );
                                 };
@@ -1562,7 +1614,11 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
                 self.with_generic_param_rib(
                     &generics.params,
                     ItemRibKind(HasGenericParams::Yes),
-                    LifetimeRibKind::Generics { parent: item.id, kind: LifetimeBinderKind::Item },
+                    LifetimeRibKind::Generics {
+                        parent: item.id,
+                        kind: LifetimeBinderKind::Item,
+                        span: generics.span,
+                    },
                     |this| {
                         let local_def_id = this.r.local_def_id(item.id).to_def_id();
                         this.with_self_rib(Res::SelfTy(Some(local_def_id), None), |this| {
@@ -1878,7 +1934,7 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
         // method, it will not be considered an in-band
         // lifetime to be added, but rather a reference to a
         // parent lifetime.
-        self.with_generic_param_rib(&generics.params, ItemRibKind(HasGenericParams::Yes), LifetimeRibKind::Generics { parent: item_id, kind: LifetimeBinderKind::ImplBlock }, |this| {
+        self.with_generic_param_rib(&generics.params, ItemRibKind(HasGenericParams::Yes), LifetimeRibKind::Generics { span: generics.span, parent: item_id, kind: LifetimeBinderKind::ImplBlock }, |this| {
             // Dummy self type for better errors if `Self` is used in the trait path.
             this.with_self_rib(Res::SelfTy(None, None), |this| {
                 // Resolve the trait reference, if necessary.
@@ -1950,7 +2006,7 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
                                                     this.with_generic_param_rib(
                                                         &generics.params,
                                                         AssocItemRibKind,
-                                                        LifetimeRibKind::Generics { parent: item.id, kind: LifetimeBinderKind::Function },
+                                                        LifetimeRibKind::Generics { parent: item.id, span: generics.span, kind: LifetimeBinderKind::Function },
                                                         |this| {
                                                             // If this is a trait impl, ensure the method
                                                             // exists in trait
@@ -1978,7 +2034,7 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
                                                     this.with_generic_param_rib(
                                                         &generics.params,
                                                         AssocItemRibKind,
-                                                        LifetimeRibKind::Generics { parent: item.id, kind: LifetimeBinderKind::Item },
+                                                        LifetimeRibKind::Generics { parent: item.id, span: generics.span, kind: LifetimeBinderKind::Item },
                                                         |this| {
                                                             // If this is a trait impl, ensure the type
                                                             // exists in trait

@@ -1,6 +1,7 @@
 use crate::diagnostics::{ImportSuggestion, LabelSuggestion, TypoSuggestion};
 use crate::late::lifetimes::{ElisionFailureInfo, LifetimeContext};
 use crate::late::{AliasPossibility, LateResolutionVisitor, RibKind};
+use crate::late::{LifetimeBinderKind, LifetimeRibKind};
 use crate::path_names_to_string;
 use crate::{CrateLint, Module, ModuleKind, ModuleOrUniformRoot};
 use crate::{PathResult, PathSource, Segment};
@@ -1776,6 +1777,95 @@ impl<'a: 'ast, 'ast> LateResolutionVisitor<'a, '_, 'ast> {
             (*ident, within_scope)
         })
     }
+
+    crate fn emit_undeclared_lifetime_error(&self, lifetime_ref: &ast::Lifetime) {
+        debug_assert_ne!(lifetime_ref.ident.name, kw::UnderscoreLifetime);
+        let mut err = struct_span_err!(
+            self.r.session,
+            lifetime_ref.ident.span,
+            E0261,
+            "use of undeclared lifetime name `{}`",
+            lifetime_ref.ident
+        );
+        err.span_label(lifetime_ref.ident.span, "undeclared lifetime");
+        let mut suggests_in_band = false;
+        let mut suggest_note = true;
+
+        for rib in self.lifetime_ribs.iter() {
+            if let LifetimeRibKind::Generics { parent: _, span, kind } = rib.kind {
+                if !kind.transparent_in_band() {
+                    suggests_in_band = kind.allow_in_band();
+                }
+
+                if span.from_expansion() && suggest_note {
+                    suggest_note = false; // Avoid displaying the same help multiple times.
+                    err.span_label(
+                        span,
+                        &format!(
+                            "lifetime `{}` is missing in item created through this procedural macro",
+                            lifetime_ref.ident,
+                        ),
+                    );
+                    continue;
+                }
+
+                let higher_ranked = matches!(
+                    kind,
+                    LifetimeBinderKind::BareFnType
+                        | LifetimeBinderKind::PolyTrait
+                        | LifetimeBinderKind::WhereBound
+                );
+                let (span, sugg) = if span.is_empty() {
+                    let sugg = format!(
+                        "{}<{}>{}",
+                        if higher_ranked { "for" } else { "" },
+                        lifetime_ref.ident,
+                        if higher_ranked { " " } else { "" },
+                    );
+                    (span, sugg)
+                } else {
+                    let span =
+                        self.r.session.source_map().span_through_char(span, '<').shrink_to_hi();
+                    let sugg = format!("{}, ", lifetime_ref.ident);
+                    (span, sugg)
+                };
+                if higher_ranked {
+                    err.span_suggestion(
+                        span,
+                        &format!(
+                            "consider making the {} lifetime-generic with a new `{}` lifetime",
+                            kind.descr(),
+                            lifetime_ref
+                        ),
+                        sugg,
+                        Applicability::MaybeIncorrect,
+                    );
+                    err.note(
+                        "for more information on higher-ranked polymorphism, visit \
+                         https://doc.rust-lang.org/nomicon/hrtb.html",
+                    );
+                } else {
+                    err.span_suggestion(
+                        span,
+                        &format!("consider introducing lifetime `{}` here", lifetime_ref.ident),
+                        sugg,
+                        Applicability::MaybeIncorrect,
+                    );
+                }
+            }
+        }
+
+        if self.r.session.is_nightly_build()
+            && !self.r.session.features_untracked().in_band_lifetimes
+            && suggests_in_band
+        {
+            err.help(
+                "if you want to experiment with in-band lifetime bindings, \
+                 add `#![feature(in_band_lifetimes)]` to the crate attributes",
+            );
+        }
+        err.emit();
+    }
 }
 
 impl<'tcx> LifetimeContext<'_, 'tcx> {
@@ -1791,84 +1881,6 @@ impl<'tcx> LifetimeContext<'_, 'tcx> {
             "missing lifetime specifier{}",
             pluralize!(count)
         )
-    }
-
-    crate fn emit_undeclared_lifetime_error(&self, lifetime_ref: &hir::Lifetime) {
-        let mut err = struct_span_err!(
-            self.tcx.sess,
-            lifetime_ref.span,
-            E0261,
-            "use of undeclared lifetime name `{}`",
-            lifetime_ref
-        );
-        err.span_label(lifetime_ref.span, "undeclared lifetime");
-        let mut suggests_in_band = false;
-        let mut suggest_note = true;
-        for missing in &self.missing_named_lifetime_spots {
-            match missing {
-                MissingLifetimeSpot::Generics(generics) => {
-                    let (span, sugg) = if let Some(param) = generics.params.iter().find(|p| {
-                        !matches!(
-                            p.kind,
-                            hir::GenericParamKind::Type { synthetic: true, .. }
-                                | hir::GenericParamKind::Lifetime {
-                                    kind: hir::LifetimeParamKind::Elided,
-                                }
-                        )
-                    }) {
-                        (param.span.shrink_to_lo(), format!("{}, ", lifetime_ref))
-                    } else {
-                        suggests_in_band = true;
-                        (generics.span, format!("<{}>", lifetime_ref))
-                    };
-                    if !span.from_expansion() {
-                        err.span_suggestion(
-                            span,
-                            &format!("consider introducing lifetime `{}` here", lifetime_ref),
-                            sugg,
-                            Applicability::MaybeIncorrect,
-                        );
-                    } else if suggest_note {
-                        suggest_note = false; // Avoid displaying the same help multiple times.
-                        err.span_label(
-                            span,
-                            &format!(
-                                "lifetime `{}` is missing in item created through this procedural \
-                                 macro",
-                                lifetime_ref,
-                            ),
-                        );
-                    }
-                }
-                MissingLifetimeSpot::HigherRanked { span, span_type } => {
-                    err.span_suggestion(
-                        *span,
-                        &format!(
-                            "consider making the {} lifetime-generic with a new `{}` lifetime",
-                            span_type.descr(),
-                            lifetime_ref
-                        ),
-                        span_type.suggestion(&lifetime_ref.to_string()),
-                        Applicability::MaybeIncorrect,
-                    );
-                    err.note(
-                        "for more information on higher-ranked polymorphism, visit \
-                         https://doc.rust-lang.org/nomicon/hrtb.html",
-                    );
-                }
-                _ => {}
-            }
-        }
-        if self.tcx.sess.is_nightly_build()
-            && !self.tcx.features().in_band_lifetimes
-            && suggests_in_band
-        {
-            err.help(
-                "if you want to experiment with in-band lifetime bindings, \
-                 add `#![feature(in_band_lifetimes)]` to the crate attributes",
-            );
-        }
-        err.emit();
     }
 
     // FIXME(const_generics): This patches over an ICE caused by non-'static lifetimes in const
