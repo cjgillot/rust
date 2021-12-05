@@ -1797,6 +1797,9 @@ impl<'a: 'ast, 'ast> LateResolutionVisitor<'a, '_, 'ast> {
                 if !kind.transparent_in_band() {
                     suggests_in_band = kind.allow_in_band();
                 }
+                if let LifetimeBinderKind::FnTrait = kind {
+                    continue;
+                }
 
                 if span.from_expansion() && suggest_note {
                     suggest_note = false; // Avoid displaying the same help multiple times.

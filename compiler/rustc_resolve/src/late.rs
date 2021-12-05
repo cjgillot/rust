@@ -248,6 +248,7 @@ enum LifetimeRibKind {
 #[derive(Copy, Clone, Debug)]
 enum LifetimeBinderKind {
     BareFnType,
+    FnTrait,
     PolyTrait,
     WhereBound,
     Item,
@@ -260,6 +261,7 @@ impl LifetimeBinderKind {
         use LifetimeBinderKind::*;
         match self {
             BareFnType => "type",
+            FnTrait => "bound",
             PolyTrait => "bound",
             WhereBound => "bound",
             Item => "item",
@@ -271,7 +273,7 @@ impl LifetimeBinderKind {
     fn allow_in_band(self) -> bool {
         use LifetimeBinderKind::*;
         match self {
-            BareFnType | PolyTrait | WhereBound | Item => false,
+            BareFnType | FnTrait | PolyTrait | WhereBound | Item => false,
             Function | ImplBlock => true,
         }
     }
@@ -279,7 +281,7 @@ impl LifetimeBinderKind {
     fn transparent_in_band(self) -> bool {
         use LifetimeBinderKind::*;
         match self {
-            BareFnType | Function | ImplBlock => false,
+            BareFnType | Function | FnTrait | ImplBlock => false,
             _ => true,
         }
     }
@@ -856,9 +858,18 @@ impl<'a: 'ast, 'ast> Visitor<'ast> for LateResolutionVisitor<'a, '_, 'ast> {
         if let Some(ref args) = path_segment.args {
             match &**args {
                 GenericArgs::AngleBracketed(..) => visit::walk_generic_args(self, path_span, args),
-                GenericArgs::Parenthesized(..) => self.with_lifetime_rib(
+                GenericArgs::Parenthesized(data) => self.with_lifetime_rib(
                     LifetimeRibKind::AnonymousPassThrough(path_segment.id),
-                    |this| visit::walk_generic_args(this, path_span, args),
+                    |this| {
+                        this.with_lifetime_rib(
+                            LifetimeRibKind::Generics {
+                                parent: path_segment.id,
+                                kind: LifetimeBinderKind::FnTrait,
+                                span: data.span,
+                            },
+                            |this| visit::walk_generic_args(this, path_span, args),
+                        )
+                    },
                 ),
             }
         }
@@ -1212,6 +1223,28 @@ impl<'a: 'ast, 'b, 'ast> LateResolutionVisitor<'a, 'b, 'ast> {
 
                     self.lifetime_ribs[in_band_rib_index].bindings.insert(res_ident, region);
                     self.r.lifetimes_res_map.insert(lifetime.id, region);
+                    return;
+                }
+                LifetimeRibKind::Generics {
+                    kind: LifetimeBinderKind::BareFnType | LifetimeBinderKind::FnTrait,
+                    ..
+                } => {
+                    rustc_errors::struct_span_err!(
+                        self.r.session,
+                        lifetime.ident.span,
+                        E0687,
+                        "lifetimes used in `fn` or `Fn` syntax must be \
+                             explicitly declared using `<...>` binders"
+                    )
+                    .span_label(lifetime.ident.span, "in-band lifetime definition")
+                    .emit();
+                    let res_ident =
+                        Ident::new(lifetime.ident.name, res_span.normalize_to_macros_2_0());
+
+                    self.lifetime_ribs[in_band_rib_index]
+                        .bindings
+                        .insert(res_ident, LifetimeRes::Error);
+                    self.r.lifetimes_res_map.insert(lifetime.id, LifetimeRes::Error);
                     return;
                 }
                 _ => {}
