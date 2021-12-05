@@ -14,6 +14,7 @@
 #![feature(bool_to_option)]
 #![feature(crate_visibility_modifier)]
 #![cfg_attr(bootstrap, feature(format_args_capture))]
+#![feature(if_let_guard)]
 #![feature(iter_zip)]
 #![feature(let_else)]
 #![feature(never_type)]
@@ -36,7 +37,7 @@ use rustc_ast::{self as ast, NodeId};
 use rustc_ast::{Crate, CRATE_NODE_ID};
 use rustc_ast::{Expr, ExprKind, LitKind};
 use rustc_ast::{ItemKind, ModKind, Path};
-use rustc_ast_lowering::ResolverAstLowering;
+use rustc_ast_lowering::{LifetimeRes, ResolverAstLowering};
 use rustc_ast_pretty::pprust;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet, FxIndexMap};
 use rustc_data_structures::ptr_key::PtrKey;
@@ -926,6 +927,8 @@ pub struct Resolver<'a> {
     import_res_map: NodeMap<PerNS<Option<Res>>>,
     /// Resolutions for labels (node IDs of their corresponding blocks or loops).
     label_res_map: NodeMap<NodeId>,
+    /// Resolutions for lifetimes.
+    lifetimes_res_map: NodeMap<LifetimeRes>,
 
     /// `CrateNum` resolutions of `extern crate` items.
     extern_crate_map: FxHashMap<LocalDefId, CrateNum>,
@@ -1173,6 +1176,10 @@ impl ResolverAstLowering for Resolver<'_> {
         self.label_res_map.get(&id).cloned()
     }
 
+    fn get_lifetime_res(&mut self, id: NodeId) -> Option<LifetimeRes> {
+        self.lifetimes_res_map.get(&id).cloned()
+    }
+
     fn definitions(&mut self) -> &mut Definitions {
         &mut self.definitions
     }
@@ -1334,6 +1341,7 @@ impl<'a> Resolver<'a> {
             partial_res_map: Default::default(),
             import_res_map: Default::default(),
             label_res_map: Default::default(),
+            lifetimes_res_map: Default::default(),
             extern_crate_map: Default::default(),
             export_map: FxHashMap::default(),
             trait_map: NodeMap::default(),
@@ -1437,6 +1445,17 @@ impl<'a> Resolver<'a> {
             .expect("input too large; ran out of NodeIds");
         self.next_node_id = ast::NodeId::from_usize(next);
         self.next_node_id
+    }
+
+    pub fn next_node_ids(&mut self, count: usize) -> std::ops::RangeInclusive<NodeId> {
+        let start = NodeId::from_usize(self.next_node_id.as_usize() + 1);
+        let next = self
+            .next_node_id
+            .as_usize()
+            .checked_add(count)
+            .expect("input too large; ran out of NodeIds");
+        self.next_node_id = ast::NodeId::from_usize(next);
+        start..=self.next_node_id
     }
 
     pub fn lint_buffer(&mut self) -> &mut LintBuffer {

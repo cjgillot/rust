@@ -164,6 +164,39 @@ struct LoweringContext<'a, 'hir: 'a> {
     allow_gen_future: Option<Lrc<[Symbol]>>,
 }
 
+/// Resolution for a lifetime appearing in a type.
+#[derive(Copy, Clone, Debug)]
+pub enum LifetimeRes {
+    /// Successfully linked the lifetime to a generic parameter.
+    Param {
+        /// Id of the generic parameter that introduced it.
+        param: NodeId,
+        /// Id of the introducing place. That can be:
+        /// - an item's id, for the item's generic parameters;
+        /// - a TraitRef's ref_id, identifying the `for<...>` binder;
+        /// - a BareFn type's id;
+        /// - a Path's id when this path has parenthesized generic args.
+        binder: NodeId,
+        /// Whether this parameter was introduced as in-band.
+        in_band: bool,
+        /// Whether this parameter was created for anonymous lifetime.
+        fresh: Option<usize>,
+    },
+    /// This will should follow implicit lifetime resolution later.
+    Anonymous {
+        /// Id of the introducing place. See `Param`.
+        binder: NodeId,
+        /// Whether this lifetime was spelled or elided.
+        elided: bool,
+    },
+    /// Explicit `'static` lifetime.
+    Static,
+    /// Resolution failure.
+    Error,
+    /// HACK: This is used to recover the NodeId of an elided lifetime.
+    ElidedAnchor { start: NodeId, end: NodeId },
+}
+
 pub trait ResolverAstLowering {
     fn def_key(&mut self, id: DefId) -> DefKey;
 
@@ -181,6 +214,9 @@ pub trait ResolverAstLowering {
 
     /// Obtains resolution for a label with the given `NodeId`.
     fn get_label_res(&mut self, id: NodeId) -> Option<NodeId>;
+
+    /// Obtains resolution for a lifetime with the given `NodeId`.
+    fn get_lifetime_res(&mut self, id: NodeId) -> Option<LifetimeRes>;
 
     /// We must keep the set of definitions up to date as we add nodes that weren't in the AST.
     /// This should only return `None` during testing.
