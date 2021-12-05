@@ -52,7 +52,6 @@ impl<'hir> LoweringContext<'_, 'hir> {
                         e.span,
                         seg,
                         ParamMode::Optional,
-                        0,
                         ParenthesizedGenericArgs::Err,
                         ImplTraitContext::disallowed(),
                     ));
