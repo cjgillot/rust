@@ -731,9 +731,16 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
         match item.kind {
             hir::ItemKind::Fn(ref sig, ref generics, _) => {
                 self.missing_named_lifetime_spots.push(generics.into());
-                self.visit_early_late(None, item.hir_id(), &sig.decl, generics, |this| {
-                    intravisit::walk_item(this, item);
-                });
+                self.visit_early_late(
+                    None,
+                    item.hir_id(),
+                    &sig.decl,
+                    generics,
+                    sig.header.asyncness,
+                    |this| {
+                        intravisit::walk_item(this, item);
+                    },
+                );
                 self.missing_named_lifetime_spots.pop();
             }
 
@@ -851,11 +858,16 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
 
     fn visit_foreign_item(&mut self, item: &'tcx hir::ForeignItem<'tcx>) {
         match item.kind {
-            hir::ForeignItemKind::Fn(ref decl, _, ref generics) => {
-                self.visit_early_late(None, item.hir_id(), decl, generics, |this| {
+            hir::ForeignItemKind::Fn(ref decl, _, ref generics) => self.visit_early_late(
+                None,
+                item.hir_id(),
+                decl,
+                generics,
+                hir::IsAsync::NotAsync,
+                |this| {
                     intravisit::walk_foreign_item(this, item);
-                })
-            }
+                },
+            ),
             hir::ForeignItemKind::Static(..) => {
                 intravisit::walk_foreign_item(self, item);
             }
@@ -968,7 +980,10 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
                 let (generics, bounds) = match opaque_ty.kind {
                     // Named opaque `impl Trait` types are reached via `TyKind::Path`.
                     // This arm is for `impl Trait` in the types of statics, constants and locals.
-                    hir::ItemKind::OpaqueTy(hir::OpaqueTy { impl_trait_fn: None, .. }) => {
+                    hir::ItemKind::OpaqueTy(hir::OpaqueTy {
+                        origin: hir::OpaqueTyOrigin::TyAlias,
+                        ..
+                    }) => {
                         intravisit::walk_ty(self, ty);
 
                         // Elided lifetimes are not allowed in non-return
@@ -985,7 +1000,7 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
                     }
                     // RPIT (return position impl trait)
                     hir::ItemKind::OpaqueTy(hir::OpaqueTy {
-                        impl_trait_fn: Some(_),
+                        origin: hir::OpaqueTyOrigin::FnReturn(..) | hir::OpaqueTyOrigin::AsyncFn(..),
                         ref generics,
                         bounds,
                         ..
@@ -1138,6 +1153,7 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
                     trait_item.hir_id(),
                     &sig.decl,
                     &trait_item.generics,
+                    sig.header.asyncness,
                     |this| intravisit::walk_trait_item(this, trait_item),
                 );
                 self.missing_named_lifetime_spots.pop();
@@ -1207,6 +1223,7 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
                     impl_item.hir_id(),
                     &sig.decl,
                     &impl_item.generics,
+                    sig.header.asyncness,
                     |this| intravisit::walk_impl_item(this, impl_item),
                 );
                 self.missing_named_lifetime_spots.pop();
@@ -1695,7 +1712,11 @@ fn compute_object_lifetime_defaults(
         hir::ItemKind::Struct(_, ref generics)
         | hir::ItemKind::Union(_, ref generics)
         | hir::ItemKind::Enum(_, ref generics)
-        | hir::ItemKind::OpaqueTy(hir::OpaqueTy { ref generics, impl_trait_fn: None, .. })
+        | hir::ItemKind::OpaqueTy(hir::OpaqueTy {
+            ref generics,
+            origin: hir::OpaqueTyOrigin::TyAlias,
+            ..
+        })
         | hir::ItemKind::TyAlias(_, ref generics)
         | hir::ItemKind::Trait(_, _, ref generics, ..) => {
             let result = object_lifetime_defaults_for_item(tcx, generics);
@@ -2067,7 +2088,7 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
                                     ..
                                 }) = self.tcx.hir().get(parent_hir_id)
                                 {
-                                    if opaque.origin != hir::OpaqueTyOrigin::AsyncFn {
+                                    if !matches!(opaque.origin, hir::OpaqueTyOrigin::AsyncFn(..)) {
                                         continue 'lifetimes;
                                     }
                                     // We want to do this only if the liftime identifier is already defined
@@ -2180,11 +2201,15 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
         hir_id: hir::HirId,
         decl: &'tcx hir::FnDecl<'tcx>,
         generics: &'tcx hir::Generics<'tcx>,
+        asyncness: hir::IsAsync,
         walk: F,
     ) where
         F: for<'b, 'c> FnOnce(&'b mut LifetimeContext<'c, 'tcx>),
     {
-        insert_late_bound_lifetimes(self.map, decl, generics);
+        // Async fns need all their lifetime parameters to be early bound.
+        if asyncness != hir::IsAsync::Async {
+            insert_late_bound_lifetimes(self.map, decl, generics);
+        }
 
         // Find the start of nested early scopes, e.g., in methods.
         let mut next_early_index = 0;

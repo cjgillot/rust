@@ -540,10 +540,8 @@ pub(super) fn check_opaque_for_inheriting_lifetimes(
         }
     }
 
-    if let ItemKind::OpaqueTy(hir::OpaqueTy {
-        origin: hir::OpaqueTyOrigin::AsyncFn | hir::OpaqueTyOrigin::FnReturn,
-        ..
-    }) = item.kind
+    if let ItemKind::OpaqueTy(hir::OpaqueTy { origin: hir::OpaqueTyOrigin::FnReturn(..), .. }) =
+        item.kind
     {
         let mut visitor = ProhibitOpaqueVisitor {
             opaque_identity_ty: tcx.mk_opaque(
@@ -565,20 +563,13 @@ pub(super) fn check_opaque_for_inheriting_lifetimes(
 
         if let Some(ty) = prohibit_opaque.break_value() {
             visitor.visit_item(&item);
-            let is_async = match item.kind {
-                ItemKind::OpaqueTy(hir::OpaqueTy { origin, .. }) => {
-                    matches!(origin, hir::OpaqueTyOrigin::AsyncFn)
-                }
-                _ => unreachable!(),
-            };
 
             let mut err = struct_span_err!(
                 tcx.sess,
                 span,
                 E0760,
-                "`{}` return type cannot contain a projection or `Self` that references lifetimes from \
+                "`impl Trait` return type cannot contain a projection or `Self` that references lifetimes from \
                  a parent scope",
-                if is_async { "async fn" } else { "impl Trait" },
             );
 
             for (span, name) in visitor.selftys {
@@ -604,7 +595,7 @@ pub(super) fn check_opaque_for_cycles<'tcx>(
 ) -> Result<(), ErrorReported> {
     if tcx.try_expand_impl_trait_type(def_id.to_def_id(), substs).is_err() {
         match origin {
-            hir::OpaqueTyOrigin::AsyncFn => async_opaque_type_cycle_error(tcx, span),
+            hir::OpaqueTyOrigin::AsyncFn(..) => async_opaque_type_cycle_error(tcx, span),
             _ => opaque_type_cycle_error(tcx, def_id, span),
         }
         Err(ErrorReported)
@@ -635,7 +626,7 @@ fn check_opaque_meets_bounds<'tcx>(
 ) {
     match origin {
         // Checked when type checking the function containing them.
-        hir::OpaqueTyOrigin::FnReturn | hir::OpaqueTyOrigin::AsyncFn => return,
+        hir::OpaqueTyOrigin::FnReturn(..) | hir::OpaqueTyOrigin::AsyncFn(..) => return,
         // Can have different predicates to their defining use
         hir::OpaqueTyOrigin::TyAlias => {}
     }
