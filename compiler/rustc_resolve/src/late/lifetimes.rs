@@ -44,6 +44,8 @@ trait RegionExt {
 
     fn late(index: u32, hir_map: &Map<'_>, param: &GenericParam<'_>) -> (ParamName, Region);
 
+    fn late_elided(idx: u32, def_id: LocalDefId) -> Region;
+
     fn late_anon(named_late_bound_vars: u32, index: &Cell<u32>) -> Region;
 
     fn id(&self) -> Option<DefId>;
@@ -79,6 +81,16 @@ impl RegionExt for Region {
             param.name.normalize_to_macros_2_0(),
             Region::LateBound(depth, idx, def_id.to_def_id(), origin),
         )
+    }
+
+    fn late_elided(idx: u32, def_id: LocalDefId) -> Region {
+        let depth = ty::INNERMOST;
+        let origin = LifetimeDefOrigin::ExplicitOrElided;
+        debug!(
+            "Region::late_elided: idx={:?}, depth={:?} def_id={:?} origin={:?}",
+            idx, depth, def_id, origin,
+        );
+        Region::LateBound(depth, idx, def_id.to_def_id(), origin)
     }
 
     fn late_anon(named_late_bound_vars: u32, index: &Cell<u32>) -> Region {
@@ -1019,6 +1031,7 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
                                         false
                                     };
 
+                                debug!("CAPTURE {:?}", (lifetime, def, parent_id));
                                 if !parent_is_item {
                                     if !self.trait_definition_only {
                                         struct_span_err!(
@@ -2860,6 +2873,12 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
                     for lifetime_ref in lifetime_refs {
                         let lifetime =
                             Region::late_anon(named_late_bound_vars, counter).shifted(late_depth);
+                        //let lifetime = if let Some(def_id) = lifetime_ref.region {
+                        //    Region::late_elided(named_late_bound_vars, def_id)
+                        //} else {
+                        //    Region::late_anon(named_late_bound_vars, counter)
+                        //}
+                        //.shifted(late_depth);
 
                         self.insert_lifetime(lifetime_ref, lifetime);
                     }
@@ -3145,6 +3164,20 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
             span = ?self.tcx.sess.source_map().span_to_diagnostic_string(lifetime_ref.span)
         );
         self.map.defs.insert(lifetime_ref.hir_id, def);
+        if let Some(ast_def) = lifetime_ref.region {
+            if Some(ast_def.to_def_id()) != def.id() {
+                self.tcx
+                    .sess
+                    .struct_span_warn(
+                        lifetime_ref.span,
+                        &format!(
+                            "Different resolution for {:?}: AST={:?} HIR={:?}",
+                            lifetime_ref, ast_def, def
+                        ),
+                    )
+                    .emit();
+            }
+        }
 
         match def {
             Region::LateBoundAnon(..) | Region::Static => {

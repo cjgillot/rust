@@ -170,7 +170,7 @@ impl<'a> ParentScope<'a> {
     }
 }
 
-#[derive(Copy, Debug, Clone)]
+#[derive(Copy, Debug, PartialEq, Eq, Clone)]
 enum ImplTraitContext {
     Existential,
     Universal(LocalDefId),
