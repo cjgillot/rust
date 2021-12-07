@@ -349,9 +349,6 @@ enum Elide {
     Exact(Region),
     /// Less or more than one lifetime were found, error on unspecified.
     Error(Vec<ElisionFailureInfo>),
-    /// Forbid lifetime elision inside of a larger scope where it would be
-    /// permitted. For example, in let position impl trait.
-    Forbid,
 }
 
 #[derive(Clone, Debug)]
@@ -977,36 +974,16 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
                 //                 ^                  ^ this gets resolved in the scope of
                 //                                      the opaque_ty generics
                 let opaque_ty = self.tcx.hir().item(item_id);
-                let (generics, bounds) = match opaque_ty.kind {
-                    // Named opaque `impl Trait` types are reached via `TyKind::Path`.
-                    // This arm is for `impl Trait` in the types of statics, constants and locals.
-                    hir::ItemKind::OpaqueTy(hir::OpaqueTy {
-                        origin: hir::OpaqueTyOrigin::TyAlias,
-                        ..
-                    }) => {
-                        intravisit::walk_ty(self, ty);
-
-                        // Elided lifetimes are not allowed in non-return
-                        // position impl Trait
-                        let scope = Scope::TraitRefBoundary { s: self.scope };
-                        self.with(scope, |_, this| {
-                            let scope = Scope::Elision { elide: Elide::Forbid, s: this.scope };
-                            this.with(scope, |_, this| {
-                                intravisit::walk_item(this, opaque_ty);
-                            })
-                        });
-
-                        return;
-                    }
-                    // RPIT (return position impl trait)
-                    hir::ItemKind::OpaqueTy(hir::OpaqueTy {
-                        origin: hir::OpaqueTyOrigin::FnReturn(..) | hir::OpaqueTyOrigin::AsyncFn(..),
-                        ref generics,
-                        bounds,
-                        ..
-                    }) => (generics, bounds),
-                    ref i => bug!("`impl Trait` pointed to non-opaque type?? {:#?}", i),
+                let hir::ItemKind::OpaqueTy(hir::OpaqueTy { origin, ref generics, bounds, ..  }) =
+                    &opaque_ty.kind
+                else {
+                    bug!("`impl Trait` pointed to non-opaque type?? {:#?}", opaque_ty.kind)
                 };
+
+                if let hir::OpaqueTyOrigin::TyAlias = origin {
+                    debug_assert!(generics.params.is_empty());
+                    debug_assert!(lifetimes.is_empty());
+                }
 
                 // Resolve the lifetimes that are applied to the opaque type.
                 // These are resolved in the current scope.
@@ -1095,6 +1072,7 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
                 self.map.late_bound_vars.insert(ty.hir_id, vec![]);
 
                 if let Some(elision_region) = elision {
+                    debug_assert!(!matches!(origin, hir::OpaqueTyOrigin::TyAlias));
                     let scope =
                         Scope::Elision { elide: Elide::Exact(elision_region), s: self.scope };
                     self.with(scope, |_old_scope, this| {
@@ -1111,7 +1089,7 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
                             this.visit_generics(generics);
                             let scope = Scope::TraitRefBoundary { s: this.scope };
                             this.with(scope, |_, this| {
-                                for bound in bounds {
+                                for bound in *bounds {
                                     this.visit_param_bound(bound);
                                 }
                             })
@@ -1131,7 +1109,7 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
                         let scope = Scope::TraitRefBoundary { s: this.scope };
                         this.with(scope, |_, this| {
                             this.visit_generics(generics);
-                            for bound in bounds {
+                            for bound in *bounds {
                                 this.visit_param_bound(bound);
                             }
                         })
@@ -3147,8 +3125,6 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
                     break Err(Some(&e[..]));
                 }
 
-                Scope::Elision { elide: Elide::Forbid, .. } => break Err(None),
-
                 Scope::ObjectLifetimeDefault { s, .. }
                 | Scope::Supertrait { s, .. }
                 | Scope::TraitRefBoundary { s, .. } => {
@@ -3403,9 +3379,7 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
                 // going to make a fresh name, so we cannot
                 // necessarily replace a single-use lifetime with
                 // `'_`.
-                Scope::Elision {
-                    elide: Elide::Exact(_) | Elide::Error(_) | Elide::Forbid, ..
-                } => break false,
+                Scope::Elision { elide: Elide::Exact(_) | Elide::Error(_), .. } => break false,
 
                 Scope::ObjectLifetimeDefault { s, .. }
                 | Scope::Supertrait { s, .. }
