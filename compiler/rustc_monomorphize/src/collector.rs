@@ -615,7 +615,13 @@ impl<'a, 'tcx> MirNeighborCollector<'a, 'tcx> {
     where
         T: TypeFoldable<'tcx>,
     {
+        debug!("monomorphize: value={:?}", value);
+        //debug!("monomorphize: body={:#?}", self.body);
         debug!("monomorphize: self.instance={:?}", self.instance);
+        debug!(
+            "instance param_env={:#?}",
+            self.tcx.param_env_reveal_all_normalized(self.instance.def_id()),
+        );
         self.instance.subst_mir_and_normalize_erasing_regions(
             self.tcx,
             //ty::ParamEnv::reveal_all(),
@@ -1405,7 +1411,7 @@ fn collect_neighbours<'tcx>(
     instance: Instance<'tcx>,
     output: &mut Vec<Spanned<MonoItem<'tcx>>>,
 ) {
-    debug!("collect_neighbours: {:?}", instance.def_id());
+    debug!("collect_neighbours: {:?}", instance);
     let body = tcx.instance_mir(instance.def);
     debug!("visit_body: {:#?}", body);
 

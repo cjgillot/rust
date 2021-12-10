@@ -107,9 +107,17 @@ fn gather_types(
     body: &Body<'tcx>,
 ) -> Result<FxHashMap<Ty<'tcx>, Ty<'tcx>>, String> {
     // Translate all the function calls.
-    let mut calls = TypeGatherer { tcx, decls: &body.local_decls, types: FxHashSet::default() };
+    let mut calls = TypeGatherer {
+        tcx,
+        decls: &body.local_decls,
+        types: FxHashSet::default(),
+        has_dyn_cast: false,
+    };
     calls.visit_body(body);
-    let TypeGatherer { types, .. } = calls;
+    let TypeGatherer { types, has_dyn_cast, .. } = calls;
+    if has_dyn_cast {
+        return Err("Cannot handle dyn cast.".to_string());
+    }
 
     let mut type_map = FxHashMap::default();
     //let mut eraser = TypeEraser { tcx };
@@ -426,6 +434,7 @@ struct TypeGatherer<'tcx, 'a> {
     tcx: TyCtxt<'tcx>,
     decls: &'a LocalDecls<'tcx>,
     types: FxHashSet<Ty<'tcx>>,
+    has_dyn_cast: bool,
 }
 
 impl<'tcx> Visitor<'tcx> for TypeGatherer<'tcx, '_> {
@@ -449,6 +458,26 @@ impl<'tcx> Visitor<'tcx> for TypeGatherer<'tcx, '_> {
         if let Operand::Constant(ref constant) = &*operand {
             let const_ty = constant.literal.ty();
             self.types.insert(const_ty);
+        }
+    }
+
+    fn visit_rvalue(&mut self, rvalue: &Rvalue<'tcx>, location: Location) {
+        self.super_rvalue(rvalue, location);
+        match rvalue {
+            Rvalue::Cast(CastKind::Pointer(PointerCast::Unsize), operand, target_ty) => {
+                let source_ty = operand.ty(self.decls, self.tcx);
+                debug!(?source_ty);
+                debug!(?target_ty);
+                debug!("is_trait={:?}", target_ty.is_trait());
+                if let ty::Ref(_, target_ty, _) | ty::RawPtr(ty::TypeAndMut { ty: target_ty, .. }) =
+                    target_ty.kind()
+                {
+                    debug!(?target_ty);
+                    debug!("is_trait={:?}", target_ty.is_trait());
+                    self.has_dyn_cast |= target_ty.is_trait();
+                }
+            }
+            _ => {}
         }
     }
 
