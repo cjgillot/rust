@@ -1,3 +1,4 @@
+#![allow(arithmetic_overflow)] // Overflowing is part of the test.
 use core::num::Wrapping;
 
 macro_rules! wrapping_operation {

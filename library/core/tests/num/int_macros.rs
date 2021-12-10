@@ -1,6 +1,7 @@
 macro_rules! int_module {
     ($T:ident, $T_i:ident) => {
         #[cfg(test)]
+        #[allow(arithmetic_overflow)] // Overflowing is part of the test.
         mod tests {
             use core::ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr};
             use core::$T_i::*;
