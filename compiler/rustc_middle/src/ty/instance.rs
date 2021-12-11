@@ -572,6 +572,21 @@ impl<'tcx> Instance<'tcx> {
         if self.def.has_polymorphic_mir_body() { Some(self.substs) } else { None }
     }
 
+    crate fn substs_for_codegen(&self, tcx: TyCtxt<'tcx>) -> Option<SubstsRef<'tcx>> {
+        if let ty::InstanceDef::ErasedShim(def_id) = self.def {
+            let substs = InternalSubsts::for_item(tcx, def_id, |param, _| match param.kind {
+                ty::GenericParamDefKind::Lifetime => tcx.lifetimes.re_erased.into(),
+                ty::GenericParamDefKind::Type { .. } => tcx.types.u8.into(),
+                ty::GenericParamDefKind::Const { .. } => {
+                    panic!("Unsupported type-erased const params")
+                }
+            });
+            Some(substs)
+        } else {
+            self.substs_for_mir_body()
+        }
+    }
+
     pub fn subst_mir<T>(&self, tcx: TyCtxt<'tcx>, v: &T) -> T
     where
         T: TypeFoldable<'tcx> + Copy,
@@ -593,6 +608,25 @@ impl<'tcx> Instance<'tcx> {
             tcx.subst_and_normalize_erasing_regions(substs, param_env, v)
         } else {
             tcx.normalize_erasing_regions(param_env, v)
+        }
+    }
+
+    #[inline(always)]
+    pub fn subst_mir_for_codegen<T>(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        param_env: ty::ParamEnv<'tcx>,
+        v: T,
+    ) -> T
+    where
+        T: TypeFoldable<'tcx> + Clone,
+    {
+        if let ty::InstanceDef::ErasedShim(def_id) = self.def {
+            let substs = self.substs_for_codegen(tcx).unwrap();
+            let v = tcx.erase_regions(v);
+            v.subst(tcx, substs)
+        } else {
+            self.subst_mir_and_normalize_erasing_regions(tcx, param_env, v)
         }
     }
 

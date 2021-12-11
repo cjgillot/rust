@@ -564,6 +564,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         }
     }
 
+    #[tracing::instrument(level = "debug", skip(self, helper, bx))]
     fn codegen_call_terminator(
         &mut self,
         helper: TerminatorCodegenHelper<'tcx>,
@@ -1417,6 +1418,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         Bx::build(self.cx, llbb)
     }
 
+    #[tracing::instrument(level = "debug", skip(self, bx))]
     fn make_return_dest(
         &mut self,
         bx: &mut Bx,

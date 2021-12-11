@@ -26,6 +26,7 @@ use tracing::debug;
 ///
 /// If there’s a value with the same name already declared, the function will
 /// update the declaration and return existing Value instead.
+#[tracing::instrument(level = "debug", skip(cx, unnamed))]
 fn declare_raw_fn(
     cx: &CodegenCx<'ll, '_>,
     name: &str,
@@ -33,7 +34,6 @@ fn declare_raw_fn(
     unnamed: llvm::UnnamedAddr,
     ty: &'ll Type,
 ) -> &'ll Value {
-    debug!("declare_raw_fn(name={:?}, ty={:?})", name, ty);
     let llfn = unsafe {
         llvm::LLVMRustGetOrInsertFunction(cx.llmod, name.as_ptr().cast(), name.len(), ty)
     };

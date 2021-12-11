@@ -2957,6 +2957,7 @@ fn fn_abi_of_fn_ptr<'tcx>(
     query: ty::ParamEnvAnd<'tcx, (ty::PolyFnSig<'tcx>, &'tcx ty::List<Ty<'tcx>>)>,
 ) -> Result<&'tcx FnAbi<'tcx, Ty<'tcx>>, FnAbiError<'tcx>> {
     let (param_env, (sig, extra_args)) = query.into_parts();
+    let sig = tcx.normalize_erasing_late_bound_regions(param_env, sig);
 
     LayoutCx { tcx, param_env }.fn_abi_new_uncached(
         sig,
@@ -2974,11 +2975,14 @@ fn fn_abi_of_instance<'tcx>(
     let (param_env, (instance, extra_args)) = query.into_parts();
 
     let sig = instance.fn_sig_for_fn_abi(tcx);
+    let mut sig = tcx.normalize_erasing_late_bound_regions(param_env, sig);
 
     let extra_args = if let ty::InstanceDef::ErasedShim(def_id) = instance.def {
+        sig = instance.subst_mir_for_codegen(tcx, param_env, sig);
+
         // Remove extra arguments between Item and ErasedShim.
         let raw_sig = tcx.fn_sig(def_id);
-        let additions = sig.inputs().skip_binder().len() - raw_sig.inputs().skip_binder().len();
+        let additions = sig.inputs().len() - raw_sig.inputs().skip_binder().len();
         let additions = std::cmp::min(additions, extra_args.len());
         &extra_args[additions..]
     } else {
@@ -3007,7 +3011,7 @@ impl<'tcx> LayoutCx<'tcx, TyCtxt<'tcx>> {
     // arguments of this method, into a separate `struct`.
     fn fn_abi_new_uncached(
         &self,
-        sig: ty::PolyFnSig<'tcx>,
+        sig: ty::FnSig<'tcx>,
         extra_args: &[Ty<'tcx>],
         caller_location: Option<Ty<'tcx>>,
         codegen_fn_attr_flags: CodegenFnAttrFlags,
@@ -3015,8 +3019,6 @@ impl<'tcx> LayoutCx<'tcx, TyCtxt<'tcx>> {
         force_thin_self_ptr: bool,
     ) -> Result<&'tcx FnAbi<'tcx, Ty<'tcx>>, FnAbiError<'tcx>> {
         debug!("fn_abi_new_uncached({:?}, {:?})", sig, extra_args);
-
-        let sig = self.tcx.normalize_erasing_late_bound_regions(self.param_env, sig);
 
         let conv = conv_from_spec_abi(self.tcx(), sig.abi);
 

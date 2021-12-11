@@ -94,11 +94,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         T: Copy + TypeFoldable<'tcx>,
     {
         debug!("monomorphize: self.instance={:?}", self.instance);
-        self.instance.subst_mir_and_normalize_erasing_regions(
-            self.cx.tcx(),
-            ty::ParamEnv::reveal_all(),
-            value,
-        )
+        self.instance.subst_mir_for_codegen(self.cx.tcx(), ty::ParamEnv::reveal_all(), value)
     }
 }
 

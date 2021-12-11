@@ -14,6 +14,7 @@ use tracing::debug;
 
 use std::fmt::Write;
 
+#[tracing::instrument(level = "debug", skip(cx))]
 fn uncached_llvm_type<'a, 'tcx>(
     cx: &CodegenCx<'a, 'tcx>,
     layout: TyAndLayout<'tcx>,
@@ -217,6 +218,7 @@ impl<'tcx> LayoutLlvmExt<'tcx> for TyAndLayout<'tcx> {
     /// with the inner-most trailing unsized field using the "minimal unit"
     /// of that field's type - this is useful for taking the address of
     /// that field and ensuring the struct has the right alignment.
+    #[tracing::instrument(level = "debug", skip(cx))]
     fn llvm_type<'a>(&self, cx: &CodegenCx<'a, 'tcx>) -> &'a Type {
         if let Abi::Scalar(scalar) = self.abi {
             // Use a different cache for scalars because pointers to DSTs
@@ -318,6 +320,7 @@ impl<'tcx> LayoutLlvmExt<'tcx> for TyAndLayout<'tcx> {
         }
     }
 
+    #[tracing::instrument(level = "debug", skip(cx))]
     fn scalar_pair_element_llvm_type<'a>(
         &self,
         cx: &CodegenCx<'a, 'tcx>,
