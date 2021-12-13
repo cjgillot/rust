@@ -2,6 +2,7 @@
 // error-pattern:index out of bounds
 // ignore-emscripten no processes
 
+#![allow(unconditional_panic)]
 use std::mem::size_of;
 
 fn main() {

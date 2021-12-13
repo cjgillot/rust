@@ -1,18 +1,25 @@
 // run-pass
 #![allow(non_upper_case_globals)]
+#![allow(arithmetic_overflow)]
 
 // Tests the range assertion wraparound case when reading discriminants.
 
 #[repr(u8)]
 #[derive(Copy, Clone)]
-enum Eu { Lu = 0, Hu = 255 }
+enum Eu {
+    Lu = 0,
+    Hu = 255,
+}
 
 static CLu: Eu = Eu::Lu;
 static CHu: Eu = Eu::Hu;
 
 #[repr(i8)]
 #[derive(Copy, Clone)]
-enum Es { Ls = -128, Hs = 127 }
+enum Es {
+    Ls = -128,
+    Hs = 127,
+}
 
 static CLs: Es = Es::Ls;
 static CHs: Es = Es::Hs;

@@ -1,6 +1,7 @@
 // run-pass
 // Catch mistakes in the overflowing literals lint.
 #![deny(overflowing_literals)]
+#![allow(arithmetic_overflow)]
 
 pub fn main() {
     assert_eq!(0xffffffff, (!0 as u32));
