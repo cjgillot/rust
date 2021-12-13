@@ -3,6 +3,8 @@
 // ignore-emscripten no threads support
 // needs-unwind
 
+#![allow(arithmetic_overflow)]
+
 use std::thread;
 
 fn main() {

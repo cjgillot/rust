@@ -1,5 +1,4 @@
 // build-fail
- //~^ overflow evaluating
 
 fn main() {
     let mut iter = 0u8..1;
@@ -8,4 +7,5 @@ fn main() {
 
 fn func<T: Iterator<Item = u8>>(iter: &mut T) {
     func(&mut iter.map(|x| x + 1))
+    //~^ ERROR reached the recursion limit while instantiating
 }

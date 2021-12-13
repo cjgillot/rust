@@ -4,11 +4,12 @@
 // Test that with MIR codegen, overflow checks can be
 // turned off, even when they're from core::ops::*.
 
+#![allow(arithmetic_overflow)]
+
 use std::ops::*;
 
 fn main() {
     assert_eq!(i8::neg(-0x80), -0x80);
-
     assert_eq!(u8::add(0xff, 1), 0_u8);
     assert_eq!(u8::sub(0, 1), 0xff_u8);
     assert_eq!(u8::mul(0xff, 2), 0xfe_u8);
