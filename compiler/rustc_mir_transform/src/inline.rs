@@ -294,12 +294,7 @@ impl<'tcx> Inliner<'tcx> {
     ) -> Result<(), &'static str> {
         match callee_attrs.inline {
             InlineAttr::Never => return Err("never inline hint"),
-            InlineAttr::Always | InlineAttr::Hint => {}
-            InlineAttr::None => {
-                if self.tcx.sess.mir_opt_level() <= 2 {
-                    return Err("at mir-opt-level=2, only #[inline] is inlined");
-                }
-            }
+            InlineAttr::Always | InlineAttr::Hint | InlineAttr::None => {}
         }
 
         // Only inline local functions if they would be eligible for cross-crate
