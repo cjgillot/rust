@@ -266,6 +266,10 @@ impl<'tcx> Inliner<'tcx> {
                     return None;
                 }
 
+                if self.history.contains(&callee) {
+                    return None;
+                }
+
                 let fn_sig = self.tcx.fn_sig(def_id).subst(self.tcx, substs);
 
                 return Some(CallSite {
@@ -415,19 +419,9 @@ impl<'tcx> Inliner<'tcx> {
                 }
 
                 TerminatorKind::Call { func: Operand::Constant(ref f), cleanup, .. } => {
-                    if let ty::FnDef(def_id, substs) =
+                    if let ty::FnDef(def_id, _) =
                         *callsite.callee.subst_mir(self.tcx, &f.literal.ty()).kind()
                     {
-                        let substs = self.tcx.normalize_erasing_regions(self.param_env, substs);
-                        if let Ok(Some(instance)) =
-                            Instance::resolve(self.tcx, self.param_env, def_id, substs)
-                        {
-                            if callsite.callee.def_id() == instance.def_id() {
-                                return Err("self-recursion");
-                            } else if self.history.contains(&instance) {
-                                return Err("already inlined");
-                            }
-                        }
                         // Don't give intrinsics the extra penalty for calls
                         let f = tcx.fn_sig(def_id);
                         if f.abi() == Abi::RustIntrinsic || f.abi() == Abi::PlatformIntrinsic {
