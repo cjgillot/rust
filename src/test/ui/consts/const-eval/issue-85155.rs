@@ -17,5 +17,4 @@ extern crate post_monomorphization_error;
 fn main() {
     // This function triggers a PME whenever the const argument does not fit in 1-bit.
     post_monomorphization_error::stdarch_intrinsic::<2>();
-    //~^ NOTE the above error was encountered while instantiating
 }

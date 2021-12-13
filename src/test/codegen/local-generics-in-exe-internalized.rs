@@ -5,6 +5,7 @@
 // CHECK-LABEL: ; local_generics_in_exe_internalized::foo
 // CHECK-NEXT: ; Function Attrs:
 // CHECK-NEXT: define internal
+#[inline(never)]
 pub fn foo<T>(x: T, y: T) -> (T, T) {
     (x, y)
 }

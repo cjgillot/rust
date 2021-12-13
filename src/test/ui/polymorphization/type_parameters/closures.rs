@@ -1,5 +1,5 @@
 // build-fail
-// compile-flags:-Zpolymorphize=on
+// compile-flags:-Zpolymorphize=on -Zinline-mir=no
 #![feature(stmt_expr_attributes, rustc_attrs)]
 
 // This test checks that the polymorphization analysis correctly detects unused type
