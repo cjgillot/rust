@@ -120,7 +120,7 @@ fn gather_types(
     }
 
     let mut type_map = FxHashMap::default();
-    //let mut eraser = TypeEraser { tcx };
+    let mut eraser = TypeEraser { tcx };
 
     let mut types: Vec<_> = types.into_iter().collect();
     while let Some(ty) = types.pop() {
@@ -146,7 +146,7 @@ fn gather_types(
 
             let ptr_ty = mk_fn_ptr(tcx, param_env, *def_id, substs);
             let new_ty = tcx.normalize_erasing_regions(param_env, ptr_ty);
-            //let new_ty = new_ty.fold_with(&mut eraser);
+            let new_ty = new_ty.fold_with(&mut eraser);
             type_map.insert(ty, new_ty);
             type_map.insert(ptr_ty, new_ty);
 
@@ -156,8 +156,8 @@ fn gather_types(
         }
 
         let new_ty = tcx.normalize_erasing_regions(param_env, ty);
-        //let new_ty = new_ty.fold_with(&mut eraser);
-        //debug_assert!(!new_ty.potentially_has_param_types_or_consts());
+        let new_ty = new_ty.fold_with(&mut eraser);
+        debug_assert!(!new_ty.potentially_has_param_types_or_consts());
         type_map.insert(ty, new_ty);
     }
 
@@ -294,7 +294,10 @@ fn build_trampoline(
     let func = {
         let substs = InternalSubsts::for_item(tcx, def_id, |param, _| match param.kind {
             ty::GenericParamDefKind::Lifetime => tcx.lifetimes.re_erased.into(),
-            ty::GenericParamDefKind::Type { .. } => tcx.mk_ty_param(param.index, param.name).into(),
+            ty::GenericParamDefKind::Type { .. } => {
+                tcx.mk_ty_param(param.index, param.name).into()
+                //tcx.types.u8.into()
+            }
             ty::GenericParamDefKind::Const { .. } => {
                 tcx.mk_const_param(param.index, param.name, tcx.type_of(param.def_id)).into()
             }
@@ -326,13 +329,13 @@ fn build_trampoline(
         })));
         let transmute = {
             let def_id = tcx.get_diagnostic_item(sym::transmute).unwrap();
-            debug_assert_eq!(
-                tcx.layout_of(param_env.and(ret_ty)).unwrap().layout,
-                tcx.layout_of(param_env.and(erased_ret_ty)).unwrap().layout,
-                "Mismatch in layout for {:?} and erased {:?}",
-                ret_ty,
-                erased_ret_ty,
-            );
+            //debug_assert_eq!(
+            //    tcx.layout_of(param_env.and(ret_ty)).unwrap().layout,
+            //    tcx.layout_of(param_env.and(erased_ret_ty)).unwrap().layout,
+            //    "Mismatch in layout for {:?} and erased {:?}",
+            //    ret_ty,
+            //    erased_ret_ty,
+            //);
             let substs = tcx.intern_substs(&[ret_ty.into(), erased_ret_ty.into()]);
             let ty = tcx.mk_fn_def(def_id, substs);
             Operand::Constant(Box::new(Constant {
@@ -401,10 +404,10 @@ fn type_erase_body(
     //body.is_polymorphic = body.potentially_has_param_types_or_consts();
     //debug_assert!(!body.is_polymorphic, "{:#?}", body);
 
-    let param_env = tcx.param_env_reveal_all_normalized(body.source.def_id());
-    for l in body.local_decls.iter() {
-        debug_assert!(tcx.layout_of(param_env.and(l.ty)).is_ok());
-    }
+    //let param_env = tcx.param_env_reveal_all_normalized(body.source.def_id());
+    //for l in body.local_decls.iter() {
+    //    debug_assert!(tcx.layout_of(param_env.and(l.ty)).is_ok());
+    //}
 
     // Reorder locals to have parameters first.
     body.arg_count += num_new_locals;
@@ -605,10 +608,10 @@ impl<'tcx> MutVisitor<'tcx> for BodyEraser<'tcx, '_> {
         }
     }
 
-    //fn visit_source_scope_data(&mut self, scope_data: &mut SourceScopeData<'tcx>) {
-    //    self.super_source_scope_data(scope_data);
-    //    *scope_data = scope_data.clone().fold_with(&mut TypeEraser { tcx: self.tcx })
-    //}
+    fn visit_source_scope_data(&mut self, scope_data: &mut SourceScopeData<'tcx>) {
+        self.super_source_scope_data(scope_data);
+        *scope_data = scope_data.clone().fold_with(&mut TypeEraser { tcx: self.tcx })
+    }
 
     fn process_projection_elem(
         &mut self,
