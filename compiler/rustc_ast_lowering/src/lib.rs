@@ -42,6 +42,7 @@
 use crate::errors::{AssocTyParentheses, AssocTyParenthesesSub, MisplacedImplTrait};
 use rustc_ast::node_id::NodeMap;
 use rustc_ast::ptr::P;
+use rustc_ast::visit::{self, Visitor};
 use rustc_ast::{self as ast, *};
 use rustc_ast_pretty::pprust;
 use rustc_data_structures::captures::Captures;
@@ -49,10 +50,11 @@ use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::fx::FxIndexSet;
 use rustc_data_structures::sorted_map::SortedMap;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_data_structures::steal::Steal;
 use rustc_data_structures::sync::Lrc;
 use rustc_errors::{DiagArgFromDisplay, DiagCtxtHandle, StashKey};
 use rustc_hir::def::{DefKind, LifetimeRes, Namespace, PartialRes, PerNS, Res};
-use rustc_hir::def_id::{LocalDefId, LocalDefIdMap, CRATE_DEF_ID, LOCAL_CRATE};
+use rustc_hir::def_id::{LocalDefId, LocalDefIdMap};
 use rustc_hir::{self as hir};
 use rustc_hir::{
     ConstArg, GenericArg, HirId, ItemLocalMap, MissingLifetimeKind, ParamName, TraitCandidate,
@@ -354,54 +356,72 @@ enum FnDeclKind {
     Impl,
 }
 
-#[derive(Copy, Clone)]
-enum AstOwner<'a> {
-    NonOwner,
-    Crate(&'a ast::Crate),
-    Item(&'a ast::Item),
-    AssocItem(&'a ast::AssocItem, visit::AssocCtxt),
-    ForeignItem(&'a ast::ForeignItem),
-}
+pub fn index_ast<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    (): (),
+) -> &'tcx Steal<IndexVec<LocalDefId, AstOwner<'tcx>>> {
+    let (resolver, krate) = tcx.resolver_for_lowering();
 
-fn index_crate<'a>(
-    node_id_to_def_id: &NodeMap<LocalDefId>,
-    krate: &'a Crate,
-) -> IndexVec<LocalDefId, AstOwner<'a>> {
-    let mut indexer = Indexer { node_id_to_def_id, index: IndexVec::new() };
-    *indexer.index.ensure_contains_elem(CRATE_DEF_ID, || AstOwner::NonOwner) =
-        AstOwner::Crate(krate);
-    visit::walk_crate(&mut indexer, krate);
-    return indexer.index;
+    let mut indexer =
+        Indexer { node_id_to_def_id: &resolver.node_id_to_def_id, index: IndexVec::new() };
+    indexer.visit_crate(&krate);
+    indexer.insert(CRATE_NODE_ID, AstOwner::Crate(&*krate));
+    return tcx.arena.alloc(Steal::new(indexer.index));
 
-    struct Indexer<'s, 'a> {
+    struct Indexer<'s, 'ast> {
         node_id_to_def_id: &'s NodeMap<LocalDefId>,
-        index: IndexVec<LocalDefId, AstOwner<'a>>,
+        index: IndexVec<LocalDefId, AstOwner<'ast>>,
     }
 
-    impl<'a> visit::Visitor<'a> for Indexer<'_, 'a> {
-        fn visit_attribute(&mut self, _: &'a Attribute) {
+    impl<'ast> Indexer<'_, 'ast> {
+        fn insert(&mut self, id: NodeId, node: AstOwner<'ast>) {
+            let def_id = self.node_id_to_def_id[&id];
+            self.index.ensure_contains_elem(def_id, || AstOwner::NonOwner);
+            self.index[def_id] = node;
+        }
+
+        fn visit_item_id_use_tree(&mut self, tree: &UseTree, parent: LocalDefId) {
+            match tree.kind {
+                UseTreeKind::Glob | UseTreeKind::Simple(_) => {}
+                UseTreeKind::Nested { items: ref nested_vec, span: _ } => {
+                    for &(ref nested, id) in nested_vec {
+                        self.insert(id, AstOwner::Synthetic(parent));
+
+                        let def_id = self.node_id_to_def_id[&id];
+                        self.visit_item_id_use_tree(nested, def_id);
+                    }
+                }
+            }
+        }
+    }
+
+    impl<'ast> Visitor<'ast> for Indexer<'_, 'ast> {
+        fn visit_attribute(&mut self, _: &Attribute) {
             // We do not want to lower expressions that appear in attributes,
             // as they are not accessible to the rest of the HIR.
         }
 
-        fn visit_item(&mut self, item: &'a ast::Item) {
+        fn visit_item(&mut self, item: &'ast Item) {
             let def_id = self.node_id_to_def_id[&item.id];
-            *self.index.ensure_contains_elem(def_id, || AstOwner::NonOwner) = AstOwner::Item(item);
-            visit::walk_item(self, item)
-        }
-
-        fn visit_assoc_item(&mut self, item: &'a ast::AssocItem, ctxt: visit::AssocCtxt) {
-            let def_id = self.node_id_to_def_id[&item.id];
-            *self.index.ensure_contains_elem(def_id, || AstOwner::NonOwner) =
-                AstOwner::AssocItem(item, ctxt);
-            visit::walk_assoc_item(self, item, ctxt);
-        }
-
-        fn visit_foreign_item(&mut self, item: &'a ast::ForeignItem) {
-            let def_id = self.node_id_to_def_id[&item.id];
-            *self.index.ensure_contains_elem(def_id, || AstOwner::NonOwner) =
-                AstOwner::ForeignItem(item);
+            if let ItemKind::Use(ref use_tree) = item.kind {
+                self.visit_item_id_use_tree(use_tree, def_id);
+            }
             visit::walk_item(self, item);
+            self.insert(item.id, AstOwner::Item(item));
+        }
+
+        fn visit_assoc_item(&mut self, item: &'ast AssocItem, ctxt: visit::AssocCtxt) {
+            visit::walk_item(self, item);
+            let owner_ref = match ctxt {
+                visit::AssocCtxt::Trait => AstOwner::TraitItem(item),
+                visit::AssocCtxt::Impl => AstOwner::ImplItem(item),
+            };
+            self.insert(item.id, owner_ref);
+        }
+
+        fn visit_foreign_item(&mut self, item: &'ast ForeignItem) {
+            visit::walk_item(self, item);
+            self.insert(item.id, AstOwner::ForeignItem(item));
         }
     }
 }
@@ -431,15 +451,10 @@ fn compute_hir_hash(
 
 pub fn lower_to_hir(tcx: TyCtxt<'_>, (): ()) -> hir::Crate<'_> {
     let sess = tcx.sess;
-    // Queries that borrow `resolver_for_lowering`.
-    tcx.ensure_with_value().output_filenames(());
-    tcx.ensure_with_value().early_lint_checks(());
-    tcx.ensure_with_value().debugger_visualizers(LOCAL_CRATE);
-    tcx.ensure_with_value().get_lang_items(());
-    let (resolver, krate) = tcx.resolver_for_lowering();
-    let krate = krate.steal();
+    let (resolver, _) = tcx.resolver_for_lowering();
 
-    let ast_index = index_crate(&resolver.node_id_to_def_id, &krate);
+    let ast_index = tcx.index_ast(()).steal();
+
     let mut owners = IndexVec::from_fn_n(
         |_| hir::MaybeOwner::Phantom,
         tcx.definitions_untracked().def_index_count(),
@@ -451,8 +466,7 @@ pub fn lower_to_hir(tcx: TyCtxt<'_>, (): ()) -> hir::Crate<'_> {
     }
 
     // Drop AST to free memory
-    drop(ast_index);
-    sess.time("drop_ast", || drop(krate));
+    sess.time("drop_ast", || drop(ast_index));
 
     // Don't hash unless necessary, because it's expensive.
     let opt_hir_hash =

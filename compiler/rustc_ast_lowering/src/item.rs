@@ -1,10 +1,9 @@
 use super::errors::{InvalidAbi, InvalidAbiReason, InvalidAbiSuggestion, MisplacedRelaxTraitBound};
 use super::ResolverAstLoweringExt;
-use super::{AstOwner, ImplTraitContext, ImplTraitPosition};
 use super::{FnDeclKind, LoweringContext, ParamMode};
+use super::{ImplTraitContext, ImplTraitPosition};
 
 use rustc_ast::ptr::P;
-use rustc_ast::visit::AssocCtxt;
 use rustc_ast::*;
 use rustc_errors::ErrorGuaranteed;
 use rustc_hir as hir;
@@ -12,7 +11,6 @@ use rustc_hir::def::{DefKind, Res};
 use rustc_hir::def_id::{LocalDefId, CRATE_DEF_ID};
 use rustc_hir::PredicateOrigin;
 use rustc_index::{IndexSlice, IndexVec};
-use rustc_middle::span_bug;
 use rustc_middle::ty::{ResolverAstLowering, TyCtxt};
 use rustc_span::edit_distance::find_best_match_for_name;
 use rustc_span::symbol::{kw, sym, Ident};
@@ -69,13 +67,14 @@ impl<'a, 'hir> ItemLowerer<'a, 'hir> {
     pub(super) fn lower_node(&mut self, def_id: LocalDefId) -> hir::MaybeOwner<'hir> {
         let owner = self.owners.ensure_contains_elem(def_id, || hir::MaybeOwner::Phantom);
         if let hir::MaybeOwner::Phantom = owner {
-            let node = self.ast_index[def_id];
+            let node = &self.ast_index[def_id];
             match node {
-                AstOwner::NonOwner => {}
-                AstOwner::Crate(c) => self.lower_crate(c),
-                AstOwner::Item(item) => self.lower_item(item),
-                AstOwner::AssocItem(item, ctxt) => self.lower_assoc_item(item, ctxt),
-                AstOwner::ForeignItem(item) => self.lower_foreign_item(item),
+                AstOwner::NonOwner | AstOwner::Synthetic(..) => {}
+                AstOwner::Crate(c) => self.lower_crate(&c),
+                AstOwner::Item(item) => self.lower_item(&item),
+                AstOwner::TraitItem(item) => self.lower_trait_item(&item),
+                AstOwner::ImplItem(item) => self.lower_impl_item(&item),
+                AstOwner::ForeignItem(item) => self.lower_foreign_item(&item),
             }
         }
 
@@ -97,11 +96,12 @@ impl<'a, 'hir> ItemLowerer<'a, 'hir> {
         self.with_lctx(item.id, |lctx| hir::OwnerNode::Item(lctx.lower_item(item)))
     }
 
-    fn lower_assoc_item(&mut self, item: &AssocItem, ctxt: AssocCtxt) {
-        let def_id = self.resolver.node_id_to_def_id[&item.id];
-        let parent_id = self.tcx.local_parent(def_id);
-        let parent_hir = self.lower_node(parent_id).unwrap();
-        self.with_lctx(item.id, |lctx| lctx.lower_assoc_item(item, ctxt, parent_hir))
+    fn lower_trait_item(&mut self, item: &AssocItem) {
+        self.with_lctx(item.id, |lctx| hir::OwnerNode::TraitItem(lctx.lower_trait_item(item)))
+    }
+
+    fn lower_impl_item(&mut self, item: &AssocItem) {
+        self.with_lctx(item.id, |lctx| hir::OwnerNode::ImplItem(lctx.lower_impl_item(item)))
     }
 
     fn lower_foreign_item(&mut self, item: &ForeignItem) {
@@ -598,43 +598,6 @@ impl<'hir> LoweringContext<'hir> {
         }
     }
 
-    fn lower_assoc_item(
-        &mut self,
-        item: &AssocItem,
-        ctxt: AssocCtxt,
-        parent_hir: &'hir hir::OwnerInfo<'hir>,
-    ) -> hir::OwnerNode<'hir> {
-        // Evaluate with the lifetimes in `params` in-scope.
-        // This is used to track which lifetimes have already been defined,
-        // and which need to be replicated when lowering an async fn.
-
-        let generics = match parent_hir.node().expect_item().kind {
-            hir::ItemKind::Impl(impl_) => {
-                self.is_in_trait_impl = impl_.of_trait.is_some();
-                &impl_.generics
-            }
-            hir::ItemKind::Trait(_, _, generics, _, _) => generics,
-            kind => {
-                span_bug!(item.span, "assoc item has unexpected kind of parent: {}", kind.descr())
-            }
-        };
-
-        if self.tcx.features().effects {
-            self.host_param_id = generics
-                .params
-                .iter()
-                .find(|param| {
-                    matches!(param.kind, hir::GenericParamKind::Const { is_host_effect: true, .. })
-                })
-                .map(|param| param.def_id);
-        }
-
-        match ctxt {
-            AssocCtxt::Trait => hir::OwnerNode::TraitItem(self.lower_trait_item(item)),
-            AssocCtxt::Impl => hir::OwnerNode::ImplItem(self.lower_impl_item(item)),
-        }
-    }
-
     fn lower_foreign_item(&mut self, i: &ForeignItem) -> &'hir hir::ForeignItem<'hir> {
         let hir_id = self.lower_node_id(i.id);
         let owner_id = hir_id.expect_owner();
@@ -769,6 +732,24 @@ impl<'hir> LoweringContext<'hir> {
         self.lower_attrs(hir_id, &i.attrs);
         let trait_item_def_id = hir_id.expect_owner();
 
+        let parent_id = self.tcx.local_parent(trait_item_def_id.def_id);
+        let parent_hir = self.lower_node(parent_id).node.expect_item();
+        match parent_hir.kind {
+            hir::ItemKind::Trait(_, _, generics, _, _) if self.tcx.features().effects => {
+                self.host_param_id = generics
+                    .params
+                    .iter()
+                    .find(|param| {
+                        matches!(
+                            param.kind,
+                            hir::GenericParamKind::Const { is_host_effect: true, .. }
+                        )
+                    })
+                    .map(|param| param.def_id);
+            }
+            _ => {}
+        }
+
         let (generics, kind, has_default) = match &i.kind {
             AssocItemKind::Const(box ConstItem { generics, ty, expr, .. }) => {
                 let (generics, kind) = self.lower_generics(
@@ -899,6 +880,29 @@ impl<'hir> LoweringContext<'hir> {
         let hir_id = self.lower_node_id(i.id);
         self.lower_attrs(hir_id, &i.attrs);
 
+        let impl_item_def_id = hir_id.expect_owner();
+        let parent_id = self.tcx.local_parent(impl_item_def_id.def_id);
+        let parent_hir = self.lower_node(parent_id).node.expect_item();
+        match parent_hir.kind {
+            hir::ItemKind::Impl(impl_) => {
+                self.is_in_trait_impl = impl_.of_trait.is_some();
+                if self.tcx.features().effects {
+                    self.host_param_id = impl_
+                        .generics
+                        .params
+                        .iter()
+                        .find(|param| {
+                            matches!(
+                                param.kind,
+                                hir::GenericParamKind::Const { is_host_effect: true, .. }
+                            )
+                        })
+                        .map(|param| param.def_id);
+                }
+            }
+            _ => {}
+        }
+
         let (generics, kind) = match &i.kind {
             AssocItemKind::Const(box ConstItem { generics, ty, expr, .. }) => self.lower_generics(
                 generics,
@@ -977,7 +981,7 @@ impl<'hir> LoweringContext<'hir> {
         };
 
         let item = hir::ImplItem {
-            owner_id: hir_id.expect_owner(),
+            owner_id: impl_item_def_id,
             ident: self.lower_ident(i.ident),
             generics,
             kind,
