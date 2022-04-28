@@ -1410,11 +1410,14 @@ impl<'a, 'tcx> Visitor<'tcx> for LifetimeContext<'a, 'tcx> {
                                 if lt.name != hir::LifetimeName::Static {
                                     continue;
                                 }
+                                let span = this.map.defs.get(&lifetime.hir_id)
+                                    .and_then(RegionExt::id)
+                                    .map_or(lifetime.span, |id| this.tcx.def_span(id));
                                 this.insert_lifetime(lt, Region::Static);
                                 this.tcx
                                     .sess
                                     .struct_span_warn(
-                                        lifetime.span,
+                                        span,
                                         &format!(
                                             "unnecessary lifetime parameter `{}`",
                                             lifetime.name.ident(),

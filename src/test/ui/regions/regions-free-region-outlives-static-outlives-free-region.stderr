@@ -1,8 +1,8 @@
 warning: unnecessary lifetime parameter `'a`
-  --> $DIR/regions-free-region-outlives-static-outlives-free-region.rs:12:11
+  --> $DIR/regions-free-region-outlives-static-outlives-free-region.rs:11:9
    |
-LL |     where 'a: 'static
-   |           ^^
+LL | fn test<'a,'b>(x: &'a i32) -> &'b i32
+   |         ^^
    |
    = help: you can use the `'static` lifetime directly, in place of `'a`
 

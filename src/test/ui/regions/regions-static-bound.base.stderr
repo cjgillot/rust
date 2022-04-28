@@ -1,16 +1,16 @@
 warning: unnecessary lifetime parameter `'a`
-  --> $DIR/regions-static-bound.rs:6:11
+  --> $DIR/regions-static-bound.rs:5:14
    |
-LL |     where 'a: 'static { t }
-   |           ^^
+LL | fn static_id<'a,'b>(t: &'a ()) -> &'static ()
+   |              ^^
    |
    = help: you can use the `'static` lifetime directly, in place of `'a`
 
 warning: unnecessary lifetime parameter `'b`
-  --> $DIR/regions-static-bound.rs:10:19
+  --> $DIR/regions-static-bound.rs:9:26
    |
-LL |     where 'a: 'b, 'b: 'static { t }
-   |                   ^^
+LL | fn static_id_indirect<'a,'b>(t: &'a ()) -> &'static ()
+   |                          ^^
    |
    = help: you can use the `'static` lifetime directly, in place of `'b`
 
