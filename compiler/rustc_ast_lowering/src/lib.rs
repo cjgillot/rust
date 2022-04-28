@@ -1307,7 +1307,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                         });
                         if let Some(preds) = self.lower_generic_bound_predicate(
                             ident,
-                            def_id,
+                            def_node_id,
                             &GenericParamKind::Type { default: None },
                             hir_bounds,
                         ) {
