@@ -1466,7 +1466,7 @@ impl<'a, 'tcx> LifetimeContext<'a, 'tcx> {
                     i += 1;
                 }
                 GenericArg::Const(ct) => {
-                    self.visit_anon_const(&ct.value);
+                    self.visit_anon_const(None, &ct.value);
                     i += 1;
                 }
                 GenericArg::Infer(inf) => {

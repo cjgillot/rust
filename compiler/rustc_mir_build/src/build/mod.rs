@@ -575,7 +575,7 @@ fn construct_const<'a, 'tcx>(
             span,
             ..
         }) => (*span, ty.span),
-        Node::AnonConst(_) => {
+        Node::AnonConst(..) => {
             let span = tcx.def_span(def.did);
             (span, span)
         }

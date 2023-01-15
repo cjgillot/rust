@@ -1269,7 +1269,7 @@ impl<'tcx> Visitor<'tcx> for DumpVisitor<'tcx> {
                 hir::GenericParamKind::Const { ref ty, ref default } => {
                     self.visit_ty(ty);
                     if let Some(default) = default {
-                        self.visit_anon_const(default);
+                        self.visit_anon_const(None, default);
                     }
                 }
             }
@@ -1312,10 +1312,12 @@ impl<'tcx> Visitor<'tcx> for DumpVisitor<'tcx> {
                     // FIXME(generic_arg_infer): We probably want to
                     // output the inferred type here? :shrug:
                     hir::ArrayLen::Infer(..) => {}
-                    hir::ArrayLen::Body(anon_const) => self
-                        .nest_typeck_results(anon_const.def_id, |v| {
-                            v.visit_expr(&map.body(anon_const.body).value)
-                        }),
+                    hir::ArrayLen::Body(anon_const) => {
+                        todo!()
+                        //self.nest_typeck_results(anon_const.def_id, |v| {
+                        //    v.visit_expr(&map.body(anon_const.body).value)
+                        //})
+                    }
                 }
             }
             hir::TyKind::OpaqueDef(item_id, _, _) => {
@@ -1382,10 +1384,12 @@ impl<'tcx> Visitor<'tcx> for DumpVisitor<'tcx> {
                     // FIXME(generic_arg_infer): We probably want to
                     // output the inferred type here? :shrug:
                     hir::ArrayLen::Infer(..) => {}
-                    hir::ArrayLen::Body(anon_const) => self
-                        .nest_typeck_results(anon_const.def_id, |v| {
-                            v.visit_expr(&map.body(anon_const.body).value)
-                        }),
+                    hir::ArrayLen::Body(anon_const) => {
+                        todo!()
+                        //self.nest_typeck_results(anon_const.def_id, |v| {
+                        //    v.visit_expr(&map.body(anon_const.body).value)
+                        //})
+                    }
                 }
             }
             // In particular, we take this branch for call and path expressions,

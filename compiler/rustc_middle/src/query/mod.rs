@@ -91,6 +91,7 @@ rustc_queries! {
     /// Avoid calling this query directly.
     query local_def_id_to_hir_id(key: LocalDefId) -> hir::HirId {
         desc { |tcx| "getting HIR ID of `{}`", tcx.def_path_str(key.to_def_id()) }
+        feedable
     }
 
     /// Gives access to the HIR node's parent for the HIR owner `key`.
@@ -117,27 +118,12 @@ rustc_queries! {
         desc { |tcx| "getting HIR owner attributes in `{}`", tcx.def_path_str(key.to_def_id()) }
     }
 
-    /// Computes the `DefId` of the corresponding const parameter in case the `key` is a
-    /// const argument and returns `None` otherwise.
-    ///
-    /// ```ignore (incomplete)
-    /// let a = foo::<7>();
-    /// //            ^ Calling `opt_const_param_of` for this argument,
-    ///
-    /// fn foo<const N: usize>()
-    /// //           ^ returns this `DefId`.
-    ///
-    /// fn bar() {
-    /// // ^ While calling `opt_const_param_of` for other bodies returns `None`.
-    /// }
-    /// ```
-    // It looks like caching this query on disk actually slightly
-    // worsened performance in #74376.
-    //
-    // Once const generics are more prevalently used, we might want to
-    // consider only caching calls returning `Some`.
-    query opt_const_param_of(key: LocalDefId) -> Option<DefId> {
-        desc { |tcx| "computing the optional const parameter of `{}`", tcx.def_path_str(key.to_def_id()) }
+    /// Given the def_id of a const-generic parameter, computes the associated default const
+    /// parameter. e.g. `fn example<const N: usize=3>` called on `N` would return `3`.
+    query create_anon_const(key: (hir::HirId, Ty<'tcx>)) -> LocalDefId {
+        desc { |tcx|
+            "creating an AnonConst for HIR node a `{:?}` with type `{}`", key.0, key.1
+        }
     }
 
     /// Given the def_id of a const-generic parameter, computes the associated default const
@@ -167,6 +153,7 @@ rustc_queries! {
         }
         cache_on_disk_if { key.is_local() }
         separate_provide_extern
+        feedable
     }
 
     query collect_return_position_impl_trait_in_trait_tys(key: DefId)
