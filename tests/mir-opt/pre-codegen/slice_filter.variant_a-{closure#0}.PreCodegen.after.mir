@@ -12,8 +12,8 @@ fn variant_a::{closure#0}(_1: &mut [closure@$DIR/slice_filter.rs:7:25: 7:39], _2
     let _10: &usize;
     let _11: &usize;
     let mut _16: bool;
-    let mut _17: bool;
-    let _18: &usize;
+    let _17: &usize;
+    let mut _22: bool;
     let mut _23: bool;
     let _24: &usize;
     let mut _29: bool;
@@ -60,13 +60,13 @@ fn variant_a::{closure#0}(_1: &mut [closure@$DIR/slice_filter.rs:7:25: 7:39], _2
         scope 6 (inlined cmp::impls::<impl PartialOrd for &usize>::le) {
             debug self => _39;
             debug other => _40;
+            let mut _18: &usize;
             let mut _19: &usize;
-            let mut _20: &usize;
             scope 7 (inlined cmp::impls::<impl PartialOrd for usize>::le) {
-                debug self => _19;
-                debug other => _20;
+                debug self => _18;
+                debug other => _19;
+                let mut _20: usize;
                 let mut _21: usize;
-                let mut _22: usize;
             }
         }
         scope 8 (inlined cmp::impls::<impl PartialOrd for &usize>::le) {
@@ -96,7 +96,7 @@ fn variant_a::{closure#0}(_1: &mut [closure@$DIR/slice_filter.rs:7:25: 7:39], _2
         StorageLive(_10);
         _9 = deref_copy (*_2);
         _10 = &((*_9).3: usize);
-        StorageLive(_17);
+        StorageLive(_23);
         StorageLive(_16);
         StorageLive(_37);
         StorageLive(_38);
@@ -118,39 +118,36 @@ fn variant_a::{closure#0}(_1: &mut [closure@$DIR/slice_filter.rs:7:25: 7:39], _2
     }
 
     bb1: {
-        _17 = const false;
+        StorageDead(_22);
+        StorageDead(_16);
         goto -> bb3;
     }
 
     bb2: {
-        StorageLive(_23);
+        StorageLive(_22);
         StorageLive(_39);
         StorageLive(_40);
-        StorageLive(_18);
-        _18 = _6;
-        _19 = deref_copy _10;
-        _20 = deref_copy _18;
+        StorageLive(_17);
+        _17 = _6;
+        _18 = deref_copy _10;
+        _19 = deref_copy _17;
+        StorageLive(_20);
+        _20 = (*_18);
         StorageLive(_21);
         _21 = (*_19);
-        StorageLive(_22);
-        _22 = (*_20);
-        _23 = Le(move _21, move _22);
-        StorageDead(_22);
+        _22 = Le(move _20, move _21);
         StorageDead(_21);
-        StorageDead(_18);
+        StorageDead(_20);
+        StorageDead(_17);
         StorageDead(_40);
         StorageDead(_39);
-        _17 = move _23;
-        goto -> bb3;
+        _23 = move _22;
+        StorageDead(_22);
+        StorageDead(_16);
+        switchInt(move _23) -> [0: bb3, otherwise: bb7];
     }
 
     bb3: {
-        StorageDead(_23);
-        StorageDead(_16);
-        switchInt(move _17) -> [0: bb4, otherwise: bb8];
-    }
-
-    bb4: {
         StorageLive(_30);
         StorageLive(_29);
         StorageLive(_41);
@@ -169,15 +166,15 @@ fn variant_a::{closure#0}(_1: &mut [closure@$DIR/slice_filter.rs:7:25: 7:39], _2
         StorageDead(_24);
         StorageDead(_42);
         StorageDead(_41);
-        switchInt(move _29) -> [0: bb5, otherwise: bb6];
+        switchInt(move _29) -> [0: bb4, otherwise: bb5];
+    }
+
+    bb4: {
+        _30 = const false;
+        goto -> bb6;
     }
 
     bb5: {
-        _30 = const false;
-        goto -> bb7;
-    }
-
-    bb6: {
         StorageLive(_36);
         StorageLive(_43);
         StorageLive(_44);
@@ -196,24 +193,24 @@ fn variant_a::{closure#0}(_1: &mut [closure@$DIR/slice_filter.rs:7:25: 7:39], _2
         StorageDead(_44);
         StorageDead(_43);
         _30 = move _36;
-        goto -> bb7;
+        goto -> bb6;
     }
 
-    bb7: {
+    bb6: {
         StorageDead(_36);
         StorageDead(_29);
         _0 = move _30;
-        goto -> bb9;
+        goto -> bb8;
+    }
+
+    bb7: {
+        _0 = const true;
+        goto -> bb8;
     }
 
     bb8: {
-        _0 = const true;
-        goto -> bb9;
-    }
-
-    bb9: {
         StorageDead(_30);
-        StorageDead(_17);
+        StorageDead(_23);
         StorageDead(_10);
         StorageDead(_8);
         StorageDead(_6);
