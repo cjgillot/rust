@@ -32,7 +32,7 @@
 //! cost by `MAX_COST`.
 
 use rustc_arena::DroplessArena;
-use rustc_data_structures::fx::FxHashSet;
+use rustc_data_structures::fx::FxIndexSet;
 use rustc_index::bit_set::BitSet;
 use rustc_index::IndexVec;
 use rustc_middle::mir::visit::Visitor;
@@ -146,7 +146,7 @@ struct TOFinder<'tcx, 'a> {
     opportunities: Vec<ThreadingOpportunity>,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 struct Condition {
     value: ScalarInt,
     /// `true` means `==`, `false` means `!=`
@@ -179,6 +179,22 @@ impl<'a> ConditionSet<'a> {
 
     fn map(self, arena: &'a DroplessArena, f: impl Fn(Condition) -> Condition) -> ConditionSet<'a> {
         ConditionSet(arena.alloc_from_iter(self.iter().map(f)))
+    }
+
+    fn unioner(
+        arena: &'a DroplessArena,
+    ) -> impl Fn(&mut ConditionSet<'a>, ConditionSet<'a>) + Clone {
+        move |lhs, rhs| {
+            if rhs.0.is_empty() {
+                // Do nothing.
+            } else if lhs.0.is_empty() {
+                *lhs = rhs;
+            } else {
+                lhs.0 = arena.alloc_from_iter(
+                    lhs.iter().chain(rhs.iter()).collect::<FxIndexSet<_>>().into_iter(),
+                );
+            }
+        }
     }
 }
 
@@ -325,7 +341,7 @@ impl<'tcx, 'a> TOFinder<'tcx, 'a> {
             // Transfer the conditions on the copied rhs.
             Operand::Move(rhs) | Operand::Copy(rhs) => {
                 let rhs = self.map.find(rhs.as_ref())?;
-                state.insert_place_idx(rhs, lhs, self.map);
+                state.insert_place_idx_with(rhs, lhs, self.map, ConditionSet::unioner(self.arena));
             }
         }
 
@@ -385,7 +401,12 @@ impl<'tcx, 'a> TOFinder<'tcx, 'a> {
                         }
                         Rvalue::Discriminant(rhs) => {
                             let rhs = self.map.find_discr(rhs.as_ref())?;
-                            state.insert_place_idx(rhs, lhs, self.map);
+                            state.insert_place_idx_with(
+                                rhs,
+                                lhs,
+                                self.map,
+                                ConditionSet::unioner(self.arena),
+                            );
                         }
                         // If we expect `lhs ?= A`, we have an opportunity if we assume `constant == A`.
                         Rvalue::Aggregate(box ref kind, ref operands) => {
@@ -416,7 +437,12 @@ impl<'tcx, 'a> TOFinder<'tcx, 'a> {
                             let conditions = state.try_get_idx(lhs, self.map)?;
                             let place = self.map.find(place.as_ref())?;
                             let conds = conditions.map(self.arena, Condition::inv);
-                            state.insert_value_idx(place, conds, self.map);
+                            state.insert_value_idx_with(
+                                place,
+                                conds,
+                                self.map,
+                                ConditionSet::unioner(self.arena),
+                            );
                         }
                         // We expect `lhs ?= A`. We found `lhs = Eq(rhs, B)`.
                         // Create a condition on `rhs ?= B`.
@@ -445,7 +471,12 @@ impl<'tcx, 'a> TOFinder<'tcx, 'a> {
                                 polarity: c.matches(equals),
                                 ..c
                             });
-                            state.insert_value_idx(place, conds, self.map);
+                            state.insert_value_idx_with(
+                                place,
+                                conds,
+                                self.map,
+                                ConditionSet::unioner(self.arena),
+                            );
                         }
 
                         _ => {}
@@ -601,7 +632,7 @@ impl OpportunitySet {
         debug!(?op);
         let op_chain = std::mem::take(&mut op.chain);
         let op_target = op.target;
-        debug_assert_eq!(op_chain.len(), op_chain.iter().collect::<FxHashSet<_>>().len());
+        debug_assert_eq!(op_chain.len(), op_chain.iter().collect::<FxIndexSet<_>>().len());
 
         let Some((current, chain)) = op_chain.split_first() else { return };
         let basic_blocks = body.basic_blocks.as_mut();

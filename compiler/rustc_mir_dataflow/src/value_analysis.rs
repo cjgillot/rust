@@ -547,9 +547,19 @@ impl<V: Clone> State<V> {
     ///
     /// The target place must have been flooded before calling this method.
     pub fn insert_value_idx(&mut self, target: PlaceIndex, value: V, map: &Map) {
+        self.insert_value_idx_with(target, value, map, |lhs, rhs| *lhs = rhs)
+    }
+
+    pub fn insert_value_idx_with(
+        &mut self,
+        target: PlaceIndex,
+        value: V,
+        map: &Map,
+        op: impl FnOnce(&mut V, V),
+    ) {
         let StateData::Reachable(values) = &mut self.0 else { return };
         if let Some(value_index) = map.places[target].value_index {
-            values[value_index] = value;
+            op(&mut values[value_index], value);
         }
     }
 
@@ -561,6 +571,16 @@ impl<V: Clone> State<V> {
     ///
     /// The target place must have been flooded before calling this method.
     pub fn insert_place_idx(&mut self, target: PlaceIndex, source: PlaceIndex, map: &Map) {
+        self.insert_place_idx_with(target, source, map, |lhs, rhs| *lhs = rhs)
+    }
+
+    pub fn insert_place_idx_with(
+        &mut self,
+        target: PlaceIndex,
+        source: PlaceIndex,
+        map: &Map,
+        op: impl Fn(&mut V, V) + Clone,
+    ) {
         let StateData::Reachable(values) = &mut self.0 else { return };
 
         // If both places are tracked, we copy the value to the target.
@@ -568,14 +588,15 @@ impl<V: Clone> State<V> {
         // already been performed.
         if let Some(target_value) = map.places[target].value_index {
             if let Some(source_value) = map.places[source].value_index {
-                values[target_value] = values[source_value].clone();
+                let value = values[source_value].clone();
+                op(&mut values[target_value], value);
             }
         }
         for target_child in map.children(target) {
             // Try to find corresponding child and recurse. Reasoning is similar as above.
             let projection = map.places[target_child].proj_elem.unwrap();
             if let Some(source_child) = map.projections.get(&(source, projection)) {
-                self.insert_place_idx(target_child, *source_child, map);
+                self.insert_place_idx_with(target_child, *source_child, map, op.clone());
             }
         }
     }
