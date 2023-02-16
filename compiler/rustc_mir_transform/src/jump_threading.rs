@@ -31,7 +31,6 @@
 //! Likewise, applying the optimisation can create a lot of new MIR, so we bound the instruction
 //! cost by `MAX_COST`.
 
-use rustc_arena::DroplessArena;
 use rustc_data_structures::fx::FxIndexSet;
 use rustc_index::bit_set::BitSet;
 use rustc_index::IndexVec;
@@ -63,12 +62,10 @@ impl<'tcx> MirPass<'tcx> for JumpThreading {
         debug!(?map);
         let loop_headers = loop_headers(body);
 
-        let arena = DroplessArena::default();
         let mut finder = TOFinder {
             tcx,
             param_env,
             body,
-            arena: &arena,
             map: &map,
             loop_headers: &loop_headers,
             opportunities: Vec::new(),
@@ -97,15 +94,21 @@ impl<'tcx> MirPass<'tcx> for JumpThreading {
                 let Some(value) = ScalarInt::try_from_uint(value, discr_layout.size) else {
                     continue;
                 };
-                arena.alloc_from_iter([
+                [
                     Condition { value, polarity: true, target: then },
                     Condition { value, polarity: false, target: else_ },
-                ])
+                ]
+                .into_iter()
+                .collect()
             } else {
-                arena.alloc_from_iter(targets.iter().filter_map(|(value, target)| {
-                    let value = ScalarInt::try_from_uint(value, discr_layout.size)?;
-                    Some(Condition { value, polarity: true, target })
-                }))
+                targets
+                    .iter()
+                    .filter_map(|(value, target)| {
+                        let value = ScalarInt::try_from_uint(value, discr_layout.size)?;
+                        Some(Condition { value, polarity: true, target })
+                    })
+                    .into_iter()
+                    .collect()
             };
             let conds = ConditionSet(conds);
             state.insert_value_idx(discr, conds, &finder.map);
@@ -141,8 +144,6 @@ struct TOFinder<'tcx, 'a> {
     body: &'a Body<'tcx>,
     map: &'a Map,
     loop_headers: &'a BitSet<BasicBlock>,
-    /// We use an arena to avoid cloning the slices when cloning `state`.
-    arena: &'a DroplessArena,
     opportunities: Vec<ThreadingOpportunity>,
 }
 
@@ -165,41 +166,39 @@ impl Condition {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default)]
-struct ConditionSet<'a>(&'a [Condition]);
+#[derive(Clone, Debug, Default)]
+struct ConditionSet(FxIndexSet<Condition>);
 
-impl<'a> ConditionSet<'a> {
-    fn iter(self) -> impl Iterator<Item = Condition> + 'a {
+impl ConditionSet {
+    fn iter(&self) -> impl Iterator<Item = Condition> + '_ {
         self.0.iter().copied()
     }
 
-    fn iter_matches(self, value: ScalarInt) -> impl Iterator<Item = Condition> + 'a {
+    fn iter_matches(&self, value: ScalarInt) -> impl Iterator<Item = Condition> + '_ {
         self.iter().filter(move |c| c.matches(value))
     }
 
-    fn map(self, arena: &'a DroplessArena, f: impl Fn(Condition) -> Condition) -> ConditionSet<'a> {
-        ConditionSet(arena.alloc_from_iter(self.iter().map(f)))
+    fn map(&self, f: impl Fn(Condition) -> Condition) -> ConditionSet {
+        ConditionSet(self.iter().map(f).collect())
     }
 
-    fn unioner(
-        arena: &'a DroplessArena,
-    ) -> impl Fn(&mut ConditionSet<'a>, ConditionSet<'a>) + Clone {
-        move |lhs, rhs| {
-            if rhs.0.is_empty() {
-                // Do nothing.
-            } else if lhs.0.is_empty() {
-                *lhs = rhs;
-            } else {
-                lhs.0 = arena.alloc_from_iter(
-                    lhs.iter().chain(rhs.iter()).collect::<FxIndexSet<_>>().into_iter(),
-                );
-            }
+    fn clear(&mut self) {
+        self.0.clear()
+    }
+
+    fn unioner(&mut self, other: ConditionSet) {
+        if other.0.is_empty() {
+            // Do nothing.
+        } else if self.0.is_empty() {
+            *self = other;
+        } else {
+            self.0.extend(other.0.into_iter());
         }
     }
 }
 
 impl<'tcx, 'a> TOFinder<'tcx, 'a> {
-    fn is_empty(&self, state: &State<ConditionSet<'a>>) -> bool {
+    fn is_empty(&self, state: &State<ConditionSet>) -> bool {
         state.all(|cs| cs.0.is_empty())
     }
 
@@ -208,7 +207,7 @@ impl<'tcx, 'a> TOFinder<'tcx, 'a> {
     fn find_opportunity(
         &mut self,
         bb: BasicBlock,
-        mut state: State<ConditionSet<'a>>,
+        mut state: State<ConditionSet>,
         mut cost: CostChecker<'_, 'tcx>,
         depth: usize,
     ) {
@@ -238,7 +237,7 @@ impl<'tcx, 'a> TOFinder<'tcx, 'a> {
             //   _1 = 5 // Whatever happens here, it won't change the result of a `SwitchInt`.
             //   _1 = 6
             if let Some((lhs, tail)) = self.mutated_statement(stmt) {
-                state.flood_with_extra(lhs.as_ref(), tail, self.map, ConditionSet::default());
+                state.flood_with_extra(lhs.as_ref(), tail, self.map, ConditionSet::clear);
             }
         }
 
@@ -323,7 +322,7 @@ impl<'tcx, 'a> TOFinder<'tcx, 'a> {
         bb: BasicBlock,
         lhs: PlaceIndex,
         rhs: &Operand<'tcx>,
-        state: &mut State<ConditionSet<'a>>,
+        state: &mut State<ConditionSet>,
     ) -> Option<!> {
         let register_opportunity = |c: Condition| {
             debug!(?bb, ?c.target, "register");
@@ -341,7 +340,7 @@ impl<'tcx, 'a> TOFinder<'tcx, 'a> {
             // Transfer the conditions on the copied rhs.
             Operand::Move(rhs) | Operand::Copy(rhs) => {
                 let rhs = self.map.find(rhs.as_ref())?;
-                state.insert_place_idx_with(rhs, lhs, self.map, ConditionSet::unioner(self.arena));
+                state.insert_place_idx_with(rhs, lhs, self.map, ConditionSet::unioner);
             }
         }
 
@@ -353,7 +352,7 @@ impl<'tcx, 'a> TOFinder<'tcx, 'a> {
         &mut self,
         bb: BasicBlock,
         stmt: &Statement<'tcx>,
-        state: &mut State<ConditionSet<'a>>,
+        state: &mut State<ConditionSet>,
     ) -> Option<!> {
         let register_opportunity = |c: Condition| {
             debug!(?bb, ?c.target, "register");
@@ -401,12 +400,7 @@ impl<'tcx, 'a> TOFinder<'tcx, 'a> {
                         }
                         Rvalue::Discriminant(rhs) => {
                             let rhs = self.map.find_discr(rhs.as_ref())?;
-                            state.insert_place_idx_with(
-                                rhs,
-                                lhs,
-                                self.map,
-                                ConditionSet::unioner(self.arena),
-                            );
+                            state.insert_place_idx_with(rhs, lhs, self.map, ConditionSet::unioner);
                         }
                         // If we expect `lhs ?= A`, we have an opportunity if we assume `constant == A`.
                         Rvalue::Aggregate(box ref kind, ref operands) => {
@@ -436,12 +430,12 @@ impl<'tcx, 'a> TOFinder<'tcx, 'a> {
                         Rvalue::UnaryOp(UnOp::Not, Operand::Move(place) | Operand::Copy(place)) => {
                             let conditions = state.try_get_idx(lhs, self.map)?;
                             let place = self.map.find(place.as_ref())?;
-                            let conds = conditions.map(self.arena, Condition::inv);
+                            let conds = conditions.map(Condition::inv);
                             state.insert_value_idx_with(
                                 place,
                                 conds,
                                 self.map,
-                                ConditionSet::unioner(self.arena),
+                                ConditionSet::unioner,
                             );
                         }
                         // We expect `lhs ?= A`. We found `lhs = Eq(rhs, B)`.
@@ -466,7 +460,7 @@ impl<'tcx, 'a> TOFinder<'tcx, 'a> {
                             };
                             let value =
                                 value.literal.eval(self.tcx, self.param_env).try_to_scalar_int()?;
-                            let conds = conditions.map(self.arena, |c| Condition {
+                            let conds = conditions.map(|c| Condition {
                                 value,
                                 polarity: c.matches(equals),
                                 ..c
@@ -475,7 +469,7 @@ impl<'tcx, 'a> TOFinder<'tcx, 'a> {
                                 place,
                                 conds,
                                 self.map,
-                                ConditionSet::unioner(self.arena),
+                                ConditionSet::unioner,
                             );
                         }
 
@@ -493,7 +487,7 @@ impl<'tcx, 'a> TOFinder<'tcx, 'a> {
     fn recurse_through_terminator(
         &mut self,
         bb: BasicBlock,
-        state: &State<ConditionSet<'a>>,
+        state: &State<ConditionSet>,
         cost: &CostChecker<'_, 'tcx>,
         depth: usize,
     ) {
@@ -549,7 +543,7 @@ impl<'tcx, 'a> TOFinder<'tcx, 'a> {
         discr: &Operand<'tcx>,
         targets: &SwitchTargets,
         target_bb: BasicBlock,
-        state: &mut State<ConditionSet<'a>>,
+        state: &mut State<ConditionSet>,
     ) -> Option<!> {
         debug_assert_ne!(target_bb, START_BLOCK);
         debug_assert_eq!(self.body.basic_blocks.predecessors()[target_bb].len(), 1);

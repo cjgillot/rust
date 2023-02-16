@@ -497,7 +497,7 @@ impl<V: Clone> State<V> {
     }
 
     pub fn flood_with(&mut self, place: PlaceRef<'_>, map: &Map, value: V) {
-        self.flood_with_extra(place, None, map, value)
+        self.flood_with_extra(place, None, map, |v| *v = value.clone())
     }
 
     pub fn flood(&mut self, place: PlaceRef<'_>, map: &Map)
@@ -508,7 +508,7 @@ impl<V: Clone> State<V> {
     }
 
     pub fn flood_discr_with(&mut self, place: PlaceRef<'_>, map: &Map, value: V) {
-        self.flood_with_extra(place, Some(TrackElem::Discriminant), map, value)
+        self.flood_with_extra(place, Some(TrackElem::Discriminant), map, |v| *v = value.clone())
     }
 
     pub fn flood_discr(&mut self, place: PlaceRef<'_>, map: &Map)
@@ -523,12 +523,10 @@ impl<V: Clone> State<V> {
         place: PlaceRef<'_>,
         tail_elem: Option<TrackElem>,
         map: &Map,
-        value: V,
+        op: impl Fn(&mut V),
     ) {
         let StateData::Reachable(values) = &mut self.0 else { return };
-        map.for_each_aliasing_place(place, tail_elem, &mut |vi| {
-            values[vi] = value.clone();
-        });
+        map.for_each_aliasing_place(place, tail_elem, &mut |vi| op(&mut values[vi]));
     }
 
     /// Low-level method that assigns to a place.
