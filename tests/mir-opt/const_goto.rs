@@ -1,4 +1,4 @@
-// unit-test: ConstGoto
+// unit-test: JumpThreading
 
 pub enum Foo {
     A,
@@ -9,7 +9,7 @@ pub enum Foo {
     F,
 }
 
-// EMIT_MIR const_goto.issue_77355_opt.ConstGoto.diff
+// EMIT_MIR const_goto.issue_77355_opt.JumpThreading.diff
 fn issue_77355_opt(num: Foo) -> u64 {
     if matches!(num, Foo::B | Foo::C) { 23 } else { 42 }
 }

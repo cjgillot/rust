@@ -1,6 +1,6 @@
-// unit-test: ConstGoto
+// unit-test: JumpThreading
 
-// EMIT_MIR const_goto_storage.match_nested_if.ConstGoto.diff
+// EMIT_MIR const_goto_storage.match_nested_if.JumpThreading.diff
 fn match_nested_if() -> bool {
     let val = match () {
         () if if if if true { true } else { false } { true } else { false } {

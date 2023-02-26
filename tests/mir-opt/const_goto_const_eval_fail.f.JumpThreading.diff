@@ -1,5 +1,5 @@
-- // MIR for `f` before ConstGoto
-+ // MIR for `f` after ConstGoto
+- // MIR for `f` before JumpThreading
++ // MIR for `f` after JumpThreading
   
   fn f() -> u64 {
       let mut _0: u64;
@@ -15,37 +15,37 @@
   
       bb1: {
           _1 = const true;
-          goto -> bb3;
+-         goto -> bb3;
++         goto -> bb7;
       }
   
       bb2: {
           _1 = const B;
--         goto -> bb3;
-+         switchInt(_1) -> [0: bb4, otherwise: bb3];
+          goto -> bb3;
       }
   
       bb3: {
--         switchInt(_1) -> [0: bb5, otherwise: bb4];
--     }
-- 
--     bb4: {
+          switchInt(_1) -> [0: bb5, otherwise: bb4];
+      }
+  
+      bb4: {
           _0 = const 2_u64;
--         goto -> bb6;
-+         goto -> bb5;
+          goto -> bb6;
       }
   
--     bb5: {
-+     bb4: {
+      bb5: {
           _0 = const 1_u64;
--         goto -> bb6;
-+         goto -> bb5;
+          goto -> bb6;
       }
   
--     bb6: {
-+     bb5: {
+      bb6: {
           StorageDead(_2);
           StorageDead(_1);
           return;
++     }
++ 
++     bb7: {
++         goto -> bb4;
       }
   }
   
