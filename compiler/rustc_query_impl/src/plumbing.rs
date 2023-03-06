@@ -509,7 +509,7 @@ macro_rules! define_queries {
             #[inline]
             fn try_load_from_disk(_qcx: QueryCtxt<'tcx>, _key: &Self::Key) -> rustc_query_system::query::TryLoadFromDisk<QueryCtxt<'tcx>, Self> {
                 should_ever_cache_on_disk!([$($modifiers)*] {
-                    if Self::cache_on_disk(_qcx.tcx, _key) {
+                    if _qcx.on_disk_cache().is_some() && Self::cache_on_disk(_qcx.tcx, _key) {
                         Some(|qcx: QueryCtxt<'tcx>, dep_node| {
                             let value = $crate::plumbing::try_load_from_disk::<query_provided::$name<'tcx>>(
                                 qcx,

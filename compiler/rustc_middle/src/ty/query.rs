@@ -97,12 +97,24 @@ pub struct TyCtxtEnsure<'tcx> {
     pub tcx: TyCtxt<'tcx>,
 }
 
+#[derive(Copy, Clone)]
+pub struct TyCtxtSteal<'tcx> {
+    pub tcx: TyCtxt<'tcx>,
+}
+
 impl<'tcx> TyCtxt<'tcx> {
-    /// Returns a transparent wrapper for `TyCtxt`, which ensures queries
-    /// are executed instead of just returning their results.
+    /// Returns a transparent wrapper for `TyCtxt`, to create a dependency on the result of a
+    /// query without actually computing it.
     #[inline(always)]
     pub fn ensure(self) -> TyCtxtEnsure<'tcx> {
         TyCtxtEnsure { tcx: self }
+    }
+
+    /// Returns a transparent wrapper for `TyCtxt`, to ensure that a query result is available
+    /// without creating a dependency.
+    #[inline(always)]
+    pub fn execute_no_dependency(self) -> TyCtxtSteal<'tcx> {
+        TyCtxtSteal { tcx: self }
     }
 
     /// Returns a transparent wrapper for `TyCtxt` which uses
@@ -284,6 +296,14 @@ macro_rules! define_callbacks {
                     Some(_) => return,
                     None => self.tcx.queries.$name(self.tcx, DUMMY_SP, key, QueryMode::Ensure),
                 };
+            })*
+        }
+
+        impl<'tcx> TyCtxtSteal<'tcx> {
+            $($(#[$attr])*
+            #[inline(always)]
+            pub fn $name(self, key: query_helper_param_ty!($($K)*)) {
+                self.tcx.dep_graph.with_ignore(|| drop(self.tcx.$name(key)))
             })*
         }
 
