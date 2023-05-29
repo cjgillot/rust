@@ -1,8 +1,7 @@
 use super::errors::{
     ArbitraryExpressionInPattern, ExtraDoubleDot, MisplacedDoubleDot, SubTupleBinding,
 };
-use super::ResolverAstLoweringExt;
-use super::{ImplTraitContext, LoweringContext, ParamMode};
+use super::{ImplTraitContext, LoweringContext, ParamMode, ResolverAstLoweringExt};
 use crate::ImplTraitPosition;
 
 use rustc_ast::ptr::P;
@@ -13,7 +12,7 @@ use rustc_hir::def::Res;
 use rustc_span::symbol::Ident;
 use rustc_span::{source_map::Spanned, Span};
 
-impl<'a, 'hir> LoweringContext<'a, 'hir> {
+impl<'hir> LoweringContext<'hir> {
     pub(crate) fn lower_pat(&mut self, pattern: &Pat) -> &'hir hir::Pat<'hir> {
         self.arena.alloc(self.lower_pat_mut(pattern))
     }

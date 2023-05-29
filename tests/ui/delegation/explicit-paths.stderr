@@ -85,17 +85,6 @@ LL |     fn foo2(x: i32) -> i32 { x }
 LL |     reuse <S as Trait>::foo2;
    |                         ^^^^
 
-error[E0308]: mismatched types
-  --> $DIR/explicit-paths.rs:63:36
-   |
-LL |     trait Trait2 : Trait {
-   |     -------------------- found this type parameter
-LL |         reuse <F as Trait>::foo1 { self }
-   |                                    ^^^^ expected `&F`, found `&Self`
-   |
-   = note: expected reference `&F`
-              found reference `&Self`
-
 error[E0277]: the trait bound `S2: Trait` is not satisfied
   --> $DIR/explicit-paths.rs:78:16
    |
@@ -123,7 +112,7 @@ note: method defined here
 LL |     fn foo1(&self, x: i32) -> i32 { x }
    |        ^^^^ -----
 
-error: aborting due to 12 previous errors
+error: aborting due to 11 previous errors
 
 Some errors have detailed explanations: E0119, E0277, E0308, E0407, E0425.
 For more information about an error, try `rustc --explain E0119`.

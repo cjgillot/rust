@@ -60,7 +60,7 @@ pub(crate) struct DelegationResults<'hir> {
     pub generics: &'hir hir::Generics<'hir>,
 }
 
-impl<'hir> LoweringContext<'_, 'hir> {
+impl<'hir> LoweringContext<'hir> {
     pub(crate) fn delegation_has_self(&self, item_id: NodeId, path_id: NodeId, span: Span) -> bool {
         let sig_id = self.get_delegation_sig_id(item_id, path_id, span);
         let Ok(sig_id) = sig_id else {
@@ -253,12 +253,12 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 let arg = if let Some(block) = block
                     && idx == 0
                 {
-                    let mut self_resolver = SelfResolver {
-                        resolver: this.resolver,
-                        path_id: delegation.id,
-                        self_param_id: pat_node_id,
-                    };
-                    self_resolver.visit_block(block);
+                    //let mut self_resolver = SelfResolver {
+                    //    resolver: this.resolver,
+                    //    path_id: delegation.id,
+                    //    self_param_id: pat_node_id,
+                    //};
+                    //self_resolver.visit_block(block);
                     let block = this.lower_block(block, false);
                     this.mk_expr(hir::ExprKind::Block(block, None), block.span)
                 } else {

@@ -89,9 +89,9 @@ mod path;
 
 rustc_fluent_macro::fluent_messages! { "../messages.ftl" }
 
-struct LoweringContext<'a, 'hir> {
+struct LoweringContext<'hir> {
     tcx: TyCtxt<'hir>,
-    resolver: &'a mut ResolverAstLowering,
+    resolver: &'hir ResolverAstLowering,
 
     /// Used to allocate HIR nodes.
     arena: &'hir hir::Arena<'hir>,
@@ -121,13 +121,19 @@ struct LoweringContext<'a, 'hir> {
 
     current_hir_id_owner: hir::OwnerId,
     item_local_id_counter: hir::ItemLocalId,
-    trait_map: ItemLocalMap<Box<[TraitCandidate]>>,
+    trait_map: ItemLocalMap<&'hir [TraitCandidate]>,
 
     impl_trait_defs: Vec<hir::GenericParam<'hir>>,
     impl_trait_bounds: Vec<hir::WherePredicate<'hir>>,
 
     /// NodeIds that are lowered inside the current HIR owner.
     node_id_to_local_id: NodeMap<hir::ItemLocalId>,
+    /// The `NodeId` space is split in two.
+    /// `0..resolver.next_node_id` are created by the resolver on the AST.
+    /// The higher part `resolver.next_node_id..next_node_id` are created during lowering.
+    next_node_id: NodeId,
+    /// Maps the `NodeId`s created during lowering to `LocalDefId`s.
+    node_id_to_def_id: NodeMap<LocalDefId>,
 
     allow_try_trait: Lrc<[Symbol]>,
     allow_gen_future: Lrc<[Symbol]>,
@@ -144,8 +150,8 @@ struct LoweringContext<'a, 'hir> {
     host_param_id: Option<LocalDefId>,
 }
 
-impl<'a, 'hir> LoweringContext<'a, 'hir> {
-    fn new(tcx: TyCtxt<'hir>, resolver: &'a mut ResolverAstLowering) -> Self {
+impl<'hir> LoweringContext<'hir> {
+    fn new(tcx: TyCtxt<'hir>, resolver: &'hir ResolverAstLowering) -> Self {
         Self {
             // Pseudo-globals.
             tcx,
@@ -160,6 +166,8 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
             item_local_id_counter: hir::ItemLocalId::ZERO,
             node_id_to_local_id: Default::default(),
             trait_map: Default::default(),
+            next_node_id: resolver.next_node_id,
+            node_id_to_def_id: NodeMap::default(),
 
             // Lowering state.
             catch_scope: None,
@@ -247,8 +255,8 @@ impl ResolverAstLowering {
     ///
     /// The extra lifetimes that appear from the parenthesized `Fn`-trait desugaring
     /// should appear at the enclosing `PolyTraitRef`.
-    fn take_extra_lifetime_params(&mut self, id: NodeId) -> Vec<(Ident, NodeId, LifetimeRes)> {
-        self.extra_lifetime_params_map.remove(&id).unwrap_or_default()
+    fn extra_lifetime_params(&self, id: NodeId) -> &[(Ident, NodeId, LifetimeRes)] {
+        self.extra_lifetime_params_map.get(&id).map_or(&[], |v| &v[..])
     }
 }
 
@@ -428,7 +436,8 @@ pub fn lower_to_hir(tcx: TyCtxt<'_>, (): ()) -> hir::Crate<'_> {
     tcx.ensure_with_value().early_lint_checks(());
     tcx.ensure_with_value().debugger_visualizers(LOCAL_CRATE);
     tcx.ensure_with_value().get_lang_items(());
-    let (mut resolver, krate) = tcx.resolver_for_lowering().steal();
+    let (resolver, krate) = tcx.resolver_for_lowering();
+    let krate = krate.steal();
 
     let ast_index = index_crate(&resolver.node_id_to_def_id, &krate);
     let mut owners = IndexVec::from_fn_n(
@@ -437,13 +446,8 @@ pub fn lower_to_hir(tcx: TyCtxt<'_>, (): ()) -> hir::Crate<'_> {
     );
 
     for def_id in ast_index.indices() {
-        item::ItemLowerer {
-            tcx,
-            resolver: &mut resolver,
-            ast_index: &ast_index,
-            owners: &mut owners,
-        }
-        .lower_node(def_id);
+        item::ItemLowerer { tcx, resolver: &resolver, ast_index: &ast_index, owners: &mut owners }
+            .lower_node(def_id);
     }
 
     // Drop AST to free memory
@@ -471,7 +475,7 @@ enum ParenthesizedGenericArgs {
     Err,
 }
 
-impl<'a, 'hir> LoweringContext<'a, 'hir> {
+impl<'hir> LoweringContext<'hir> {
     fn create_def(
         &mut self,
         parent: LocalDefId,
@@ -492,22 +496,26 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
         let def_id = self.tcx.at(span).create_def(parent, name, def_kind).def_id();
 
         debug!("create_def: def_id_to_node_id[{:?}] <-> {:?}", def_id, node_id);
-        self.resolver.node_id_to_def_id.insert(node_id, def_id);
+        self.node_id_to_def_id.insert(node_id, def_id);
 
         def_id
     }
 
     fn next_node_id(&mut self) -> NodeId {
-        let start = self.resolver.next_node_id;
+        let start = self.next_node_id;
         let next = start.as_u32().checked_add(1).expect("input too large; ran out of NodeIds");
-        self.resolver.next_node_id = ast::NodeId::from_u32(next);
+        self.next_node_id = ast::NodeId::from_u32(next);
         start
     }
 
     /// Given the id of some node in the AST, finds the `LocalDefId` associated with it by the name
     /// resolver (if any).
     fn orig_opt_local_def_id(&self, node: NodeId) -> Option<LocalDefId> {
-        self.resolver.node_id_to_def_id.get(&node).copied()
+        self.resolver
+            .node_id_to_def_id
+            .get(&node)
+            .or_else(|| self.node_id_to_def_id.get(&node))
+            .copied()
     }
 
     /// Given the id of some node in the AST, finds the `LocalDefId` associated with it by the name
@@ -680,8 +688,8 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                     self.children.push((def_id, hir::MaybeOwner::NonOwner(hir_id)));
                 }
 
-                if let Some(traits) = self.resolver.trait_map.remove(&ast_node_id) {
-                    self.trait_map.insert(hir_id.local_id, traits.into_boxed_slice());
+                if let Some(traits) = self.resolver.trait_map.get(&ast_node_id) {
+                    self.trait_map.insert(hir_id.local_id, &traits[..]);
                 }
 
                 hir_id
@@ -845,9 +853,9 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
         let mut generic_params: Vec<_> = self
             .lower_generic_params_mut(generic_params, hir::GenericParamSource::Binder)
             .collect();
-        let extra_lifetimes = self.resolver.take_extra_lifetime_params(binder);
+        let extra_lifetimes = self.resolver.extra_lifetime_params(binder);
         debug!(?extra_lifetimes);
-        generic_params.extend(extra_lifetimes.into_iter().filter_map(|(ident, node_id, res)| {
+        generic_params.extend(extra_lifetimes.into_iter().filter_map(|&(ident, node_id, res)| {
             self.lifetime_res_to_generic_param(ident, node_id, res, hir::GenericParamSource::Binder)
         }));
         let generic_params = self.arena.alloc_from_iter(generic_params);
@@ -1561,9 +1569,9 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                     // decided to capture all in-scope lifetimes, which we collect for
                     // all opaques during resolution.
                     self.resolver
-                        .take_extra_lifetime_params(opaque_ty_node_id)
+                        .extra_lifetime_params(opaque_ty_node_id)
                         .into_iter()
-                        .map(|(ident, id, _)| Lifetime { id, ident })
+                        .map(|&(ident, id, _)| Lifetime { id, ident })
                         .collect()
                 }
                 hir::OpaqueTyOrigin::FnReturn(..) => {
@@ -1576,9 +1584,9 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                         // return-position impl trait in trait was decided to capture all
                         // in-scope lifetimes, which we collect for all opaques during resolution.
                         self.resolver
-                            .take_extra_lifetime_params(opaque_ty_node_id)
-                            .into_iter()
-                            .map(|(ident, id, _)| Lifetime { id, ident })
+                            .extra_lifetime_params(opaque_ty_node_id)
+                            .iter()
+                            .map(|&(ident, id, _)| Lifetime { id, ident })
                             .collect()
                     } else {
                         // in fn return position, like the `fn test<'a>() -> impl Debug + 'a`
@@ -1963,9 +1971,9 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
 
         let captured_lifetimes = self
             .resolver
-            .take_extra_lifetime_params(opaque_ty_node_id)
-            .into_iter()
-            .map(|(ident, id, _)| Lifetime { id, ident })
+            .extra_lifetime_params(opaque_ty_node_id)
+            .iter()
+            .map(|&(ident, id, _)| Lifetime { id, ident })
             .collect();
 
         let opaque_ty_ref = self.lower_opaque_inner(
@@ -2117,7 +2125,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
         &'s mut self,
         params: &'s [GenericParam],
         source: hir::GenericParamSource,
-    ) -> impl Iterator<Item = hir::GenericParam<'hir>> + Captures<'a> + Captures<'s> {
+    ) -> impl Iterator<Item = hir::GenericParam<'hir>> + Captures<'s> {
         params.iter().map(move |param| self.lower_generic_param(param, source))
     }
 
@@ -2276,7 +2284,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
         &'s mut self,
         bounds: &'s [GenericBound],
         itctx: ImplTraitContext,
-    ) -> impl Iterator<Item = hir::GenericBound<'hir>> + Captures<'s> + Captures<'a> {
+    ) -> impl Iterator<Item = hir::GenericBound<'hir>> + Captures<'s> {
         bounds.iter().map(move |bound| self.lower_param_bound(bound, itctx))
     }
 
@@ -2607,11 +2615,7 @@ struct GenericArgsCtor<'hir> {
 }
 
 impl<'hir> GenericArgsCtor<'hir> {
-    fn push_constness(
-        &mut self,
-        lcx: &mut LoweringContext<'_, 'hir>,
-        constness: ast::BoundConstness,
-    ) {
+    fn push_constness(&mut self, lcx: &mut LoweringContext<'hir>, constness: ast::BoundConstness) {
         if !lcx.tcx.features().effects {
             return;
         }
@@ -2685,7 +2689,7 @@ impl<'hir> GenericArgsCtor<'hir> {
             && self.parenthesized == hir::GenericArgsParentheses::No
     }
 
-    fn into_generic_args(self, this: &LoweringContext<'_, 'hir>) -> &'hir hir::GenericArgs<'hir> {
+    fn into_generic_args(self, this: &LoweringContext<'hir>) -> &'hir hir::GenericArgs<'hir> {
         let ga = hir::GenericArgs {
             args: this.arena.alloc_from_iter(self.args),
             constraints: self.constraints,
