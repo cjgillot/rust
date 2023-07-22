@@ -71,7 +71,7 @@ impl<'tcx> MirPass<'tcx> for LowerIntrinsics {
                         block.statements.push(Statement {
                             source_info: terminator.source_info,
                             kind: StatementKind::Intrinsic(Box::new(
-                                NonDivergingIntrinsic::Assume(args.next().unwrap()),
+                                NonDivergingIntrinsic::Assume(args.next().unwrap(), BinOp::Eq, 1),
                             )),
                         });
                         assert_eq!(

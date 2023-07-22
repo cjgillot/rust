@@ -17,7 +17,7 @@ fn unchecked_shr_signed_smaller(_1: i16, _2: u32) -> i16 {
         StorageLive(_4);
         StorageLive(_3);
         _3 = Le(_2, const 32767_u32);
-        assume(move _3);
+        assume(move _3 Eq 1);
         StorageDead(_3);
         _4 = _2 as i16 (IntToInt);
         _0 = ShrUnchecked(_1, move _4);

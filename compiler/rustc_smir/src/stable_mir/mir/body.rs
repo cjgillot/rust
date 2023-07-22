@@ -176,7 +176,7 @@ pub struct CopyNonOverlapping {
 
 #[derive(Clone, Debug)]
 pub enum NonDivergingIntrinsic {
-    Assume(Operand),
+    Assume(Operand, BinOp, u128),
     CopyNonOverlapping(CopyNonOverlapping),
 }
 

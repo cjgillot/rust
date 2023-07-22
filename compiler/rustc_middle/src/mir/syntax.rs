@@ -421,7 +421,7 @@ pub enum NonDivergingIntrinsic<'tcx> {
     /// computation to infer information about other variables. So if the boolean came from a
     /// `x < y` operation, subsequent operations on `x` and `y` could elide various bound checks.
     /// If the argument is `false`, this operation is equivalent to `TerminatorKind::Unreachable`.
-    Assume(Operand<'tcx>),
+    Assume(Operand<'tcx>, BinOp, u128),
 
     /// Denotes a call to the intrinsic function `copy_nonoverlapping`.
     ///
@@ -442,7 +442,7 @@ pub enum NonDivergingIntrinsic<'tcx> {
 impl std::fmt::Display for NonDivergingIntrinsic<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Assume(op) => write!(f, "assume({op:?})"),
+            Self::Assume(lhs, op, bits) => write!(f, "assume({lhs:?} {op:?} {bits:?})"),
             Self::CopyNonOverlapping(CopyNonOverlapping { src, dst, count }) => {
                 write!(f, "copy_nonoverlapping(dst = {dst:?}, src = {src:?}, count = {count:?})")
             }

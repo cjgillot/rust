@@ -634,8 +634,12 @@ impl<'tcx> Stable<'tcx> for mir::NonDivergingIntrinsic<'tcx> {
     fn stable(&self, tables: &mut Tables<'tcx>) -> Self::T {
         use rustc_middle::mir::NonDivergingIntrinsic;
         match self {
-            NonDivergingIntrinsic::Assume(op) => {
-                stable_mir::mir::NonDivergingIntrinsic::Assume(op.stable(tables))
+            NonDivergingIntrinsic::Assume(op, binop, value) => {
+                stable_mir::mir::NonDivergingIntrinsic::Assume(
+                    op.stable(tables),
+                    binop.stable(tables),
+                    *value,
+                )
             }
             NonDivergingIntrinsic::CopyNonOverlapping(copy_non_overlapping) => {
                 stable_mir::mir::NonDivergingIntrinsic::CopyNonOverlapping(CopyNonOverlapping {

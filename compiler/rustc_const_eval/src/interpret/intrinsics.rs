@@ -474,9 +474,15 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
         intrinsic: &NonDivergingIntrinsic<'tcx>,
     ) -> InterpResult<'tcx> {
         match intrinsic {
-            NonDivergingIntrinsic::Assume(op) => {
+            NonDivergingIntrinsic::Assume(op, binop, bits) => {
                 let op = self.eval_operand(op, None)?;
-                let cond = self.read_scalar(&op)?.to_bool()?;
+                let cond = self.read_immediate(&op)?;
+                // Compare using MIR BinOp::Eq, to also support pointer values.
+                // (Avoiding `self.binary_op` as that does some redundant layout computation.)
+                let cond = self
+                    .overflowing_binary_op(*binop, &cond, &ImmTy::from_uint(*bits, cond.layout))?
+                    .0
+                    .to_bool()?;
                 if !cond {
                     throw_ub_custom!(fluent::const_eval_assume_false);
                 }

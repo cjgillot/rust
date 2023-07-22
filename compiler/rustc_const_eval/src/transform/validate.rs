@@ -1127,13 +1127,21 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                     );
                 }
             }
-            StatementKind::Intrinsic(box NonDivergingIntrinsic::Assume(op)) => {
+            StatementKind::Intrinsic(box NonDivergingIntrinsic::Assume(op, binop, value)) => {
+                if !matches!(binop, BinOp::Eq | BinOp::Ne) {
+                    self.fail(location, format!("wrong operator {binop:?} in Assume"));
+                }
                 let ty = op.ty(&self.body.local_decls, self.tcx);
-                if !ty.is_bool() {
-                    self.fail(
-                        location,
-                        format!("`assume` argument must be `bool`, but got: `{ty}`"),
-                    );
+                let target_width = self.tcx.sess.target.pointer_width;
+                let size = Size::from_bits(match ty.kind() {
+                    ty::Uint(uint) => uint.normalize(target_width).bit_width().unwrap(),
+                    ty::Int(int) => int.normalize(target_width).bit_width().unwrap(),
+                    ty::Char => 32,
+                    ty::Bool => 1,
+                    other => bug!("unhandled type: {:?}", other),
+                });
+                if Scalar::<()>::try_from_uint(*value, size).is_none() {
+                    self.fail(location, format!("the value {value:#x} is not a proper {ty}"))
                 }
             }
             StatementKind::Intrinsic(box NonDivergingIntrinsic::CopyNonOverlapping(

@@ -21,11 +21,16 @@ impl<'tcx> MirPass<'tcx> for SimplifyConstCondition {
         'blocks: for block in body.basic_blocks_mut() {
             for stmt in block.statements.iter_mut() {
                 if let StatementKind::Intrinsic(box ref intrinsic) = stmt.kind
-                    && let NonDivergingIntrinsic::Assume(discr) = intrinsic
+                    && let NonDivergingIntrinsic::Assume(discr, op, bits) = intrinsic
                     && let Operand::Constant(ref c) = discr
-                    && let Some(constant) = c.literal.try_eval_bool(tcx, param_env)
+                    && let Some(constant) = c.literal.try_eval_bits(tcx, param_env, c.ty())
                 {
-                    if constant {
+                    let fulfilled = match op {
+                        BinOp::Eq => constant == *bits,
+                        BinOp::Ne => constant != *bits,
+                        _ => continue,
+                    };
+                    if fulfilled {
                         stmt.make_nop();
                     } else {
                         block.statements.clear();

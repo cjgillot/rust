@@ -280,6 +280,8 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                                 source_info,
                                 kind: StatementKind::Intrinsic(Box::new(NonDivergingIntrinsic::Assume(
                                     Operand::Move(assert_place),
+                                    BinOp::Eq,
+                                    1,
                                 ))),
                             },
                         );

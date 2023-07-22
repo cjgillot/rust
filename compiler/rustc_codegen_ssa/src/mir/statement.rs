@@ -3,6 +3,7 @@ use rustc_middle::mir::NonDivergingIntrinsic;
 
 use super::FunctionCx;
 use super::LocalRef;
+use crate::common::IntPredicate;
 use crate::traits::BuilderMethods;
 use crate::traits::*;
 
@@ -67,9 +68,21 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             mir::StatementKind::Coverage(box ref coverage) => {
                 self.codegen_coverage(bx, coverage, statement.source_info.scope);
             }
-            mir::StatementKind::Intrinsic(box NonDivergingIntrinsic::Assume(ref op)) => {
+            mir::StatementKind::Intrinsic(box NonDivergingIntrinsic::Assume(
+                ref op,
+                binop,
+                test_value,
+            )) => {
                 let op_val = self.codegen_operand(bx, op);
-                bx.assume(op_val.immediate());
+                let switch_llty = bx.immediate_backend_type(op_val.layout);
+                let llval = bx.const_uint_big(switch_llty, test_value);
+                let predicate = match binop {
+                    mir::BinOp::Eq => IntPredicate::IntEQ,
+                    mir::BinOp::Ne => IntPredicate::IntNE,
+                    _ => bug!(),
+                };
+                let cmp = bx.icmp(predicate, op_val.immediate(), llval);
+                bx.assume(cmp);
             }
             mir::StatementKind::Intrinsic(box NonDivergingIntrinsic::CopyNonOverlapping(
                 mir::CopyNonOverlapping { ref count, ref src, ref dst },

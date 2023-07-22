@@ -28,7 +28,7 @@
 +         StorageLive(_5);
 +         StorageLive(_6);
 +         _6 = Le(_4, const 65535_u32);
-+         assume(move _6);
++         assume(move _6 Eq 1);
 +         StorageDead(_6);
 +         _5 = _4 as u16 (IntToInt);
 +         _0 = ShlUnchecked(_3, move _5);

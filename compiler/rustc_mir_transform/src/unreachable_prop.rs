@@ -4,11 +4,9 @@
 
 use crate::MirPass;
 use rustc_data_structures::fx::FxHashSet;
-use rustc_middle::mir::interpret::Scalar;
 use rustc_middle::mir::patch::MirPatch;
 use rustc_middle::mir::*;
-use rustc_middle::ty::{self, TyCtxt};
-use rustc_target::abi::Size;
+use rustc_middle::ty::TyCtxt;
 
 pub struct UnreachablePropagation;
 
@@ -33,7 +31,7 @@ impl MirPass<'_> for UnreachablePropagation {
                 }
                 // Try to remove unreachable targets from the switch.
                 TerminatorKind::SwitchInt { .. } => {
-                    remove_successors_from_switch(tcx, bb, &unreachable_blocks, body, &mut patch)
+                    remove_successors_from_switch(bb, &unreachable_blocks, body, &mut patch)
                 }
                 _ => false,
             };
@@ -59,7 +57,6 @@ impl MirPass<'_> for UnreachablePropagation {
 
 /// Return whether the current terminator is fully unreachable.
 fn remove_successors_from_switch<'tcx>(
-    tcx: TyCtxt<'tcx>,
     bb: BasicBlock,
     unreachable_blocks: &FxHashSet<BasicBlock>,
     body: &Body<'tcx>,
@@ -67,7 +64,6 @@ fn remove_successors_from_switch<'tcx>(
 ) -> bool {
     let terminator = body.basic_blocks[bb].terminator();
     let TerminatorKind::SwitchInt { discr, targets } = &terminator.kind else { bug!() };
-    let source_info = terminator.source_info;
     let location = body.terminator_loc(bb);
 
     let is_unreachable = |bb| unreachable_blocks.contains(&bb);
@@ -89,26 +85,8 @@ fn remove_successors_from_switch<'tcx>(
     // In order to preserve this information, we record reachable and unreachable targets as
     // `Assume` statements in MIR.
 
-    let discr_ty = discr.ty(body, tcx);
-    let discr_size = Size::from_bits(match discr_ty.kind() {
-        ty::Uint(uint) => uint.normalize(tcx.sess.target.pointer_width).bit_width().unwrap(),
-        ty::Int(int) => int.normalize(tcx.sess.target.pointer_width).bit_width().unwrap(),
-        ty::Char => 32,
-        ty::Bool => 1,
-        other => bug!("unhandled type: {:?}", other),
-    });
-
     let mut add_assumption = |binop, value| {
-        let local = patch.new_temp(tcx.types.bool, source_info.span);
-        let value = Operand::Constant(Box::new(Constant {
-            span: source_info.span,
-            user_ty: None,
-            literal: ConstantKind::from_scalar(tcx, Scalar::from_uint(value, discr_size), discr_ty),
-        }));
-        let cmp = Rvalue::BinaryOp(binop, Box::new((discr.to_copy(), value)));
-        patch.add_assign(location, local.into(), cmp);
-
-        let assume = NonDivergingIntrinsic::Assume(Operand::Move(local.into()));
+        let assume = NonDivergingIntrinsic::Assume(discr.to_copy(), binop, value);
         patch.add_statement(location, StatementKind::Intrinsic(Box::new(assume)));
     };
 
