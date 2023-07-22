@@ -1,4 +1,6 @@
+// unit-test: UnreachablePropagation
 // EMIT_MIR_FOR_EACH_PANIC_STRATEGY
+
 enum Empty {}
 
 fn empty() -> Option<Empty> {
