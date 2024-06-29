@@ -7,4 +7,4 @@ trait Sized {}
 
 #[lang = "tuple_trait"]
 pub trait Tuple {}
-//~^ ERROR: `main` function not found in crate `duplicate`
+// no error

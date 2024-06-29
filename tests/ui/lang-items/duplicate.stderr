@@ -1,9 +1,3 @@
-error[E0601]: `main` function not found in crate `duplicate`
-  --> $DIR/duplicate.rs:9:19
-   |
-LL | pub trait Tuple {}
-   |                   ^ consider adding a `main` function to `$DIR/duplicate.rs`
-
 error[E0152]: found duplicate lang item `sized`
   --> $DIR/duplicate.rs:5:1
    |
@@ -14,7 +8,6 @@ LL | trait Sized {}
    = note: first definition in `core` loaded from SYSROOT/libcore-*.rlib
    = note: second definition in the local crate (`duplicate`)
 
-error: aborting due to 2 previous errors
+error: aborting due to 1 previous error
 
-Some errors have detailed explanations: E0152, E0601.
-For more information about an error, try `rustc --explain E0152`.
+For more information about this error, try `rustc --explain E0152`.
