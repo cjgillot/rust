@@ -92,6 +92,7 @@ use hashbrown::hash_table::{Entry, HashTable};
 use itertools::Itertools as _;
 use rustc_abi::{self as abi, BackendRepr, FIRST_VARIANT, FieldIdx, Primitive, Size, VariantIdx};
 use rustc_arena::DroplessArena;
+use rustc_ast::attr;
 use rustc_const_eval::const_eval::DummyMachine;
 use rustc_const_eval::interpret::{
     ImmTy, Immediate, InterpCx, MemPlaceMeta, MemoryKind, OpTy, Projectable, Scalar,
@@ -108,31 +109,63 @@ use rustc_middle::mir::visit::*;
 use rustc_middle::mir::*;
 use rustc_middle::ty::layout::HasTypingEnv;
 use rustc_middle::ty::{self, Ty, TyCtxt};
-use rustc_span::DUMMY_SP;
+use rustc_span::{DUMMY_SP, sym};
 use smallvec::SmallVec;
 use tracing::{debug, instrument, trace};
 
 use crate::ssa::SsaLocals;
 
-pub(super) struct GVN;
+pub(super) enum GVN {
+    Polymorphic,
+    PostMono,
+}
 
 impl<'tcx> crate::MirPass<'tcx> for GVN {
+    fn name(&self) -> &'static str {
+        match self {
+            GVN::Polymorphic => "GVN",
+            GVN::PostMono => "GVN-post-mono",
+        }
+    }
+
     fn is_enabled(&self, sess: &rustc_session::Session) -> bool {
-        sess.mir_opt_level() >= 2
+        let threshold = match self {
+            GVN::Polymorphic => 2,
+            GVN::PostMono => 1,
+        };
+        sess.mir_opt_level() >= threshold
     }
 
     #[instrument(level = "trace", skip(self, tcx, body))]
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
         debug!(def_id = ?body.source.def_id());
 
-        let typing_env = body.typing_env(tcx);
+        let typing_env = match self {
+            GVN::Polymorphic => body.typing_env(tcx),
+            GVN::PostMono => ty::TypingEnv::fully_monomorphized(),
+        };
         let ssa = SsaLocals::new(tcx, body, typing_env);
         // Clone dominators because we need them while mutating the body.
         let dominators = body.basic_blocks.dominators().clone();
 
+        let preserve_ub_checks = match self {
+            GVN::Polymorphic => {
+                attr::contains_name(tcx.hir_krate_attrs(), sym::rustc_preserve_ub_checks)
+            }
+            GVN::PostMono => false,
+        };
+
         let arena = DroplessArena::default();
-        let mut state =
-            VnState::new(tcx, body, typing_env, &ssa, dominators, &body.local_decls, &arena);
+        let mut state = VnState::new(
+            tcx,
+            body,
+            typing_env,
+            &ssa,
+            dominators,
+            &body.local_decls,
+            &arena,
+            preserve_ub_checks,
+        );
 
         for local in body.args_iter().filter(|&local| ssa.is_ssa(local)) {
             let opaque = state.new_opaque(body.local_decls[local].ty);
@@ -374,6 +407,7 @@ struct VnState<'body, 'a, 'tcx> {
     dominators: Dominators<BasicBlock>,
     reused_locals: DenseBitSet<Local>,
     arena: &'a DroplessArena,
+    preserve_ub_checks: bool,
 }
 
 impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
@@ -385,6 +419,7 @@ impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
         dominators: Dominators<BasicBlock>,
         local_decls: &'body LocalDecls<'tcx>,
         arena: &'a DroplessArena,
+        preserve_ub_checks: bool,
     ) -> Self {
         // Compute a rough estimate of the number of values in the body from the number of
         // statements. This is meant to reduce the number of allocations, but it's all right if
@@ -407,6 +442,7 @@ impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
             dominators,
             reused_locals: DenseBitSet::new_empty(local_decls.len()),
             arena,
+            preserve_ub_checks,
         }
     }
 
@@ -676,8 +712,15 @@ impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
                         .tcx
                         .offset_of_subfield(self.typing_env(), arg_layout, fields.iter())
                         .bytes(),
-                    NullOp::UbChecks => return None,
                     NullOp::ContractChecks => return None,
+                    NullOp::UbChecks => {
+                        if self.preserve_ub_checks {
+                            return None;
+                        } else {
+                            let val = ImmTy::from_bool(self.tcx.sess.ub_checks(), self.tcx);
+                            return Some(val.into());
+                        }
+                    }
                 };
                 ImmTy::from_uint(val, ty).into()
             }

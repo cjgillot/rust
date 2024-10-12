@@ -1,5 +1,5 @@
 use rustc_middle::mir::*;
-use rustc_middle::ty::TyCtxt;
+use rustc_middle::ty::{self, TyCtxt};
 use tracing::trace;
 
 use crate::patch::MirPatch;
@@ -7,6 +7,7 @@ use crate::patch::MirPatch;
 pub(super) enum SimplifyConstCondition {
     AfterConstProp,
     Final,
+    PostMono,
 }
 
 /// A pass that replaces a branch with a goto when its condition is known.
@@ -15,12 +16,17 @@ impl<'tcx> crate::MirPass<'tcx> for SimplifyConstCondition {
         match self {
             SimplifyConstCondition::AfterConstProp => "SimplifyConstCondition-after-const-prop",
             SimplifyConstCondition::Final => "SimplifyConstCondition-final",
+            SimplifyConstCondition::PostMono => "SimplifyConstCondition-post-mono",
         }
     }
 
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
         trace!("Running SimplifyConstCondition on {:?}", body.source);
-        let typing_env = body.typing_env(tcx);
+        let typing_env = if matches!(*self, SimplifyConstCondition::PostMono) {
+            ty::TypingEnv::fully_monomorphized()
+        } else {
+            body.typing_env(tcx)
+        };
         let mut patch = MirPatch::new(body);
 
         'blocks: for (bb, block) in body.basic_blocks.iter_enumerated() {
