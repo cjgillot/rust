@@ -67,6 +67,7 @@ use rustc_span::DUMMY_SP;
 use tracing::{debug, instrument, trace};
 
 use crate::cost_checker::CostChecker;
+use crate::patch::MirPatch;
 
 pub(super) struct JumpThreading;
 
@@ -88,6 +89,8 @@ impl<'tcx> crate::MirPass<'tcx> for JumpThreading {
             trace!("Skipped for coroutine {:?}", def_id);
             return;
         }
+
+        split_critical_switch_edges(body);
 
         let typing_env = body.typing_env(tcx);
         let mut finder = TOFinder {
@@ -143,6 +146,52 @@ impl<'tcx> crate::MirPass<'tcx> for JumpThreading {
     fn is_required(&self) -> bool {
         false
     }
+}
+
+#[instrument(level = "trace", skip(body))]
+fn split_critical_switch_edges(body: &mut Body<'_>) {
+    let mut patch = MirPatch::new(body);
+
+    for (bb, bbdata) in body.basic_blocks.iter_enumerated() {
+        if bbdata.is_cleanup {
+            continue;
+        }
+
+        let terminator = bbdata.terminator();
+        let TerminatorKind::SwitchInt { ref targets, ref discr } = terminator.kind else {
+            continue;
+        };
+
+        let mut seen_targets = FxHashSet::default();
+        let mut mk_block = |target| {
+            // If its the first time we see this target, do nothing.
+            if seen_targets.insert(target) {
+                return target;
+            }
+
+            let new = patch.new_block(BasicBlockData::new(
+                Some(Terminator {
+                    source_info: terminator.source_info,
+                    kind: TerminatorKind::Goto { target },
+                }),
+                bbdata.is_cleanup,
+            ));
+            trace!(?target, ?new, "=>");
+            new
+        };
+        let otherwise = mk_block(targets.otherwise());
+        let new_targets = targets.iter().map(|(value, target)| (value, mk_block(target)));
+        let new_targets = SwitchTargets::new(new_targets, otherwise);
+
+        if *targets != new_targets {
+            patch.patch_terminator(
+                bb,
+                TerminatorKind::SwitchInt { discr: discr.clone(), targets: new_targets },
+            );
+        }
+    }
+
+    patch.apply(body);
 }
 
 struct TOFinder<'a, 'tcx> {
@@ -674,61 +723,58 @@ impl<'a, 'tcx> TOFinder<'a, 'tcx> {
 
         // Attempt to fulfill a condition using an outgoing branch's condition.
         // Only support the case where there are no duplicated outgoing edges.
-        if targets.is_distinct() {
-            for &(index, c) in state.active.iter() {
-                if c.place != discr_idx {
-                    continue;
-                }
+        debug_assert!(targets.is_distinct());
+        for &(index, c) in state.active.iter() {
+            if c.place != discr_idx {
+                continue;
+            }
 
-                // Set of blocks `t` such that the edge `bb -> t` fulfills `c`.
-                let mut edges_fulfilling_condition = FxHashSet::default();
+            // Set of blocks `t` such that the edge `bb -> t` fulfills `c`.
+            let mut edges_fulfilling_condition = FxHashSet::default();
 
-                // On edge `bb -> tgt`, we know that `discr_idx == branch`.
-                for (branch, tgt) in targets.iter() {
-                    if let Some(branch) = ScalarInt::try_from_uint(branch, discr_layout.size)
-                        && c.matches(discr_idx, branch)
-                    {
-                        edges_fulfilling_condition.insert(tgt);
-                    }
-                }
-
-                // On edge `bb -> otherwise`, we only know that `discr` is different from all the
-                // constants in the switch. That's much weaker information than the equality we
-                // had in the previous arm. All we can conclude is that the replacement condition
-                // `discr != value` can be threaded, and nothing else.
-                if c.polarity == Polarity::Ne
-                    && let Ok(value) = c.value.try_to_bits(discr_layout.size)
-                    && targets.all_values().contains(&value.into())
+            // On edge `bb -> tgt`, we know that `discr_idx == branch`.
+            for (branch, tgt) in targets.iter() {
+                if let Some(branch) = ScalarInt::try_from_uint(branch, discr_layout.size)
+                    && c.matches(discr_idx, branch)
                 {
-                    edges_fulfilling_condition.insert(targets.otherwise());
+                    edges_fulfilling_condition.insert(tgt);
                 }
+            }
 
-                // Register that jumping to a `t` fulfills condition `c`.
-                // This does *not* mean that `c` is fulfilled in this block: inserting `index` in
-                // `fulfilled` is wrong if we have targets that jump to other blocks.
-                let condition_targets = &state.targets[index];
+            // On edge `bb -> otherwise`, we only know that `discr` is different from all the
+            // constants in the switch. That's much weaker information than the equality we
+            // had in the previous arm. All we can conclude is that the replacement condition
+            // `discr != value` can be threaded, and nothing else.
+            if c.polarity == Polarity::Ne
+                && let Ok(value) = c.value.try_to_bits(discr_layout.size)
+                && targets.all_values().contains(&value.into())
+            {
+                edges_fulfilling_condition.insert(targets.otherwise());
+            }
 
-                let new_edges: Vec<_> = condition_targets
-                    .iter()
-                    .copied()
-                    .filter(|&target| match target {
-                        ConditionTarget::Goto(_) => false,
-                        ConditionTarget::Chain(succ, _) => {
-                            edges_fulfilling_condition.contains(&succ)
-                        }
-                    })
-                    .collect();
+            // Register that jumping to a `t` fulfills condition `c`.
+            // This does *not* mean that `c` is fulfilled in this block: inserting `index` in
+            // `fulfilled` is wrong if we have targets that jump to other blocks.
+            let condition_targets = &state.targets[index];
 
-                if new_edges.len() == condition_targets.len() {
-                    // If `new_edges == condition_targets`, do not bother creating a new
-                    // `ConditionIndex`, we can use the existing one.
-                    state.fulfilled.push(index);
-                } else {
-                    // Fulfilling `index` may thread conditions that we do not want,
-                    // so create a brand new index to immediately mark fulfilled.
-                    let index = state.targets.push(new_edges);
-                    state.fulfilled.push(index);
-                }
+            let new_edges: Vec<_> = condition_targets
+                .iter()
+                .copied()
+                .filter(|&target| match target {
+                    ConditionTarget::Goto(_) => false,
+                    ConditionTarget::Chain(succ, _) => edges_fulfilling_condition.contains(&succ),
+                })
+                .collect();
+
+            if new_edges.len() == condition_targets.len() {
+                // If `new_edges == condition_targets`, do not bother creating a new
+                // `ConditionIndex`, we can use the existing one.
+                state.fulfilled.push(index);
+            } else {
+                // Fulfilling `index` may thread conditions that we do not want,
+                // so create a brand new index to immediately mark fulfilled.
+                let index = state.targets.push(new_edges);
+                state.fulfilled.push(index);
             }
         }
 

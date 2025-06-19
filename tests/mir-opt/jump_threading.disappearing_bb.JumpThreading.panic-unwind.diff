@@ -9,13 +9,14 @@
       bb0: {
           _2 = const true;
           _3 = const true;
-          switchInt(copy _1) -> [0: bb3, 1: bb3, 2: bb1, otherwise: bb2];
+-         switchInt(copy _1) -> [0: bb3, 1: bb3, 2: bb1, otherwise: bb2];
++         switchInt(copy _1) -> [0: bb3, 1: bb9, 2: bb1, otherwise: bb2];
       }
   
       bb1: {
           _3 = const false;
 -         goto -> bb4;
-+         goto -> bb10;
++         goto -> bb11;
       }
   
       bb2: {
@@ -25,7 +26,7 @@
       bb3: {
           _2 = const false;
 -         goto -> bb4;
-+         goto -> bb13;
++         goto -> bb14;
       }
   
       bb4: {
@@ -49,23 +50,23 @@
 +     }
 + 
 +     bb9: {
-+         switchInt(copy _3) -> [0: bb5, otherwise: bb7];
++         goto -> bb3;
 +     }
 + 
 +     bb10: {
-+         goto -> bb11;
-+     }
-+ 
-+     bb11: {
-+         goto -> bb8;
-+     }
-+ 
-+     bb12: {
 +         switchInt(copy _3) -> [0: bb5, otherwise: bb7];
 +     }
 + 
++     bb11: {
++         goto -> bb12;
++     }
++ 
++     bb12: {
++         goto -> bb8;
++     }
++ 
 +     bb13: {
-+         goto -> bb14;
++         switchInt(copy _3) -> [0: bb5, otherwise: bb7];
 +     }
 + 
 +     bb14: {
@@ -73,6 +74,10 @@
 +     }
 + 
 +     bb15: {
++         goto -> bb16;
++     }
++ 
++     bb16: {
           goto -> bb6;
       }
   }

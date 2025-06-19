@@ -2612,7 +2612,8 @@
       }
   
       bb130: {
-          switchInt(copy _5) -> [33: bb184, 61: bb184, 63: bb184, 64: bb183, otherwise: bb173];
+-         switchInt(copy _5) -> [33: bb184, 61: bb184, 63: bb184, 64: bb183, otherwise: bb173];
++         switchInt(copy _5) -> [33: bb184, 61: bb1925, 63: bb1926, 64: bb183, otherwise: bb173];
       }
   
       bb131: {
@@ -2682,7 +2683,8 @@
           _5 = move _9;
           StorageDead(_9);
           _2 = Add(copy _2, const 1_usize);
-          switchInt(copy _5) -> [33: bb151, 61: bb151, 63: bb151, otherwise: bb141];
+-         switchInt(copy _5) -> [33: bb151, 61: bb151, 63: bb151, otherwise: bb141];
++         switchInt(copy _5) -> [33: bb151, 61: bb1927, 63: bb1928, otherwise: bb141];
       }
   
       bb140: {
@@ -2770,7 +2772,8 @@
           StorageDead(_26);
           _5 = move _25;
           StorageDead(_25);
-          switchInt(copy _5) -> [33: bb167, 61: bb167, otherwise: bb157];
+-         switchInt(copy _5) -> [33: bb167, 61: bb167, otherwise: bb157];
++         switchInt(copy _5) -> [33: bb167, 61: bb1929, otherwise: bb157];
       }
   
       bb156: {
@@ -3100,7 +3103,7 @@
           StorageDead(_80);
           _78 = const 0_u8;
 -         goto -> bb214;
-+         goto -> bb1926;
++         goto -> bb1931;
       }
   
       bb214: {
@@ -3263,7 +3266,7 @@
           StorageDead(_103);
           _101 = const 0_u8;
 -         goto -> bb242;
-+         goto -> bb1925;
++         goto -> bb1930;
       }
   
       bb242: {
@@ -13010,13 +13013,33 @@
 +     }
 + 
 +     bb1925: {
++         goto -> bb184;
++     }
++ 
++     bb1926: {
++         goto -> bb184;
++     }
++ 
++     bb1927: {
++         goto -> bb151;
++     }
++ 
++     bb1928: {
++         goto -> bb151;
++     }
++ 
++     bb1929: {
++         goto -> bb167;
++     }
++ 
++     bb1930: {
 +         StorageDead(_102);
 +         _5 = move _101;
 +         StorageDead(_101);
 +         goto -> bb244;
 +     }
 + 
-+     bb1926: {
++     bb1931: {
 +         StorageDead(_79);
 +         _5 = move _78;
 +         StorageDead(_78);

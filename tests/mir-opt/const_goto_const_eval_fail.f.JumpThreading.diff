@@ -7,13 +7,14 @@
   
       bb0: {
           StorageLive(_1);
-          switchInt(const A) -> [1: bb2, 2: bb2, 3: bb2, otherwise: bb1];
+-         switchInt(const A) -> [1: bb2, 2: bb2, 3: bb2, otherwise: bb1];
++         switchInt(const A) -> [1: bb2, 2: bb7, 3: bb8, otherwise: bb1];
       }
   
       bb1: {
           _1 = const true;
 -         goto -> bb3;
-+         goto -> bb7;
++         goto -> bb9;
       }
   
       bb2: {
@@ -41,6 +42,14 @@
 +     }
 + 
 +     bb7: {
++         goto -> bb2;
++     }
++ 
++     bb8: {
++         goto -> bb2;
++     }
++ 
++     bb9: {
 +         goto -> bb4;
       }
   }

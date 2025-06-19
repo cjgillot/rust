@@ -418,12 +418,12 @@ fn disappearing_bb(x: u8) -> u8 {
             // CHECK: bb0: {
             a = true;
             b = true;
-            // CHECK:     switchInt({{.*}}) -> [0: bb3, 1: bb3, 2: bb1, otherwise: bb2];
+            // CHECK:     switchInt({{.*}}) -> [0: bb3, 1: bb9, 2: bb1, otherwise: bb2];
             match x { 0 => bb3, 1 => bb3, 2 => bb1, _ => bb2 }
         }
         bb1 = {
             // CHECK: bb1: {
-            // CHECK:     goto -> bb10;
+            // CHECK:     goto -> bb11;
             b = false;
             Goto(bb4)
         }
@@ -434,7 +434,7 @@ fn disappearing_bb(x: u8) -> u8 {
         }
         bb3 = {
             // CHECK: bb3: {
-            // CHECK:     goto -> bb13;
+            // CHECK:     goto -> bb14;
             a = false;
             Goto(bb4)
         }
@@ -454,18 +454,20 @@ fn disappearing_bb(x: u8) -> u8 {
             Goto(bb6)
         }
         // CHECK: bb9: {
-        // CHECK:     switchInt(copy _3) -> [0: bb5, otherwise: bb7];
+        // CHECK:     goto -> bb3;
         // CHECK: bb10: {
-        // CHECK:     goto -> bb11;
-        // CHECK: bb11: {
-        // CHECK:     goto -> bb8;
-        // CHECK: bb12: {
         // CHECK:     switchInt(copy _3) -> [0: bb5, otherwise: bb7];
+        // CHECK: bb11: {
+        // CHECK:     goto -> bb12;
+        // CHECK: bb12: {
+        // CHECK:     goto -> bb8;
         // CHECK: bb13: {
-        // CHECK:     goto -> bb14;
+        // CHECK:     switchInt(copy _3) -> [0: bb5, otherwise: bb7];
         // CHECK: bb14: {
         // CHECK:     goto -> bb15;
         // CHECK: bb15: {
+        // CHECK:     goto -> bb16;
+        // CHECK: bb16: {
         // CHECK:     goto -> bb6;
     }
 }
