@@ -5,7 +5,7 @@ use rustc_span::def_id::DefPathHash;
 
 use crate::HashIgnoredAttrId;
 use crate::hir::{
-    AttributeMap, BodyId, ForeignItemId, ImplItemId, ItemId, OwnerNodes, TraitItemId,
+    AttributeMap, BodyId, ForeignItemId, ImplItemId, ItemId, OwnerInfo, OwnerNodes, TraitItemId,
 };
 use crate::hir_id::ItemLocalId;
 
@@ -67,13 +67,10 @@ impl ToStableHashKey for ForeignItemId {
 
 impl<'tcx> HashStable for OwnerNodes<'tcx> {
     fn hash_stable<Hcx: HashStableContext>(&self, hcx: &mut Hcx, hasher: &mut StableHasher) {
-        // We ignore the `nodes` and `bodies` fields since these refer to information included in
-        // `hash` which is hashed in the collector and used for the crate hash.
-        // `local_id_to_def_id` is also ignored because is dependent on the body, then just hashing
-        // the body satisfies the condition of two nodes being different have different
-        // `hash_stable` results.
-        let OwnerNodes { opt_hash_including_bodies, nodes: _, bodies: _ } = *self;
-        opt_hash_including_bodies.unwrap().hash_stable(hcx, hasher);
+        // We ignore the other fields since these refer to information included in
+        // `opt_hash` which is hashed in the collector and used for the crate hash.
+        let OwnerNodes { opt_hash, .. } = *self;
+        opt_hash.unwrap().hash_stable(hcx, hasher);
     }
 }
 
@@ -82,6 +79,15 @@ impl<'tcx> HashStable for AttributeMap<'tcx> {
         // We ignore the `map` since it refers to information included in `opt_hash` which is
         // hashed in the collector and used for the crate hash.
         let AttributeMap { opt_hash, define_opaque: _, map: _ } = *self;
+        opt_hash.unwrap().hash_stable(hcx, hasher);
+    }
+}
+
+impl<'tcx> HashStable for OwnerInfo<'tcx> {
+    fn hash_stable<Hcx: HashStableContext>(&self, hcx: &mut Hcx, hasher: &mut StableHasher) {
+        // We ignore the other fields since these refer to information included in
+        // `opt_hash` which is hashed in the collector and used for the crate hash.
+        let OwnerInfo { opt_hash, .. } = *self;
         opt_hash.unwrap().hash_stable(hcx, hasher);
     }
 }
