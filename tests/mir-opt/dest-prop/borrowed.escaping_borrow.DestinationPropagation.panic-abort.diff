@@ -1,0 +1,48 @@
+- // MIR for `escaping_borrow` before DestinationPropagation
++ // MIR for `escaping_borrow` after DestinationPropagation
+  
+  fn escaping_borrow() -> () {
+      let mut _0: ();
+      let mut _1: usize;
+      let _2: ();
+      let mut _3: *mut usize;
+      let _5: ();
+      let mut _6: *mut usize;
+      scope 1 {
+          debug a => _1;
+          let mut _4: usize;
+          scope 2 {
+              debug b => _4;
+          }
+      }
+  
+      bb0: {
+          StorageLive(_1);
+          _1 = const 5_usize;
+          StorageLive(_2);
+          StorageLive(_3);
+          _3 = &raw mut _1;
+          _2 = observe::<usize>(move _3) -> [return: bb1, unwind unreachable];
+      }
+  
+      bb1: {
+          StorageDead(_3);
+          StorageDead(_2);
+          StorageLive(_4);
+          _4 = copy _1;
+          StorageLive(_5);
+          StorageLive(_6);
+          _6 = &raw mut _4;
+          _5 = observe::<usize>(move _6) -> [return: bb2, unwind unreachable];
+      }
+  
+      bb2: {
+          StorageDead(_6);
+          StorageDead(_5);
+          _0 = const ();
+          StorageDead(_4);
+          StorageDead(_1);
+          return;
+      }
+  }
+  

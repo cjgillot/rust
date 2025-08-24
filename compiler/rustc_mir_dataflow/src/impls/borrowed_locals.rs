@@ -72,6 +72,19 @@ where
         }
     }
 
+    fn visit_operand(&mut self, operand: &Operand<'tcx>, location: Location) {
+        self.super_operand(operand, location);
+
+        match operand {
+            Operand::Move(place) => {
+                if let Some(local) = place.as_local() {
+                    self.trans.kill(local);
+                }
+            }
+            Operand::Copy(_) | Operand::Constant(_) => {}
+        }
+    }
+
     fn visit_rvalue(&mut self, rvalue: &Rvalue<'tcx>, location: Location) {
         self.super_rvalue(rvalue, location);
 
