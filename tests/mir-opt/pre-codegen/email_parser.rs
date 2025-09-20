@@ -152,13 +152,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
         yystate = 'blk: {
             match yystate {
                 S0 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     cursor += 1;
                     match yych {
                         0x21
@@ -187,13 +181,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                 }
                 S3 => {
                     marker = cursor;
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x21
                         | 0x23..=0x27
@@ -212,13 +200,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S4 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     #[cfg_attr(feature = "loop_match", const_continue)]
                     break 'blk S5;
                 }
@@ -251,13 +233,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     break 'blk S2;
                 }
                 S7 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x30..=0x39 | 0x41..=0x5A | 0x61..=0x7A => {
                             cursor += 1;
@@ -271,13 +247,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S8 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -306,13 +276,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S9 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -331,13 +295,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S10 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -369,13 +327,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     return Some(cursor);
                 }
                 S12 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -394,13 +346,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S13 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -429,13 +375,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S14 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -454,13 +394,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S15 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -489,13 +423,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S16 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -514,13 +442,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S17 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -549,13 +471,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S18 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -574,13 +490,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S19 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -609,13 +519,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S20 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -634,13 +538,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S21 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -669,13 +567,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S22 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -694,13 +586,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S23 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -729,13 +615,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S24 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -754,13 +634,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S25 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -789,13 +663,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S26 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -814,13 +682,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S27 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -849,13 +711,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S28 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -874,13 +730,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S29 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -909,13 +759,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S30 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -934,13 +778,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S31 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -969,13 +807,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S32 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -994,13 +826,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S33 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1029,13 +855,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S34 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1054,13 +874,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S35 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1089,13 +903,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S36 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1114,13 +922,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S37 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1149,13 +951,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S38 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1174,13 +970,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S39 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1209,13 +999,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S40 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1234,13 +1018,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S41 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1269,13 +1047,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S42 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1294,13 +1066,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S43 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1329,13 +1095,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S44 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1354,13 +1114,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S45 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1389,13 +1143,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S46 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1414,13 +1162,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S47 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1449,13 +1191,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S48 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1474,13 +1210,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S49 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1509,13 +1239,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S50 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1534,13 +1258,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S51 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1569,13 +1287,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S52 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1594,13 +1306,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S53 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1629,13 +1335,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S54 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1654,13 +1354,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S55 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1689,13 +1383,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S56 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1714,13 +1402,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S57 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1749,13 +1431,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S58 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1774,13 +1450,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S59 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1809,13 +1479,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S60 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1834,13 +1498,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S61 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1869,13 +1527,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S62 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1894,13 +1546,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S63 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1929,13 +1575,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S64 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1954,13 +1594,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S65 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -1989,13 +1623,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S66 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2014,13 +1642,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S67 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2049,13 +1671,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S68 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2074,13 +1690,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S69 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2109,13 +1719,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S70 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2134,13 +1738,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S71 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2169,13 +1767,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S72 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2194,13 +1786,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S73 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2229,13 +1815,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S74 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2254,13 +1834,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S75 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2289,13 +1863,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S76 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2314,13 +1882,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S77 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2349,13 +1911,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S78 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2374,13 +1930,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S79 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2409,13 +1959,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S80 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2434,13 +1978,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S81 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2469,13 +2007,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S82 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2494,13 +2026,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S83 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2529,13 +2055,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S84 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2554,13 +2074,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S85 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2589,13 +2103,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S86 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2614,13 +2122,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S87 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2649,13 +2151,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S88 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2674,13 +2170,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S89 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2709,13 +2199,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S90 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2734,13 +2218,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S91 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2769,13 +2247,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S92 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2794,13 +2266,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S93 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2829,13 +2295,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S94 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2854,13 +2314,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S95 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2889,13 +2343,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S96 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2914,13 +2362,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S97 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2949,13 +2391,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S98 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -2974,13 +2410,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S99 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3009,13 +2439,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S100 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3034,13 +2458,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S101 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3069,13 +2487,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S102 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3094,13 +2506,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S103 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3129,13 +2535,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S104 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3154,13 +2554,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S105 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3189,13 +2583,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S106 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3214,13 +2602,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S107 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3249,13 +2631,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S108 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3274,13 +2650,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S109 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3309,13 +2679,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S110 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3334,13 +2698,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S111 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3369,13 +2727,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S112 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3394,13 +2746,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S113 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3429,13 +2775,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S114 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3454,13 +2794,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S115 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3489,13 +2823,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S116 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3514,13 +2842,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S117 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3549,13 +2871,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S118 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3574,13 +2890,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S119 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3609,13 +2919,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S120 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3634,13 +2938,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S121 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3669,13 +2967,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S122 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3694,13 +2986,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S123 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3729,13 +3015,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S124 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3754,13 +3034,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S125 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3789,13 +3063,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S126 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3814,13 +3082,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S127 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3849,13 +3111,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S128 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3874,13 +3130,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S129 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2D => {
                             cursor += 1;
@@ -3909,13 +3159,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S130 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x30..=0x39 | 0x41..=0x5A | 0x61..=0x7A => {
                             cursor += 1;
@@ -3929,13 +3173,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S131 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2E => {
                             cursor += 1;
@@ -3959,13 +3197,7 @@ pub fn autolink_email(s: &[u8]) -> Option<usize> {
                     }
                 }
                 S132 => {
-                    yych = unsafe {
-                        if cursor < len {
-                            *s.get_unchecked(cursor)
-                        } else {
-                            0
-                        }
-                    };
+                    yych = unsafe { if cursor < len { *s.get_unchecked(cursor) } else { 0 } };
                     match yych {
                         0x2E => {
                             cursor += 1;
