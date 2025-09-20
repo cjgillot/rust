@@ -99,7 +99,7 @@ impl<'tcx> crate::MirPass<'tcx> for JumpThreading {
             typing_env,
             ecx: InterpCx::new(tcx, DUMMY_SP, typing_env, DummyMachine),
             body,
-            map: Map::new(tcx, body, Some(MAX_PLACES)),
+            map: Map::new(tcx, body, None),
             entry_states: IndexVec::from_elem(ConditionSet::default(), &body.basic_blocks),
         };
 
@@ -127,6 +127,7 @@ impl<'tcx> crate::MirPass<'tcx> for JumpThreading {
                 }
 
                 finder.process_statement(stmt, &mut state);
+                trace!(?state);
 
                 // When a statement mutates a place, assignments to that place that happen
                 // above the mutation cannot fulfill a condition.
@@ -134,6 +135,7 @@ impl<'tcx> crate::MirPass<'tcx> for JumpThreading {
                 //   _1 = 6
                 if let Some((lhs, tail)) = finder.mutated_statement(stmt) {
                     finder.flood_state(lhs, tail, &mut state);
+                    trace!(?state);
                 }
             }
 
@@ -538,11 +540,13 @@ impl<'a, 'tcx> TOFinder<'a, 'tcx> {
         state: &mut ConditionSet,
     ) {
         let Some(lhs) = self.map.find(lhs_place.as_ref()) else { return };
+        trace!(?lhs);
         match rvalue {
             Rvalue::Use(operand) => self.process_operand(lhs, operand, state),
             // Transfer the conditions on the copy rhs.
             Rvalue::CopyForDeref(rhs) => {
                 let Some(rhs) = self.map.find(rhs.as_ref()) else { return };
+                trace!(?rhs);
                 self.process_copy(lhs, rhs, state)
             }
             Rvalue::Discriminant(rhs) => {
