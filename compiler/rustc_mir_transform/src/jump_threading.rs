@@ -55,8 +55,9 @@ use itertools::Itertools as _;
 use rustc_const_eval::const_eval::DummyMachine;
 use rustc_const_eval::interpret::{ImmTy, Immediate, InterpCx, OpTy, Projectable};
 use rustc_data_structures::fx::{FxHashMap, FxHashSet, FxIndexSet};
+use rustc_data_structures::work_queue::WorkQueue;
 use rustc_index::IndexVec;
-use rustc_index::bit_set::{DenseBitSet, GrowableBitSet};
+use rustc_index::bit_set::GrowableBitSet;
 use rustc_middle::bug;
 use rustc_middle::mir::interpret::Scalar;
 use rustc_middle::mir::visit::Visitor;
@@ -99,11 +100,17 @@ impl<'tcx> crate::MirPass<'tcx> for JumpThreading {
             ecx: InterpCx::new(tcx, DUMMY_SP, typing_env, DummyMachine),
             body,
             map: Map::new(tcx, body, Some(MAX_PLACES)),
-            loop_headers: loop_headers(body),
             entry_states: IndexVec::from_elem(ConditionSet::default(), &body.basic_blocks),
         };
 
-        for (bb, bbdata) in traversal::postorder(body) {
+        let mut dirty_queue: WorkQueue<BasicBlock> = WorkQueue::with_none(body.basic_blocks.len());
+        for (bb, _) in traversal::postorder(body) {
+            dirty_queue.insert(bb);
+        }
+
+        let predecessors = body.basic_blocks.predecessors();
+        while let Some(bb) = dirty_queue.pop() {
+            let bbdata = &body.basic_blocks[bb];
             if bbdata.is_cleanup {
                 continue;
             }
@@ -131,6 +138,11 @@ impl<'tcx> crate::MirPass<'tcx> for JumpThreading {
             }
 
             trace!("entry_states[{bb:?}] = {state:?}");
+            if state.active != finder.entry_states[bb].active {
+                for &pred in predecessors[bb].iter() {
+                    dirty_queue.insert(pred);
+                }
+            }
             finder.entry_states[bb] = state;
         }
 
@@ -200,7 +212,6 @@ struct TOFinder<'a, 'tcx> {
     ecx: InterpCx<'tcx, DummyMachine>,
     body: &'a Body<'tcx>,
     map: Map<'tcx>,
-    loop_headers: DenseBitSet<BasicBlock>,
     /// This stores the state of each visited block on entry,
     /// and the current state of the block being visited.
     // Invariant: for each `bb`, each condition in `entry_states[bb]` has a `chain` that
@@ -324,9 +335,6 @@ impl<'a, 'tcx> TOFinder<'a, 'tcx> {
     fn populate_from_outgoing_edges(&mut self, bb: BasicBlock) -> ConditionSet {
         let bbdata = &self.body[bb];
 
-        // This should be the first time we populate `entry_states[bb]`.
-        debug_assert!(self.entry_states[bb].is_empty());
-
         let state_len =
             bbdata.terminator().successors().map(|succ| self.entry_states[succ].active.len()).sum();
         let mut state = ConditionSet {
@@ -358,12 +366,7 @@ impl<'a, 'tcx> TOFinder<'a, 'tcx> {
         // A given block may have several times the same successor.
         let mut seen = FxHashSet::default();
         for succ in bbdata.terminator().successors() {
-            if !seen.insert(succ) {
-                continue;
-            }
-
-            // Do not thread through loop headers.
-            if self.loop_headers.contains(succ) {
+            if succ == bb || !seen.insert(succ) {
                 continue;
             }
 
@@ -912,9 +915,13 @@ fn remove_costly_conditions<'tcx>(
         entry_states.len(),
     );
 
-    let reverse_postorder = basic_blocks.reverse_postorder();
+    let mut dirty_queue: WorkQueue<BasicBlock> = WorkQueue::with_none(body.basic_blocks.len());
+    for (bb, _) in traversal::postorder(body) {
+        dirty_queue.insert(bb);
+    }
 
-    for &bb in reverse_postorder.iter().rev() {
+    let predecessors = body.basic_blocks.predecessors();
+    while let Some(bb) = dirty_queue.pop() {
         let state = &entry_states[bb];
         trace!(?bb, ?state);
 
@@ -946,12 +953,17 @@ fn remove_costly_conditions<'tcx>(
         }
 
         trace!("condition_cost[{bb:?}] = {:?}", current_costs);
+        if current_costs != condition_cost[bb] {
+            for &pred in predecessors[bb].iter() {
+                dirty_queue.insert(pred);
+            }
+        }
         condition_cost[bb] = current_costs;
     }
 
     trace!(?condition_cost);
 
-    for &bb in reverse_postorder {
+    for bb in entry_states.indices() {
         for (index, targets) in entry_states[bb].targets.iter_enumerated_mut() {
             if condition_cost[bb][index] >= MAX_COST {
                 trace!(?bb, ?index, ?targets, c = ?condition_cost[bb][index], "remove");
@@ -1125,23 +1137,4 @@ impl<'a, 'tcx> OpportunitySet<'a, 'tcx> {
 
         Some(new_target)
     }
-}
-
-/// Compute the set of loop headers in the given body. We define a loop header as a block which has
-/// at least a predecessor which it dominates. This definition is only correct for reducible CFGs.
-/// But if the CFG is already irreducible, there is no point in trying much harder.
-/// is already irreducible.
-#[instrument(level = "trace", skip(body), ret)]
-fn loop_headers(body: &Body<'_>) -> DenseBitSet<BasicBlock> {
-    let mut loop_headers = DenseBitSet::new_empty(body.basic_blocks.len());
-    let dominators = body.basic_blocks.dominators();
-    // Only visit reachable blocks.
-    for (bb, bbdata) in traversal::postorder(body) {
-        for succ in bbdata.terminator().successors() {
-            if dominators.dominates(succ, bb) {
-                loop_headers.insert(succ);
-            }
-        }
-    }
-    loop_headers
 }
