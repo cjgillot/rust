@@ -25,6 +25,7 @@ rustc_index::newtype_index!(
 
 rustc_index::newtype_index!(
     /// This index uniquely identifies a tracked place and therefore a slot in [`State`].
+    #[derive(PartialOrd, Ord)]
     pub struct ValueIndex {}
 );
 
