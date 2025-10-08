@@ -54,7 +54,7 @@
           StorageDead(_5);
           StorageLive(_6);
 -         _6 = const Foo::<u8>::SENTINEL as *const u8 (PtrToPtr);
--         _1 = Eq(copy _4, copy _6);
+-         _1 = Eq(copy _2, const Foo::<u8>::SENTINEL);
 +         _6 = const {0x1 as *const u8};
 +         _1 = const true;
           StorageDead(_6);

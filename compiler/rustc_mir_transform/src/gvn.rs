@@ -61,9 +61,8 @@
 //! The evaluated form is inserted in `evaluated` as an `OpTy` or `None` if evaluation failed.
 //!
 //! The difficulty is non-deterministic evaluation of MIR constants. Some `Const` can have
-//! different runtime values each time they are evaluated. This is the case with
-//! `Const::Slice` which have a new pointer each time they are evaluated, and constants that
-//! contain a fn pointer (`AllocId` pointing to a `GlobalAlloc::Function`) pointing to a different
+//! different runtime values each time they are evaluated. This happens with fn pointer
+//! (`AllocId` pointing to a `GlobalAlloc::Function`) pointing to a different
 //! symbol in each codegen unit.
 //!
 //! Meanwhile, we want to be able to read indirect constants. For instance:
@@ -77,12 +76,9 @@
 //! }
 //! ```
 //!
-//! The `Value::Constant` variant stores a possibly unevaluated constant. Evaluating that constant
-//! may be non-deterministic. When that happens, we assign a disambiguator to ensure that we do not
-//! merge the constants. See `duplicate_slice` test in `gvn.rs`.
-//!
-//! Second, when writing constants in MIR, we do not write `Const::Slice` or `Const`
-//! that contain `AllocId`s.
+//! To avoid this issue, we do not introduce new `AllocId` provenances in MIR constants. For
+//! instance, we forbid introducing new pointers, but introducing an indirect constant is fine:
+//! since we manipulate the pointed-to value, and not the pointer itself.
 
 use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
@@ -201,13 +197,7 @@ enum Value<'a, 'tcx> {
     /// The `usize` is a counter incremented by `new_opaque`.
     Opaque(VnOpaque),
     /// Evaluated or unevaluated constant value.
-    Constant {
-        value: Const<'tcx>,
-        /// Some constants do not have a deterministic value. To avoid merging two instances of the
-        /// same `Const`, we assign them an additional integer index.
-        // `disambiguator` is `None` iff the constant is deterministic.
-        disambiguator: Option<VnOpaque>,
-    },
+    Constant(Const<'tcx>),
 
     // Aggregates.
     /// An aggregate value, either tuple/closure/struct/enum.
@@ -255,7 +245,7 @@ enum Value<'a, 'tcx> {
 ///
 /// This data structure is mostly a partial reimplementation of `FxIndexMap<VnIndex, (Value, Ty)>`.
 /// We do not use a regular `FxIndexMap` to skip hashing values that are unique by construction,
-/// like opaque values, address with provenance and non-deterministic constants.
+/// like opaque values, address with provenance.
 struct ValueSet<'a, 'tcx> {
     indices: HashTable<VnIndex>,
     hashes: IndexVec<VnIndex, u64>,
@@ -285,7 +275,6 @@ impl<'a, 'tcx> ValueSet<'a, 'tcx> {
 
         debug_assert!(match value {
             Value::Opaque(_) | Value::Address { .. } => true,
-            Value::Constant { disambiguator, .. } => disambiguator.is_some(),
             _ => false,
         });
 
@@ -303,7 +292,6 @@ impl<'a, 'tcx> ValueSet<'a, 'tcx> {
     fn insert(&mut self, ty: Ty<'tcx>, value: Value<'a, 'tcx>) -> (VnIndex, bool) {
         debug_assert!(match value {
             Value::Opaque(_) | Value::Address { .. } => false,
-            Value::Constant { disambiguator, .. } => disambiguator.is_none(),
             _ => true,
         });
 
@@ -478,30 +466,6 @@ impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
         Some(index)
     }
 
-    #[instrument(level = "trace", skip(self), ret)]
-    fn insert_constant(&mut self, value: Const<'tcx>) -> VnIndex {
-        let (index, new) = if value.is_deterministic() {
-            // The constant is deterministic, no need to disambiguate.
-            let constant = Value::Constant { value, disambiguator: None };
-            self.values.insert(value.ty(), constant)
-        } else {
-            // Multiple mentions of this constant will yield different values,
-            // so assign a different `disambiguator` to ensure they do not get the same `VnIndex`.
-            let index = self.values.insert_unique(value.ty(), |disambiguator| Value::Constant {
-                value,
-                disambiguator: Some(disambiguator),
-            });
-            (index, true)
-        };
-        if new {
-            let _index = self.evaluated.push(None);
-            debug_assert_eq!(index, _index);
-            let _index = self.rev_locals.push(SmallVec::new());
-            debug_assert_eq!(index, _index);
-        }
-        index
-    }
-
     #[inline]
     fn get(&self, index: VnIndex) -> Value<'a, 'tcx> {
         self.values.value(index)
@@ -520,18 +484,18 @@ impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
         self.rev_locals[value].push(local);
     }
 
+    fn insert_constant(&mut self, value: Const<'tcx>) -> VnIndex {
+        self.insert(value.ty(), Value::Constant(value))
+    }
+
     fn insert_bool(&mut self, flag: bool) -> VnIndex {
-        // Booleans are deterministic.
         let value = Const::from_bool(self.tcx, flag);
-        debug_assert!(value.is_deterministic());
-        self.insert(self.tcx.types.bool, Value::Constant { value, disambiguator: None })
+        self.insert(self.tcx.types.bool, Value::Constant(value))
     }
 
     fn insert_scalar(&mut self, ty: Ty<'tcx>, scalar: Scalar) -> VnIndex {
-        // Scalars are deterministic.
         let value = Const::from_scalar(self.tcx, scalar, ty);
-        debug_assert!(value.is_deterministic());
-        self.insert(ty, Value::Constant { value, disambiguator: None })
+        self.insert(ty, Value::Constant(value))
     }
 
     fn insert_tuple(&mut self, ty: Ty<'tcx>, values: &[VnIndex]) -> VnIndex {
@@ -567,7 +531,7 @@ impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
             // Do not bother evaluating repeat expressions. This would uselessly consume memory.
             Repeat(..) => return None,
 
-            Constant { ref value, disambiguator: _ } => {
+            Constant(ref value) => {
                 self.ecx.eval_mir_constant(value, DUMMY_SP, None).discard_err()?
             }
             Aggregate(variant, ref fields) => {
@@ -1005,16 +969,16 @@ impl<'body, 'a, 'tcx> VnState<'body, 'a, 'tcx> {
         operand: &mut Operand<'tcx>,
         location: Location,
     ) -> Option<VnIndex> {
-        match *operand {
-            Operand::Constant(ref constant) => Some(self.insert_constant(constant.const_)),
+        let value = match *operand {
+            Operand::Constant(ref constant) => self.insert_constant(constant.const_),
             Operand::Copy(ref mut place) | Operand::Move(ref mut place) => {
-                let value = self.simplify_place_value(place, location)?;
-                if let Some(const_) = self.try_as_constant(value) {
-                    *operand = Operand::Constant(Box::new(const_));
-                }
-                Some(value)
+                self.simplify_place_value(place, location)?
             }
+        };
+        if let Some(const_) = self.try_as_constant(value) {
+            *operand = Operand::Constant(Box::new(const_));
         }
+        Some(value)
     }
 
     #[instrument(level = "trace", skip(self), ret)]
@@ -1788,14 +1752,28 @@ impl<'tcx> VnState<'_, '_, 'tcx> {
 
     /// If `index` is a `Value::Constant`, return the `Constant` to be put in the MIR.
     fn try_as_constant(&mut self, index: VnIndex) -> Option<ConstOperand<'tcx>> {
-        // This was already constant in MIR, do not change it. If the constant is not
-        // deterministic, adding an additional mention of it in MIR will not give the same value as
-        // the former mention.
-        if let Value::Constant { value, disambiguator: None } = self.get(index) {
-            debug_assert!(value.is_deterministic());
+        let value = self.get(index);
+
+        // This was already an *evaluated* constant in MIR, do not change it.
+        if let Value::Constant(value) = value
+            && let Const::Val(..) = value
+        {
             return Some(ConstOperand { span: DUMMY_SP, user_ty: None, const_: value });
         }
 
+        if let Some(value) = self.try_as_evaluated_constant(index) {
+            return Some(ConstOperand { span: DUMMY_SP, user_ty: None, const_: value });
+        }
+
+        // We failed to provide an evaluated form, fallback to using the unevaluated constant.
+        if let Value::Constant(value) = value {
+            return Some(ConstOperand { span: DUMMY_SP, user_ty: None, const_: value });
+        }
+
+        None
+    }
+
+    fn try_as_evaluated_constant(&mut self, index: VnIndex) -> Option<Const<'tcx>> {
         let op = self.eval_to_const(index)?;
         if op.layout.is_unsized() {
             // Do not attempt to propagate unsized locals.
@@ -1809,8 +1787,7 @@ impl<'tcx> VnState<'_, '_, 'tcx> {
         // FIXME: remove this hack once https://github.com/rust-lang/rust/issues/79738 is fixed.
         assert!(!value.may_have_provenance(self.tcx, op.layout.size));
 
-        let const_ = Const::Val(value, op.layout.ty);
-        Some(ConstOperand { span: DUMMY_SP, user_ty: None, const_ })
+        Some(Const::Val(value, op.layout.ty))
     }
 
     /// Construct a place which holds the same value as `index` and for which all locals strictly
