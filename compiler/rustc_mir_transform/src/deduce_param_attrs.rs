@@ -6,11 +6,14 @@
 //! dependent crates can use them.
 
 use rustc_hir::def_id::LocalDefId;
+use rustc_index::IndexVec;
 use rustc_index::bit_set::DenseBitSet;
-use rustc_middle::mir::visit::{NonMutatingUseContext, PlaceContext, Visitor};
-use rustc_middle::mir::{Body, Location, Operand, Place, RETURN_PLACE, Terminator, TerminatorKind};
+use rustc_middle::mir::visit::{MutVisitor, NonMutatingUseContext, PlaceContext, Visitor};
+use rustc_middle::mir::*;
 use rustc_middle::ty::{self, DeducedParamAttrs, Ty, TyCtxt};
 use rustc_session::config::OptLevel;
+
+use crate::MirPass;
 
 /// A visitor that determines which arguments have been mutated. We can't use the mutability field
 /// on LocalDecl for this because it has no meaning post-optimization.
@@ -115,6 +118,12 @@ fn type_will_always_be_passed_directly(ty: Ty<'_>) -> bool {
     )
 }
 
+fn is_enabled(sess: &rustc_session::Session) -> bool {
+    // This computation is unfortunately rather expensive, so don't do it unless we're optimizing.
+    // Also skip it in incremental mode.
+    sess.opts.optimize != OptLevel::No && sess.opts.incremental.is_none()
+}
+
 /// Returns the deduced parameter attributes for a function.
 ///
 /// Deduced parameter attributes are those that can only be soundly determined by examining the
@@ -125,9 +134,7 @@ pub(super) fn deduced_param_attrs<'tcx>(
     tcx: TyCtxt<'tcx>,
     def_id: LocalDefId,
 ) -> &'tcx [DeducedParamAttrs] {
-    // This computation is unfortunately rather expensive, so don't do it unless we're optimizing.
-    // Also skip it in incremental mode.
-    if tcx.sess.opts.optimize == OptLevel::No || tcx.sess.opts.incremental.is_some() {
+    if !is_enabled(tcx.sess) {
         return &[];
     }
 
@@ -193,4 +200,86 @@ pub(super) fn deduced_param_attrs<'tcx>(
     }
 
     deduced_param_attrs
+}
+
+/// `deduced_param_attrs` works on polymorphic optimized MIR. However, codegen works on
+/// monomorphic MIR that may have modified in between. This pass makes sure that deduced and actual
+/// param attrs match.
+pub(crate) struct RecoverDeducedParamAttrs;
+
+impl<'tcx> MirPass<'tcx> for RecoverDeducedParamAttrs {
+    fn is_required(&self) -> bool {
+        true
+    }
+
+    fn is_enabled(&self, sess: &rustc_session::Session) -> bool {
+        is_enabled(sess)
+    }
+
+    fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
+        // If we deduced nothing, there is no fixup to perform.
+        let deduced_param_attrs = tcx.deduced_param_attrs(body.source.def_id());
+        if deduced_param_attrs.is_empty() {
+            return;
+        }
+
+        // Reuse the computation from `deduced_param_attrs`.
+        let mut actual_read_only = DeduceReadOnly::new(body.arg_count);
+        actual_read_only.visit_body(body);
+
+        let wrong_mutated_args = deduced_param_attrs
+            .into_iter()
+            .enumerate()
+            .filter(|&(arg_index, deduced)| {
+                // If we deduced `read_only` and the actual MIR is mutable, we must do something.
+                deduced.read_only && actual_read_only.mutable_args.contains(arg_index)
+            })
+            .map(|(arg_index, _)| arg_index)
+            .collect::<Vec<_>>();
+
+        if wrong_mutated_args.is_empty() {
+            // All arguments match, we have nothing to do.
+            return;
+        }
+
+        // For each flagged local, insert a move at the beginning of MIR. This ensures that the
+        // original argument's value is not mutated, and that all mutation happens on the newly
+        // introduced local.
+        let mut renamed_args = IndexVec::from_fn_n(|l| l, body.arg_count + 1);
+        let mut new_statements = Vec::with_capacity(wrong_mutated_args.len());
+        for arg_index in wrong_mutated_args {
+            let local = Local::from_usize(arg_index + 1);
+            let decl = &body.local_decls[local];
+            let source_info = decl.source_info;
+            let new_local = body.local_decls.push(decl.clone());
+            renamed_args[local] = new_local;
+
+            // `new_local = move local`
+            let stmt = StatementKind::Assign(Box::new((
+                new_local.into(),
+                Rvalue::Use(Operand::Move(local.into())),
+            )));
+            new_statements.push(Statement::new(source_info, stmt));
+        }
+
+        RenameLocals { tcx, renamed_args }.visit_body_preserves_cfg(body);
+        body.basic_blocks.as_mut_preserves_cfg()[START_BLOCK]
+            .statements
+            .splice(0..0, new_statements);
+
+        struct RenameLocals<'tcx> {
+            tcx: TyCtxt<'tcx>,
+            renamed_args: IndexVec<Local, Local>,
+        }
+        impl<'tcx> MutVisitor<'tcx> for RenameLocals<'tcx> {
+            fn tcx(&self) -> TyCtxt<'tcx> {
+                self.tcx
+            }
+            fn visit_local(&mut self, local: &mut Local, _: PlaceContext, _: Location) {
+                if let Some(&new_local) = self.renamed_args.get(*local) {
+                    *local = new_local;
+                }
+            }
+        }
+    }
 }
