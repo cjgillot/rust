@@ -338,6 +338,7 @@ impl<'ra, 'tcx> Resolver<'ra, 'tcx> {
                 | DefKind::GlobalAsm
                 | DefKind::Closure
                 | DefKind::SyntheticCoroutineBody
+                | DefKind::Promoted
                 | DefKind::Impl { .. },
                 _,
             )

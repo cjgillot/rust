@@ -2924,6 +2924,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                 | DefKind::Closure
                 | DefKind::ExternCrate
                 | DefKind::GlobalAsm
+                | DefKind::Promoted
                 | DefKind::SyntheticCoroutineBody,
                 _,
             )
