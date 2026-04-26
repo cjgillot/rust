@@ -229,7 +229,6 @@ pub fn provide(providers: &mut Providers) {
         is_mir_available,
         mir_callgraph_cyclic: inline::cycle::mir_callgraph_cyclic,
         mir_inliner_callees: inline::cycle::mir_inliner_callees,
-        promoted_mir,
         deduced_param_attrs: deduce_param_attrs::deduced_param_attrs,
         coroutine_by_move_body_def_id: coroutine::coroutine_by_move_body_def_id,
         trivial_const: trivial_const::trivial_const_provider,
@@ -315,7 +314,7 @@ fn take_array<T, const N: usize>(b: &mut Box<[T]>) -> Result<[T; N], Box<[T]>> {
 }
 
 fn is_mir_available(tcx: TyCtxt<'_>, def_id: LocalDefId) -> bool {
-    tcx.mir_keys(()).contains(&def_id) || tcx.def_kind(def_id) == DefKind::Promoted
+    tcx.mir_keys(()).contains(&def_id)
 }
 
 /// Finds the full set of `DefId`s within the current crate that have
@@ -349,6 +348,16 @@ fn mir_keys(tcx: TyCtxt<'_>, (): ()) -> FxIndexSet<LocalDefId> {
             }
         }
     }
+
+    // Now, the add promoted MIR from all those bodies into the set.
+    let mut promoted = Vec::new();
+    for &item in set.iter() {
+        if tcx.trivial_const(item).is_none() {
+            let (_, promoted_in_item) = tcx.mir_promoted(item);
+            promoted.extend_from_slice(&promoted_in_item.raw);
+        }
+    }
+    set.extend(promoted.into_iter());
 
     set
 }
@@ -428,8 +437,18 @@ fn mir_built(tcx: TyCtxt<'_>, def: LocalDefId) -> &Steal<Body<'_>> {
 fn mir_promoted(
     tcx: TyCtxt<'_>,
     def: LocalDefId,
-) -> (&Steal<Body<'_>>, &Steal<IndexVec<Promoted, Body<'_>>>) {
+) -> (&Steal<Body<'_>>, &IndexVec<Promoted, LocalDefId>) {
     debug_assert!(!tcx.is_trivial_const(def), "Tried to get mir_promoted of a trivial const");
+    debug_assert_ne!(tcx.def_kind(def), DefKind::Promoted);
+
+    if tcx.is_constructor(def.to_def_id()) {
+        // There's no reason to run all of the MIR passes on constructors when
+        // we can just output the MIR we want directly. This also saves const
+        // qualification and borrow checking the trouble of special casing
+        // constructors.
+        let body = shim::build_adt_ctor(tcx, def.to_def_id());
+        return (tcx.alloc_steal_mir(body), tcx.arena.alloc(IndexVec::new()));
+    }
 
     // Ensure that we compute the `mir_const_qualif` for constants at
     // this point, before we steal the mir-const result.
@@ -482,7 +501,7 @@ fn mir_promoted(
     lint_tail_expr_drop_order::run_lint(tcx, def, &body);
 
     let promoted = promote_pass.promoted_fragments.into_inner();
-    (tcx.alloc_steal_mir(body), tcx.alloc_steal_promoted(promoted))
+    (tcx.alloc_steal_mir(body), tcx.arena.alloc(promoted))
 }
 
 /// Compute the MIR that is used during CTFE (and thus has no optimizations run on it)
@@ -492,13 +511,12 @@ fn mir_for_ctfe(tcx: TyCtxt<'_>, def_id: LocalDefId) -> &Body<'_> {
 }
 
 fn inner_mir_for_ctfe(tcx: TyCtxt<'_>, def: LocalDefId) -> Body<'_> {
-    // FIXME: don't duplicate this between the optimized_mir/mir_for_ctfe queries
     if tcx.is_constructor(def.to_def_id()) {
         // There's no reason to run all of the MIR passes on constructors when
         // we can just output the MIR we want directly. This also saves const
         // qualification and borrow checking the trouble of special casing
         // constructors.
-        return shim::build_adt_ctor(tcx, def.to_def_id());
+        return tcx.mir_promoted(def).0.steal();
     }
 
     let body = tcx.mir_drops_elaborated_and_const_checked(def);
@@ -531,8 +549,7 @@ fn mir_drops_elaborated_and_const_checked(tcx: TyCtxt<'_>, def: LocalDefId) -> &
         None
     };
 
-    let is_fn_like = tcx.def_kind(def).is_fn_like();
-    if is_fn_like {
+    if tcx.def_kind(def).is_fn_like() {
         // Do not compute the mir call graph without said call graph actually being used.
         if pm::should_run_pass(tcx, &inline::Inline, pm::Optimizations::Allowed)
             || inline::ForceInline::should_run_pass_for_callee(tcx, def.to_def_id())
@@ -785,18 +802,18 @@ pub(crate) fn run_optimization_passes<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'
 
 /// Optimize the MIR and prepare it for codegen.
 fn optimized_mir(tcx: TyCtxt<'_>, did: LocalDefId) -> &Body<'_> {
-    tcx.arena.alloc(inner_optimized_mir(tcx, did))
-}
-
-fn inner_optimized_mir(tcx: TyCtxt<'_>, did: LocalDefId) -> Body<'_> {
     if tcx.is_constructor(did.to_def_id()) {
         // There's no reason to run all of the MIR passes on constructors when
         // we can just output the MIR we want directly. This also saves const
         // qualification and borrow checking the trouble of special casing
         // constructors.
-        return shim::build_adt_ctor(tcx, did.to_def_id());
+        return tcx.mir_for_ctfe(did);
     }
 
+    tcx.arena.alloc(inner_optimized_mir(tcx, did))
+}
+
+fn inner_optimized_mir(tcx: TyCtxt<'_>, did: LocalDefId) -> Body<'_> {
     match tcx.hir_body_const_context(did) {
         // Run the `mir_for_ctfe` query, which depends on `mir_drops_elaborated_and_const_checked`
         // which we are going to steal below. Thus we need to run `mir_for_ctfe` first, so it
@@ -830,23 +847,4 @@ fn inner_optimized_mir(tcx: TyCtxt<'_>, did: LocalDefId) -> Body<'_> {
     run_optimization_passes(tcx, &mut body);
 
     body
-}
-
-/// Fetch all the promoteds of an item and prepare their MIR bodies to be ready for
-/// constant evaluation once all generic parameters become known.
-fn promoted_mir(tcx: TyCtxt<'_>, def: LocalDefId) -> &IndexVec<Promoted, Body<'_>> {
-    if tcx.is_constructor(def.to_def_id()) {
-        return tcx.arena.alloc(IndexVec::new());
-    }
-
-    if !tcx.is_synthetic_mir(def) {
-        tcx.ensure_done().mir_borrowck(tcx.typeck_root_def_id_local(def));
-    }
-    let mut promoted = tcx.mir_promoted(def).1.steal();
-
-    for body in &mut promoted {
-        run_analysis_to_runtime_passes(tcx, body);
-    }
-
-    tcx.arena.alloc(promoted)
 }
