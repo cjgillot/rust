@@ -585,7 +585,6 @@ impl<'cx, 'tcx> UniversalRegionsBuilder<'cx, 'tcx> {
     /// see `DefiningTy` for details.
     fn defining_ty(&self) -> DefiningTy<'tcx> {
         let tcx = self.infcx.tcx;
-        let typeck_root_def_id = tcx.typeck_root_def_id_local(self.mir_def);
 
         match tcx.hir_body_owner_kind(self.mir_def) {
             BodyOwnerKind::Closure | BodyOwnerKind::Fn => {
@@ -616,9 +615,7 @@ impl<'cx, 'tcx> UniversalRegionsBuilder<'cx, 'tcx> {
 
             BodyOwnerKind::Const { .. } | BodyOwnerKind::Static(..) => {
                 match tcx.def_kind(self.mir_def) {
-                    DefKind::InlineConst => {
-                        // FIXME this line creates a dependency between borrowck and typeck.
-                        //
+                    DefKind::InlineConst | DefKind::Promoted => {
                         // This is required for `AscribeUserType` canonical query, which will call
                         // `type_of(inline_const_def_id)`. That `type_of` would inject erased lifetimes
                         // into borrowck, which is ICE #78174.
@@ -626,27 +623,13 @@ impl<'cx, 'tcx> UniversalRegionsBuilder<'cx, 'tcx> {
                         // As a workaround, inline consts have an additional generic param (`ty`
                         // below), so that `type_of(inline_const_def_id).substs(substs)` uses the
                         // proper type with NLL infer vars.
-                        let ty = tcx
-                            .typeck(self.mir_def)
-                            .node_type(tcx.local_def_id_to_hir_id(self.mir_def));
-                        let identity_args = GenericArgs::identity_for_item(tcx, typeck_root_def_id);
-                        let args = InlineConstArgs::new(
-                            tcx,
-                            InlineConstArgsParts { parent_args: identity_args, ty },
-                        )
-                        .args;
-                        let args = self.infcx.replace_free_regions_with_nll_infer_vars(
-                            NllRegionVariableOrigin::FreeRegion,
-                            args,
-                        );
-                        DefiningTy::InlineConst(self.mir_def.to_def_id(), args)
-                    }
-                    DefKind::Promoted => {
-                        let (body, _) = tcx.mir_promoted(self.mir_def);
-                        let body = body.borrow();
+                        //
+                        // Fetch the actual type from MIR, as `type_of` returns something useless
+                        // like `<const_ty>`.
+                        let body = tcx.mir_promoted(self.mir_def).0.borrow();
                         let ty = body.local_decls[RETURN_PLACE].ty;
-                        let parent_def_id = tcx.parent(self.mir_def.to_def_id());
-                        let parent_args = GenericArgs::identity_for_item(tcx, parent_def_id);
+                        let typeck_root_def_id = tcx.typeck_root_def_id(self.mir_def.to_def_id());
+                        let parent_args = GenericArgs::identity_for_item(tcx, typeck_root_def_id);
                         let args =
                             InlineConstArgs::new(tcx, InlineConstArgsParts { parent_args, ty })
                                 .args;
