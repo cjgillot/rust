@@ -29,13 +29,13 @@ fn bar() -> bool {
         _2 = copy _1;
         StorageLive(_3);
         StorageLive(_4);
-        _10 = const bar::promoted[1];
+        _10 = const bar::{promoted#1};
         Retag(_10);
         _4 = copy _10;
         _3 = copy _4;
         StorageLive(_6);
         StorageLive(_7);
-        _9 = const bar::promoted[0];
+        _9 = const bar::{promoted#0};
         Retag(_9);
         _7 = copy _9;
         _6 = copy _7;
