@@ -458,17 +458,9 @@ impl DepGraph {
     /// it with the node, for use in the next session.
     #[inline]
     pub fn record_diagnostic<'tcx>(&self, tcx: TyCtxt<'tcx>, diagnostic: &DiagInner) {
-        if let Some(ref data) = self.data {
-            read_deps(|task_deps| match task_deps {
-                TaskDepsRef::EvalAlways | TaskDepsRef::Ignore => return,
-                TaskDepsRef::Forbid | TaskDepsRef::Allow(..) => {
-                    let dep_node_index = data
-                        .encode_side_effect(tcx, QuerySideEffect::Diagnostic(diagnostic.clone()));
-                    self.read_index(dep_node_index);
-                }
-            })
-        }
+        self.encode_side_effect(tcx, QuerySideEffect::Diagnostic(diagnostic.clone()));
     }
+
     /// This forces a side effect node green by running its side effect. `prev_index` would
     /// refer to a node created used `encode_side_effect` in the previous session.
     #[inline]
@@ -692,6 +684,7 @@ impl DepGraphData {
             std::iter::once(DepNodeIndex::FOREVER_RED_NODE).collect(),
         );
         tcx.query_system.side_effects.borrow_mut().insert(dep_node_index, side_effect);
+        self.read_index(dep_node_index);
         dep_node_index
     }
 
