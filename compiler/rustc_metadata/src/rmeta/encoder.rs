@@ -2313,7 +2313,7 @@ fn prefetch_mir(tcx: TyCtxt<'_>) {
             tcx.ensure_done().optimized_mir(def_id);
         }
         if encode_opt || encode_const {
-            tcx.ensure_done().mir_promoted(def_id);
+            tcx.ensure_done().promoted_mir(def_id);
         }
     })
 }

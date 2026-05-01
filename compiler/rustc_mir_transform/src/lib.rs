@@ -229,6 +229,7 @@ pub fn provide(providers: &mut Providers) {
         is_mir_available,
         mir_callgraph_cyclic: inline::cycle::mir_callgraph_cyclic,
         mir_inliner_callees: inline::cycle::mir_inliner_callees,
+        promoted_mir,
         deduced_param_attrs: deduce_param_attrs::deduced_param_attrs,
         coroutine_by_move_body_def_id: coroutine::coroutine_by_move_body_def_id,
         trivial_const: trivial_const::trivial_const_provider,
@@ -353,7 +354,7 @@ fn mir_keys(tcx: TyCtxt<'_>, (): ()) -> FxIndexSet<LocalDefId> {
     let mut promoted = Vec::new();
     for &item in set.iter() {
         if tcx.trivial_const(item).is_none() {
-            let (_, promoted_in_item) = tcx.mir_promoted(item);
+            let promoted_in_item = tcx.promoted_mir(item);
             promoted.extend_from_slice(&promoted_in_item.raw);
         }
     }
@@ -847,4 +848,10 @@ fn inner_optimized_mir(tcx: TyCtxt<'_>, did: LocalDefId) -> Body<'_> {
     run_optimization_passes(tcx, &mut body);
 
     body
+}
+
+/// Fetch all the promoteds of an item and prepare their MIR bodies to be ready for
+/// constant evaluation once all generic parameters become known.
+fn promoted_mir(tcx: TyCtxt<'_>, def: LocalDefId) -> &IndexVec<Promoted, LocalDefId> {
+    tcx.mir_promoted(def).1
 }

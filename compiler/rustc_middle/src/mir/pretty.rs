@@ -329,7 +329,7 @@ pub fn write_mir_pretty<'tcx>(
             writer.write_mir_fn(body, w)?;
 
             if let Some(def_id) = def_id.as_local() {
-                for body in tcx.mir_promoted(def_id).1 {
+                for body in tcx.promoted_mir(def_id) {
                     writeln!(w)?;
                     let body = tcx.mir_for_ctfe(body.to_def_id());
                     writer.write_mir_fn(body, w)?;

@@ -1161,7 +1161,7 @@ fn run_required_analyses(tcx: TyCtxt<'_>) {
                 tcx.ensure_ok().mir_drops_elaborated_and_const_checked(def_id);
 
                 if tcx.trivial_const(def_id).is_none() {
-                    for &promoted in tcx.mir_promoted(def_id).1 {
+                    for &promoted in tcx.promoted_mir(def_id) {
                         tcx.ensure_ok().mir_drops_elaborated_and_const_checked(promoted);
                     }
                 }

@@ -678,11 +678,8 @@ rustc_queries! {
         separate_provide_extern
     }
 
-    /// The `DefId` is the `DefId` of the containing MIR body. Promoteds do not have their own
-    /// `DefId`. This function returns all promoteds in the specified body. The body references
-    /// promoteds by the `DefId` and the `mir::Promoted` index. This is necessary, because
-    /// after inlining a body may refer to promoteds from other bodies. In that case you still
-    /// need to use the `DefId` of the original body.
+    /// The `DefId` is the `DefId` of the containing MIR body.
+    /// This query creates new `DefId`s for promoted-out constants.
     query mir_promoted(key: LocalDefId) -> (
         &'tcx Steal<mir::Body<'tcx>>,
         &'tcx IndexVec<mir::Promoted, LocalDefId>,
@@ -690,6 +687,12 @@ rustc_queries! {
         no_hash
         feedable
         desc { "promoting constants in MIR for `{}`", tcx.def_path_str(key) }
+    }
+
+    query promoted_mir(key: LocalDefId) -> &'tcx IndexVec<mir::Promoted, LocalDefId> {
+        feedable
+        cache_on_disk
+        desc { "promoted constants in MIR for `{}`", tcx.def_path_str(key) }
     }
 
     query closure_typeinfo(key: LocalDefId) -> ty::ClosureTypeInfo<'tcx> {
